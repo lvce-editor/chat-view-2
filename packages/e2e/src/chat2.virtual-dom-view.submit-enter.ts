@@ -19,6 +19,7 @@ export const test: Test = async ({
   await composer.type('Build a smaller chat view')
   const focusedComposer = Locator('.ChatComposerInputFocused')
   await expect(focusedComposer).toBeVisible()
+  await expect(composer).toBeFocused()
   await KeyBoard.press('Enter')
 
   const detail = Locator('.ChatDetailView')
