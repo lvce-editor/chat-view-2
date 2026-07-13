@@ -6,13 +6,15 @@ import {
 } from '@lvce-editor/api'
 import { view, viewId } from '../ChatView/ChatView.ts'
 
-let activated = false
+const state = {
+  activated: false,
+}
 
 export const activate = async (): Promise<void> => {
-  if (activated) {
+  if (state.activated) {
     return
   }
-  activated = true
+  state.activated = true
   await activateExtensionApi()
   registerView(view)
   registerCommand({

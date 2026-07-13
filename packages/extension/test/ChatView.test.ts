@@ -1,7 +1,7 @@
 import type { ViewEvent } from '@lvce-editor/api'
 import { expect, test } from '@jest/globals'
-import { mockResponse } from '../src/parts/MockChatApi/MockChatApi.ts'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
+import { mockResponse } from '../src/parts/MockChatApi/MockChatApi.ts'
 
 const getText = (dom: readonly any[]): string => {
   return dom
@@ -14,7 +14,9 @@ const getNodesByClass = (
   dom: readonly any[],
   className: string,
 ): readonly any[] => {
-  return dom.filter((node) => node.className === className)
+  return dom.filter((node) => {
+    return node.className?.split(' ').includes(className)
+  })
 }
 
 const dispatch = async (
@@ -44,18 +46,14 @@ test('renders at most 20 past tasks and a composer', async () => {
   )
 })
 
-test('submits with Enter and opens the detail view', async () => {
+test('submits through the shared submit action and opens the detail view', async () => {
   const instance = await createInstance()
   await dispatch(instance, {
     name: 'composer',
     type: 'input',
     value: 'Build a smaller chat view',
   })
-  await dispatch(instance, {
-    name: 'composer',
-    type: 'keydown',
-    value: 'Enter',
-  })
+  await instance.submit()
 
   const dom = instance.render() as readonly any[]
   expect(getNodesByClass(dom, 'ChatDetailView')).toHaveLength(1)
@@ -88,7 +86,7 @@ test('does not submit an empty message', async () => {
   await dispatch(instance, {
     name: 'composer',
     type: 'input',
-    value: '   ',
+    value: ' '.repeat(3),
   })
   await dispatch(instance, {
     name: 'submit',

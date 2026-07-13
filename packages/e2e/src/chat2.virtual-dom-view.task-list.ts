@@ -7,7 +7,10 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Main.closeAllEditors()
   await showChat2(Command)
 
-  await expect(Locator('.ChatTaskButton')).toHaveCount(20)
-  await expect(Locator('textarea[name="composer"]')).toBeVisible()
-  await expect(Locator('button[name="submit"]')).toBeVisible()
+  const tasks = Locator('.ChatTaskButton')
+  const composer = Locator('textarea[name="composer"]')
+  const submit = Locator('button[name="submit"]')
+  await expect(tasks).toHaveCount(20)
+  await expect(composer).toBeVisible()
+  await expect(submit).toBeVisible()
 }

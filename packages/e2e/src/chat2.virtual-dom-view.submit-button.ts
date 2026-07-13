@@ -12,6 +12,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   // eslint-disable-next-line e2e/no-direct-click
   await submit.click()
 
-  await expect(Locator('.ChatDetailView')).toBeVisible()
-  await expect(Locator('text=Submit with the button')).toBeVisible()
+  const detail = Locator('.ChatDetailView')
+  const userMessage = Locator('.ChatMessageUser')
+  await expect(detail).toBeVisible()
+  await expect(userMessage).toContainText('Submit with the button')
 }

@@ -42,10 +42,10 @@ export const button = (
   return node(
     VirtualDomElements.Button,
     {
+      buttonType: 'button',
       className,
       name,
       onClick: 'handleClick',
-      buttonType: 'button',
     },
     [textNode(label)],
   )
@@ -81,8 +81,9 @@ export const textArea = (value: string): TreeNode => {
     ariaLabel: 'Message',
     className: 'ChatComposerInput',
     name: 'composer',
+    onBlur: 'handleBlur',
+    onFocus: 'handleFocus',
     onInput: 'handleInput',
-    onKeyDown: 'handleKeyDown',
     placeholder: 'Ask for follow-up changes',
     spellcheck: true,
     value,

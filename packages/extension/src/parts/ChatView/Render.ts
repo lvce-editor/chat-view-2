@@ -1,6 +1,7 @@
+import type { VirtualDomNode } from '@lvce-editor/virtual-dom-worker'
 import type { ChatMessage, ChatTask } from '../ChatApi/ChatApi.ts'
-import * as Dom from '../VirtualDom/VirtualDom.ts'
 import type { ChatViewState } from './ChatViewState.ts'
+import * as Dom from '../VirtualDom/VirtualDom.ts'
 
 const renderTask = (task: ChatTask): Dom.TreeNode => {
   return Dom.button(`task:${task.id}`, task.title, 'ChatTaskButton')
@@ -28,12 +29,11 @@ const renderComposer = (draft: string): Dom.TreeNode => {
 }
 
 const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
+  const taskCount = Dom.textNode(`${state.tasks.length} mock tasks`)
   return Dom.div('ChatView ChatListView', [
     Dom.div('ChatTaskListHeader', [
       Dom.heading(1, 'ChatTitle', 'Past tasks'),
-      Dom.div('ChatTaskCount', [
-        Dom.textNode(`${state.tasks.length} mock tasks`),
-      ]),
+      Dom.div('ChatTaskCount', [taskCount]),
     ]),
     renderTaskList(state.tasks),
     renderComposer(state.draft),
@@ -57,7 +57,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 
 export const render = (
   state: Readonly<ChatViewState>,
-): readonly import('@lvce-editor/virtual-dom-worker').VirtualDomNode[] => {
+): readonly VirtualDomNode[] => {
   const tree = state.selectedTask
     ? renderDetailView(state)
     : renderListView(state)

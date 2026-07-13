@@ -5,15 +5,17 @@ import type {
 } from '@lvce-editor/api'
 import type { VirtualDomNode } from '@lvce-editor/virtual-dom-worker'
 import type { ChatApi } from '../ChatApi/ChatApi.ts'
+import type { ChatViewState } from './ChatViewState.ts'
 import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
 import { render } from './Render.ts'
-import type { ChatViewState } from './ChatViewState.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
+  readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getState: () => Readonly<ChatViewState>
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderTitle: () => string
+  readonly submit: () => Promise<void>
 }
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
@@ -25,6 +27,7 @@ export const createInstance = async (
   api: ChatApi = createMockChatApi(),
 ): Promise<ActiveChatViewInstance> => {
   const state: ChatViewState = {
+    composerFocused: false,
     draft: '',
     selectedTask: undefined,
     tasks: await api.listTasks(20),
@@ -47,6 +50,11 @@ export const createInstance = async (
   }
 
   return {
+    getContext(): Readonly<Record<string, boolean>> {
+      return {
+        'chat2.composerFocus': state.composerFocused,
+      }
+    },
     getState(): Readonly<ChatViewState> {
       return state
     },
@@ -55,12 +63,12 @@ export const createInstance = async (
         state.draft = getEventString(event)
         return
       }
-      if (event.type === 'keydown' && getEventString(event) === 'Enter') {
-        await submit()
+      if (event.type === 'focus' && event.name === 'composer') {
+        state.composerFocused = true
         return
       }
-      if (event.type === 'submit' && event.name === 'composer') {
-        await submit()
+      if (event.type === 'blur' && event.name === 'composer') {
+        state.composerFocused = false
         return
       }
       if (event.type !== 'click') {
@@ -79,7 +87,7 @@ export const createInstance = async (
         state.draft = ''
       }
     },
-    render() {
+    render(): readonly VirtualDomNode[] {
       return render(state)
     },
     renderTitle(): string {
@@ -92,5 +100,6 @@ export const createInstance = async (
         selectedTaskId: state.selectedTask?.id,
       }
     },
+    submit,
   }
 }

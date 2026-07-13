@@ -8,7 +8,7 @@ const taskTitles = [
   'Fix quickpick beforeinput crash',
   'Fix running extensions view',
   'Extract context menu handler',
-  'Dispose webcontentsview on close',
+  'Dispose web contents view on close',
   'Enable TypeScript autofix tests',
   'Open browser in preview area',
   'Add devcontainer e2e tests',
