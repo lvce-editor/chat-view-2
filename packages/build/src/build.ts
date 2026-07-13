@@ -20,15 +20,11 @@ fs.copyFileSync(
   join(extension, 'extension.json'),
   join(root, 'dist', 'extension.json'),
 )
-fs.copyFileSync(join(extension, 'trello.css'), join(root, 'dist', 'trello.css'))
-fs.copyFileSync(join(extension, 'trello.svg'), join(root, 'dist', 'trello.svg'))
-fs.copyFileSync(
-  join(extension, 'comments.svg'),
-  join(root, 'dist', 'comments.svg'),
-)
+fs.copyFileSync(join(extension, 'chat.css'), join(root, 'dist', 'chat.css'))
+fs.copyFileSync(join(extension, 'chat.svg'), join(root, 'dist', 'chat.svg'))
 
 const bundle = await rollup({
-  input: join(extension, 'src', 'trelloMain.ts'),
+  input: join(extension, 'src', 'chatMain.ts'),
   external: ['electron', 'node:*'],
   plugins: [
     nodeResolve({
@@ -45,7 +41,7 @@ const bundle = await rollup({
 })
 
 await bundle.write({
-  file: join(root, 'dist', 'dist', 'trelloMain.js'),
+  file: join(root, 'dist', 'dist', 'chatMain.js'),
   format: 'esm',
 })
 

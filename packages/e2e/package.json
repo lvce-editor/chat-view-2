@@ -1,7 +1,7 @@
 {
   "name": "e2e",
   "version": "0.0.0-dev",
-  "description": "End-to-end tests for the Trello extension",
+  "description": "End-to-end tests for the Chat 2 extension",
   "main": "index.js",
   "scripts": {
     "build:extension": "node ../build/src/build-extension.ts",

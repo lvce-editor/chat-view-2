@@ -12,7 +12,7 @@ const target = path.join(
   'share',
   'lvce',
   'extensions',
-  'trello',
+  'chat-view-2',
 )
 
 await rm(target, { recursive: true, force: true })

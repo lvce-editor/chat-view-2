@@ -45,6 +45,7 @@ export const button = (
       className,
       name,
       onClick: 'handleClick',
+      buttonType: 'button',
     },
     [textNode(label)],
   )

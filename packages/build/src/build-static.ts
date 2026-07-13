@@ -4,7 +4,7 @@ import path, { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { root } from './root.ts'
 
-const extensionId = 'builtin.trello'
+const extensionId = 'builtin.chat-view-2'
 
 const assertFileExists = async (file: string): Promise<void> => {
   try {
@@ -19,7 +19,7 @@ const readJson = async <T>(file: string): Promise<T> => {
   return JSON.parse(content) as T
 }
 
-const assertTrelloExtensionEntry = (
+const assertChatExtensionEntry = (
   entries: readonly Record<string, unknown>[],
   file: string,
 ): Record<string, unknown> => {
@@ -30,7 +30,7 @@ const assertTrelloExtensionEntry = (
   return entry
 }
 
-const assertStaticTrelloExtension = async (
+const assertStaticChatExtension = async (
   commitHash: string,
 ): Promise<void> => {
   const commitDir = path.join(root, 'dist', commitHash)
@@ -54,7 +54,7 @@ const assertStaticTrelloExtension = async (
 
   const extensionsJson =
     await readJson<readonly Record<string, unknown>[]>(extensionsJsonPath)
-  const extensionEntry = assertTrelloExtensionEntry(
+  const extensionEntry = assertChatExtensionEntry(
     extensionsJson,
     extensionsJsonPath,
   )
@@ -71,7 +71,7 @@ const assertStaticTrelloExtension = async (
   const webExtensionsJson = await readJson<readonly Record<string, unknown>[]>(
     webExtensionsJsonPath,
   )
-  assertTrelloExtensionEntry(webExtensionsJson, webExtensionsJsonPath)
+  assertChatExtensionEntry(webExtensionsJson, webExtensionsJsonPath)
 
   const workerPath = path.join(
     commitDir,
@@ -123,4 +123,4 @@ await cp(
   { recursive: true, force: true },
 )
 
-await assertStaticTrelloExtension(commitHash)
+await assertStaticChatExtension(commitHash)
