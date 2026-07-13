@@ -10,6 +10,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const composer = Locator('textarea[name="composer"]')
   const submit = Locator('button[name="submit"]')
   await expect(tasks).toHaveCount(20)
+  await expect(tasks.first()).toHaveCSS('cursor', 'pointer')
   await expect(composer).toBeVisible()
   await expect(submit).toBeVisible()
 }
