@@ -1,6 +1,7 @@
 import type { VirtualDomNode } from '@lvce-editor/virtual-dom-worker'
 /* eslint-disable sonarjs/cognitive-complexity, unicorn/prefer-await */
 import {
+  executeCommand,
   getPreference,
   setPreference,
   type ViewContext,
@@ -33,6 +34,11 @@ interface SavedState {
   readonly selectedModelId?: string
   readonly selectedTaskId?: string
 }
+
+type ExecuteCommand = (
+  id: string,
+  ...args: readonly unknown[]
+) => Promise<unknown>
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
   return typeof event.value === 'string' ? event.value : ''
@@ -69,6 +75,7 @@ export const createInstance = async (
   context?: ViewContext,
   providedApi?: ChatApi,
   readPreference?: ReadPreference,
+  execute: ExecuteCommand = executeCommand,
 ): Promise<ActiveChatViewInstance> => {
   let api = providedApi
   if (!api) {
@@ -241,6 +248,21 @@ export const createInstance = async (
           state.errorMessage =
             error instanceof Error ? error.message : String(error)
           await context?.requestRerender()
+        }
+        return
+      }
+      if (event.name?.startsWith('copy-message:') && state.selectedTask) {
+        const eventId = event.name.slice('copy-message:'.length)
+        const message = state.selectedTask.events.find(
+          (item) =>
+            item.id === eventId &&
+            (item.type === 'assistant-message' || item.type === 'user-message'),
+        )
+        if (
+          message?.type === 'assistant-message' ||
+          message?.type === 'user-message'
+        ) {
+          await execute('ClipBoard.writeText', message.text)
         }
         return
       }

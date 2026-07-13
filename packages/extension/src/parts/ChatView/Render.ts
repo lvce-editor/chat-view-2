@@ -10,6 +10,18 @@ import type { ChatViewState } from './ChatViewState.ts'
 import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 
+const messageDateFormatter = new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+})
+
+const formatMessageDate = (timestamp: string): string => {
+  const date = new Date(timestamp)
+  return Number.isNaN(date.getTime())
+    ? timestamp
+    : messageDateFormatter.format(date)
+}
+
 const isRunning = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'
 }
@@ -107,6 +119,15 @@ const renderMessage = (
     message.type === 'user-message' ? 'ChatMessageUser' : 'ChatMessageAssistant'
   return Dom.div(`ChatMessage ${roleClass}`, [
     Dom.div('ChatMessageText', renderMessageText(message.text)),
+    Dom.div('ChatMessageMetadata', [
+      Dom.div('ChatMessageTimestamp', [
+        Dom.textNode(formatMessageDate(message.timestamp)),
+      ]),
+      Dom.button(`copy-message:${message.id}`, '', 'ChatMessageCopyButton', {
+        ariaLabel: 'Copy message',
+        title: 'Copy message',
+      }),
+    ]),
   ])
 }
 
