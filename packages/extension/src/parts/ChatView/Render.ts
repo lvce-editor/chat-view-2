@@ -128,10 +128,39 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   ])
 }
 
+const renderFocusModeButton = (
+  state: Readonly<ChatViewState>,
+): readonly Dom.TreeNode[] => {
+  if (!state.focusModeEnabled) {
+    return []
+  }
+  return [
+    Dom.button(
+      'toggle-focus-mode',
+      state.focusMode ? 'IDE' : 'Focus',
+      'ChatFocusModeButton',
+      {
+        title: state.focusMode
+          ? 'Return to IDE layout'
+          : 'Focus entirely on chat',
+      },
+    ),
+  ]
+}
+
+const getRootClassName = (
+  state: Readonly<ChatViewState>,
+  viewClassName: string,
+): string => {
+  return `ChatView ${viewClassName}${state.focusMode ? ' ChatFocusMode' : ''}`
+}
+
 const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  return Dom.div('ChatView ChatListView', [
+  return Dom.div(getRootClassName(state, 'ChatListView'), [
     Dom.div('ChatTaskListHeader', [
       Dom.heading(1, 'ChatTitle', 'Tasks'),
+      Dom.div('ChatHeaderSpacer', []),
+      ...renderFocusModeButton(state),
       Dom.div('ChatTaskCount', [
         Dom.textNode(
           `${state.tasks.length} ${state.tasks.length === 1 ? 'task' : 'tasks'}`,
@@ -215,10 +244,11 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     return renderListView(state)
   }
   const summary = summarizeTask(task)
-  return Dom.div('ChatView ChatDetailView', [
+  return Dom.div(getRootClassName(state, 'ChatDetailView'), [
     Dom.div('ChatDetailHeader', [
       Dom.button('back', 'Back', 'ChatBackButton'),
       Dom.heading(1, 'ChatDetailTitle', task.title),
+      ...renderFocusModeButton(state),
       Dom.button('new-task', 'New', 'ChatNewTaskButton'),
     ]),
     Dom.div('ChatMessages', [

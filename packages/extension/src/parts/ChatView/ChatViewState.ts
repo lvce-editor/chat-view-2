@@ -5,6 +5,8 @@ export interface ChatViewState {
   composerFocused: boolean
   draft: string
   errorMessage: string
+  focusMode: boolean
+  focusModeEnabled: boolean
   modelPickerOpen: boolean
   models: readonly ChatModel[]
   selectedModelId: string

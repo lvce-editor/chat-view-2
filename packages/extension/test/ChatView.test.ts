@@ -52,6 +52,37 @@ test('renders a focused task list, model control, and composer', async () => {
   )
 })
 
+test('renders the experimental focus mode control when enabled', async () => {
+  const instance = await createTestInstance()
+  const state = instance.getState() as {
+    focusMode: boolean
+    focusModeEnabled: boolean
+  }
+  state.focusModeEnabled = true
+
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      className: 'ChatFocusModeButton',
+      name: 'toggle-focus-mode',
+      title: 'Focus entirely on chat',
+    }),
+  )
+
+  state.focusMode = true
+  const focusedDom = instance.render()
+  expect(focusedDom).toContainEqual(
+    expect.objectContaining({
+      className: 'ChatFocusModeButton',
+      title: 'Return to IDE layout',
+    }),
+  )
+  expect(focusedDom[0]).toEqual(
+    expect.objectContaining({
+      className: 'ChatView ChatListView ChatFocusMode',
+    }),
+  )
+})
+
 test('submits a task and shows the compact result and change summary', async () => {
   const instance = await createTestInstance()
   await dispatch(instance, {

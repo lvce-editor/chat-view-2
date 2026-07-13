@@ -5,7 +5,10 @@ import {
   registerView,
 } from '@lvce-editor/api'
 import { view, viewId } from '../ChatView/ChatView.ts'
-import { submitActiveChatViewInstance } from '../ChatView/CreateInstance.ts'
+import {
+  submitActiveChatViewInstance,
+  toggleActiveChatViewFocusMode,
+} from '../ChatView/CreateInstance.ts'
 
 const state = {
   activated: false,
@@ -29,6 +32,13 @@ export const activate = async (): Promise<void> => {
       return submitActiveChatViewInstance()
     },
     id: 'chat2.submit',
+  })
+  registerCommand({
+    async execute() {
+      await executeCommand('SideBar.show', viewId, true)
+      await toggleActiveChatViewFocusMode()
+    },
+    id: 'chat2.toggleFocusMode',
   })
 }
 

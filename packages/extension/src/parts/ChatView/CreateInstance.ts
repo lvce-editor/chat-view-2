@@ -9,6 +9,11 @@ import {
 } from '@lvce-editor/api'
 import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
+import {
+  getFocusMode,
+  getFocusModeEnabled,
+  toggleFocusMode,
+} from '../ChatFocusMode/ChatFocusMode.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
 import { render } from './Render.ts'
 
@@ -19,6 +24,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly render: () => readonly VirtualDomNode[]
   readonly renderTitle: () => string
   readonly submit: (requestRerender?: boolean) => Promise<void>
+  readonly toggleFocusMode: (requestRerender?: boolean) => Promise<void>
 }
 
 interface SavedState {
@@ -53,6 +59,10 @@ export const submitActiveChatViewInstance = async (): Promise<void> => {
   await getActiveInstance()?.submit(true)
 }
 
+export const toggleActiveChatViewFocusMode = async (): Promise<void> => {
+  await getActiveInstance()?.toggleFocusMode(true)
+}
+
 export const createInstance = async (
   context?: ViewContext,
   providedApi?: ChatApi,
@@ -85,11 +95,14 @@ export const createInstance = async (
   const selectedTask = saved.selectedTaskId
     ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
     : undefined
+  const focusModeEnabled = await getFocusModeEnabled()
   const state: ChatViewState = {
     activityExpanded: false,
     composerFocused: false,
     draft: '',
     errorMessage,
+    focusMode: focusModeEnabled && (await getFocusMode()),
+    focusModeEnabled,
     modelPickerOpen: false,
     models,
     selectedModelId,
@@ -139,6 +152,15 @@ export const createInstance = async (
     }
   }
 
+  const handleToggleFocusMode = async (
+    requestRerender = false,
+  ): Promise<void> => {
+    state.focusMode = await toggleFocusMode(state)
+    if (requestRerender) {
+      await context?.requestRerender()
+    }
+  }
+
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       activeController?.abort()
@@ -147,6 +169,7 @@ export const createInstance = async (
     getContext(): Readonly<Record<string, boolean>> {
       return {
         'chat2.composerFocus': state.composerFocused,
+        'chat2.focusMode': state.focusMode,
         'chat2.taskRunning': state.selectedTask?.status === 'running',
       }
     },
@@ -172,6 +195,10 @@ export const createInstance = async (
       }
       if (event.name === 'submit') {
         await submit()
+        return
+      }
+      if (event.name === 'toggle-focus-mode') {
+        await handleToggleFocusMode()
         return
       }
       if (event.name === 'stop') {
@@ -240,6 +267,7 @@ export const createInstance = async (
       }
     },
     submit,
+    toggleFocusMode: handleToggleFocusMode,
   }
   activeInstances.add(instance)
   return instance
