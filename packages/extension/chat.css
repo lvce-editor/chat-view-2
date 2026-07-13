@@ -129,6 +129,7 @@
 .ChatActivityToggle:hover,
 .ChatRevertButton:hover,
 .ChatReviewButton:hover,
+.ChatShowMoreButton:hover,
 .ChatModelButton:hover {
   background: var(--ChatHoverBackground);
 }
@@ -443,9 +444,8 @@
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  gap: 7px;
   min-width: 0;
-  padding: 7px 8px;
+  overflow: hidden;
   margin: 0 6px;
   background: color-mix(in srgb, var(--ChatForeground) 4%, transparent);
   border: 1px solid var(--ChatBorder);
@@ -453,17 +453,52 @@
 }
 
 .ChatChangesHeader {
-  gap: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
   min-width: 0;
+  padding: 9px 10px;
 }
 
-.ChatReviewButton {
-  padding-inline: 3px;
-  font-size: 11px;
+.ChatChangesIcon {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 17px;
+  color: var(--ChatMutedForeground);
+  border: 1px solid var(--ChatBorder);
+  border-radius: 6px;
 }
 
-.ChatChangesSpacer {
+.ChatChangesSummary {
   flex: 1 1 auto;
+  min-width: 100px;
+}
+
+.ChatChangesTitle {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ChatChangesMeta,
+.ChatChangesActions,
+.ChatChangedFileStats {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.ChatChangesMeta {
+  margin-top: 2px;
+  font-family: var(--EditorFontFamily, monospace);
+  font-size: 11px;
 }
 
 .ChatChangeAdditions,
@@ -476,22 +511,52 @@
   color: var(--ChatDeletedForeground);
 }
 
+.ChatChecksPassed {
+  overflow: hidden;
+  color: var(--ChatMutedForeground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ChatChangesActions {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
+.ChatRevertButton,
+.ChatReviewButton,
+.ChatShowMoreButton {
+  min-height: 24px;
+  padding: 2px 6px;
+  color: var(--ChatMutedForeground);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.ChatReviewButton {
+  border: 1px solid var(--ChatBorder);
+}
+
 .ChatChangedFiles {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  max-height: 160px;
-  padding-top: 7px;
-  overflow: auto;
   border-top: 1px solid var(--ChatBorder);
 }
 
 .ChatChangedFile {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   min-width: 0;
-  padding: 2px 4px;
+  padding: 7px 11px;
+  font-family: var(--EditorFontFamily, monospace);
+  font-size: 11px;
+  color: var(--ChatMutedForeground);
+}
+
+.ChatChangedFile + .ChatChangedFile {
+  border-top: 1px solid color-mix(in srgb, var(--ChatBorder) 70%, transparent);
 }
 
 .ChatChangedFileName {
@@ -501,8 +566,16 @@
   white-space: nowrap;
 }
 
-.ChatChangesActions {
-  min-height: 24px;
+.ChatChangedFileStats {
+  flex: 0 0 auto;
+}
+
+.ChatShowMoreButton {
+  width: 100%;
+  padding: 7px 11px;
+  text-align: left;
+  border-top: 1px solid var(--ChatBorder);
+  border-radius: 0;
 }
 
 .ChatActivityItem {
@@ -518,26 +591,16 @@
   border-left-color: var(--ChatErrorForeground);
 }
 
-.ChatActivityLabel,
-.ChatChangesSummary {
+.ChatActivityLabel {
   font-size: 12px;
   font-weight: 500;
 }
 
-.ChatActivityDetail,
-.ChatChangedFile,
-.ChatChecksPassed {
+.ChatActivityDetail {
   overflow: hidden;
   font-family: var(--EditorFontFamily, monospace);
   font-size: 11px;
   color: var(--ChatMutedForeground);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ChatChangesSummary {
-  overflow: hidden;
-  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

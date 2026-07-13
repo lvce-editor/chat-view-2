@@ -287,16 +287,18 @@ const renderActivity = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   ])
 }
 
+const visibleChangedFileCount = 3
+
 const renderChangedFile = (file: ChatChangedFile): Dom.TreeNode => {
-  const status =
-    file.status === 'modified' ? 'M' : file.status === 'added' ? 'A' : 'D'
-  return Dom.div('ChatChangedFile', [
-    Dom.div('ChatChangedFileName', [Dom.textNode(`${status}  ${file.path}`)]),
-    Dom.div('ChatChangedFileAdditions', [
-      Dom.textNode(`+${file.additions || 0}`),
-    ]),
-    Dom.div('ChatChangedFileDeletions', [
-      Dom.textNode(`-${file.deletions || 0}`),
+  return Dom.div(`ChatChangedFile ChatChangedFile-${file.status}`, [
+    Dom.div('ChatChangedFileName', [Dom.textNode(file.path)]),
+    Dom.div('ChatChangedFileStats', [
+      Dom.div('ChatChangedFileAdditions', [
+        Dom.textNode(`+${file.additions || 0}`),
+      ]),
+      Dom.div('ChatChangedFileDeletions', [
+        Dom.textNode(`-${file.deletions || 0}`),
+      ]),
     ]),
   ])
 }
@@ -316,34 +318,49 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   const deletions = changedFiles.reduce((total, file) => {
     return total + (file.deletions || 0)
   }, 0)
-  const fileLabel = `${changedFiles.length} ${changedFiles.length === 1 ? 'file' : 'files'} changed`
+  const hiddenFileCount = Math.max(
+    0,
+    changedFiles.length - visibleChangedFileCount,
+  )
+  const files = state.changesExpanded
+    ? changedFiles
+    : changedFiles.slice(0, visibleChangedFileCount)
   return Dom.div('ChatChanges', [
     Dom.div('ChatChangesHeader', [
-      Dom.div('ChatChangesSummary', [Dom.textNode(fileLabel)]),
-      Dom.div('ChatChangeAdditions', [Dom.textNode(`+${additions}`)]),
-      Dom.div('ChatChangeDeletions', [Dom.textNode(`-${deletions}`)]),
-      Dom.div('ChatChangesSpacer', []),
-      Dom.button(
-        'toggle-changes',
-        state.changesExpanded ? 'Hide' : 'Review',
-        'ChatReviewButton',
-        { ariaExpanded: state.changesExpanded },
-      ),
+      Dom.div('ChatChangesIcon', [Dom.textNode('+')]),
+      Dom.div('ChatChangesSummary', [
+        Dom.div('ChatChangesTitle', [
+          Dom.textNode(
+            `Edited ${changedFiles.length} ${changedFiles.length === 1 ? 'file' : 'files'}`,
+          ),
+        ]),
+        Dom.div('ChatChangesMeta', [
+          Dom.div('ChatChangeAdditions', [Dom.textNode(`+${additions}`)]),
+          Dom.div('ChatChangeDeletions', [Dom.textNode(`-${deletions}`)]),
+          ...(checksPassed > 0
+            ? [
+                Dom.div('ChatChecksPassed', [
+                  Dom.textNode(`✓ ${checksPassed} checks passed`),
+                ]),
+              ]
+            : []),
+        ]),
+      ]),
+      Dom.div('ChatChangesActions', [
+        Dom.button('revert', 'Undo ↩', 'ChatRevertButton'),
+        Dom.button('toggle-changes', 'Review', 'ChatReviewButton', {
+          ariaExpanded: state.changesExpanded,
+        }),
+      ]),
     ]),
-    ...(state.changesExpanded
+    Dom.div('ChatChangedFiles', files.map(renderChangedFile)),
+    ...(!state.changesExpanded && hiddenFileCount > 0
       ? [
-          Dom.div('ChatChangedFiles', changedFiles.map(renderChangedFile)),
-          Dom.div('ChatChangesActions', [
-            ...(checksPassed > 0
-              ? [
-                  Dom.div('ChatChecksPassed', [
-                    Dom.textNode(`${checksPassed} checks passed`),
-                  ]),
-                ]
-              : []),
-            Dom.div('ChatChangesSpacer', []),
-            Dom.button('revert', 'Revert', 'ChatRevertButton'),
-          ]),
+          Dom.button(
+            'toggle-changes',
+            `Show ${hiddenFileCount} more ${hiddenFileCount === 1 ? 'file' : 'files'}  ⌄`,
+            'ChatShowMoreButton',
+          ),
         ]
       : []),
   ])
