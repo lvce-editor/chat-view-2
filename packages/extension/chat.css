@@ -1,10 +1,26 @@
 .ChatView {
   --ChatBackground: var(--SideBarBackground, var(--MainBackground, #181a1b));
-  --ChatForeground: var(--SideBarForeground, var(--WorkbenchForeground, #cccccc));
-  --ChatMutedForeground: color-mix(in srgb, var(--ChatForeground) 62%, transparent);
-  --ChatBorder: var(--SideBarBorder, color-mix(in srgb, var(--ChatForeground) 18%, transparent));
-  --ChatHoverBackground: var(--ListHoverBackground, color-mix(in srgb, var(--ChatForeground) 8%, transparent));
-  --ChatInputBackground: var(--InputBackground, color-mix(in srgb, var(--ChatForeground) 7%, var(--ChatBackground)));
+  --ChatForeground: var(
+    --SideBarForeground,
+    var(--WorkbenchForeground, #cccccc)
+  );
+  --ChatMutedForeground: color-mix(
+    in srgb,
+    var(--ChatForeground) 62%,
+    transparent
+  );
+  --ChatBorder: var(
+    --SideBarBorder,
+    color-mix(in srgb, var(--ChatForeground) 18%, transparent)
+  );
+  --ChatHoverBackground: var(
+    --ListHoverBackground,
+    color-mix(in srgb, var(--ChatForeground) 8%, transparent)
+  );
+  --ChatInputBackground: var(
+    --InputBackground,
+    color-mix(in srgb, var(--ChatForeground) 7%, var(--ChatBackground))
+  );
   --ChatInputForeground: var(--InputForeground, var(--ChatForeground));
   --ChatFocusBorder: var(--FocusBorder, #3794ff);
   --ChatButtonBackground: var(--ButtonBackground, #0e639c);

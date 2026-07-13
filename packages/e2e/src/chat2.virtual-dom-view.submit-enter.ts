@@ -14,6 +14,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(Locator('.ChatDetailView')).toBeVisible()
   await expect(Locator('text=Build a smaller chat view')).toBeVisible()
   await expect(
-    Locator('text=This is a mock response. Chat 2 is not connected to an API yet.'),
+    Locator(
+      'text=This is a mock response. Chat 2 is not connected to an API yet.',
+    ),
   ).toBeVisible()
 }

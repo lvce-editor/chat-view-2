@@ -3,6 +3,7 @@ import type {
   ViewEvent,
   VirtualDomViewInstance,
 } from '@lvce-editor/api'
+import type { VirtualDomNode } from '@lvce-editor/virtual-dom-worker'
 import type { ChatApi } from '../ChatApi/ChatApi.ts'
 import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
 import { render } from './Render.ts'
@@ -10,6 +11,9 @@ import type { ChatViewState } from './ChatViewState.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getState: () => Readonly<ChatViewState>
+  readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
+  readonly render: () => readonly VirtualDomNode[]
+  readonly renderTitle: () => string
 }
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
@@ -36,8 +40,10 @@ export const createInstance = async (
       : await api.createTask(message)
     state.draft = ''
     state.selectedTask = task
-    state.tasks = [task, ...state.tasks.filter((item) => item.id !== task.id)]
-      .slice(0, 20)
+    state.tasks = [
+      task,
+      ...state.tasks.filter((item) => item.id !== task.id),
+    ].slice(0, 20)
   }
 
   return {

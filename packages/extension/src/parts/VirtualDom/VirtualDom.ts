@@ -72,8 +72,7 @@ export const heading = (
   className: string,
   value: string,
 ): TreeNode => {
-  const type =
-    level === 1 ? VirtualDomElements.H1 : VirtualDomElements.H2
+  const type = level === 1 ? VirtualDomElements.H1 : VirtualDomElements.H2
   return node(type, { className }, [textNode(value)])
 }
 

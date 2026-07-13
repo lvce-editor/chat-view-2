@@ -8,12 +8,7 @@ export const renderEventListeners = (): readonly DomEventListener[] => {
   return [
     {
       name: 'handleKeyDown',
-      params: [
-        'handleViewEvent',
-        'keydown',
-        'event.target.name',
-        'event.key',
-      ],
+      params: ['handleViewEvent', 'keydown', 'event.target.name', 'event.key'],
     },
   ]
 }

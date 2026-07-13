@@ -1,8 +1,4 @@
-import type {
-  ChatApi,
-  ChatMessage,
-  ChatTask,
-} from '../ChatApi/ChatApi.ts'
+import type { ChatApi, ChatMessage, ChatTask } from '../ChatApi/ChatApi.ts'
 
 const mockResponse =
   'This is a mock response. Chat 2 is not connected to an API yet.'

@@ -30,9 +30,7 @@ const assertChatExtensionEntry = (
   return entry
 }
 
-const assertStaticChatExtension = async (
-  commitHash: string,
-): Promise<void> => {
+const assertStaticChatExtension = async (commitHash: string): Promise<void> => {
   const commitDir = path.join(root, 'dist', commitHash)
   const extensionDir = path.join(commitDir, 'extensions', extensionId)
   const extensionJsonPath = path.join(extensionDir, 'extension.json')

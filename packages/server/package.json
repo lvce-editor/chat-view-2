@@ -1,5 +1,5 @@
 {
-  "name": "builtin.trello-server",
+  "name": "builtin.chat-view-2-server",
   "version": "0.0.0-dev",
   "main": "index.js",
   "type": "module",

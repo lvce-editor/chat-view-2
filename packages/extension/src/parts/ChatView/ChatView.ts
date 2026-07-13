@@ -1,5 +1,8 @@
 import type { View } from '@lvce-editor/api'
-import { createInstance, type ActiveChatViewInstance } from './CreateInstance.ts'
+import {
+  createInstance,
+  type ActiveChatViewInstance,
+} from './CreateInstance.ts'
 import { renderEventListeners } from './RenderEventListeners.ts'
 
 export const viewId = 'chat2.views.chat'
