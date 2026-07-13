@@ -8,6 +8,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
 
   await Locator('textarea[name="composer"]').type('Submit with the button')
   const submit = Locator('button[name="submit"]')
+  await expect(submit).toContainText('↑')
   // eslint-disable-next-line e2e/no-direct-click
   await submit.click()
 

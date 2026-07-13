@@ -50,6 +50,22 @@ test('renders a focused task list, model control, and composer', async () => {
       name: 'model-picker',
     }),
   )
+  expect(dom).toContainEqual(
+    expect.objectContaining({
+      ariaLabel: 'Send message',
+      className: 'ChatSubmitButton',
+      name: 'submit',
+    }),
+  )
+  expect(getText(dom)).toContain('↑')
+
+  const spacerIndex = dom.findIndex(
+    (node) => node.className === 'ChatComposerSpacer',
+  )
+  const modelIndex = dom.findIndex((node) => node.name === 'model-picker')
+  const submitIndex = dom.findIndex((node) => node.name === 'submit')
+  expect(spacerIndex).toBeLessThan(modelIndex)
+  expect(modelIndex).toBeLessThan(submitIndex)
 })
 
 test('renders the experimental focus mode control when enabled', async () => {

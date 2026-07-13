@@ -112,16 +112,18 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     Dom.form('composer', 'ChatComposer', [
       Dom.textArea(state.draft, placeholder),
       Dom.div('ChatComposerControls', [
+        Dom.div('ChatComposerSpacer', []),
         Dom.button(
           'model-picker',
           getSelectedModelLabel(state),
           'ChatModelButton',
           { ariaExpanded: state.modelPickerOpen },
         ),
-        Dom.div('ChatComposerSpacer', []),
         ...(running ? [Dom.button('stop', 'Stop', 'ChatStopButton')] : []),
-        Dom.button('submit', running ? 'Steer' : 'Send', 'ChatSubmitButton', {
+        Dom.button('submit', '↑', 'ChatSubmitButton', {
+          ariaLabel: running ? 'Steer task' : 'Send message',
           disabled: !state.draft.trim() || !state.selectedModelId,
+          title: running ? 'Steer task' : 'Send message',
         }),
       ]),
     ]),
