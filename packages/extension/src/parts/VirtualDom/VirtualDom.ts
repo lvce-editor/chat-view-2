@@ -38,14 +38,24 @@ export const button = (
   name: string,
   label: string,
   className: string,
+  options: Readonly<{
+    ariaExpanded?: boolean
+    disabled?: boolean
+    title?: string
+  }> = {},
 ): TreeNode => {
   return node(
     VirtualDomElements.Button,
     {
       buttonType: 'button',
       className,
+      ...(typeof options.ariaExpanded === 'boolean' && {
+        ariaExpanded: options.ariaExpanded,
+      }),
+      ...(options.disabled && { disabled: true }),
       name,
       onClick: 'handleClick',
+      ...(options.title && { title: options.title }),
     },
     [textNode(label)],
   )
@@ -76,7 +86,7 @@ export const heading = (
   return node(type, { className }, [textNode(value)])
 }
 
-export const textArea = (value: string): TreeNode => {
+export const textArea = (value: string, placeholder: string): TreeNode => {
   return node(VirtualDomElements.TextArea, {
     ariaLabel: 'Message',
     className: 'ChatComposerInput',
@@ -84,7 +94,7 @@ export const textArea = (value: string): TreeNode => {
     onBlur: 'handleBlur',
     onFocus: 'handleFocus',
     onInput: 'handleInput',
-    placeholder: 'Ask for follow-up changes',
+    placeholder,
     spellcheck: true,
     value,
   })

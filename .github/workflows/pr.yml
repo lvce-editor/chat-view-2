@@ -47,6 +47,8 @@ jobs:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Build release archive
         run: node scripts/build.ts
+      - name: Check Chat 2 bundle budgets
+        run: npm run check:budgets
       - name: Ensure static build dependencies
         run: node -e "const { createRequire } = require('node:module'); createRequire(process.cwd() + '/packages/server/package.json').resolve('@lvce-editor/shared-process')" || npm ci
         shell: bash

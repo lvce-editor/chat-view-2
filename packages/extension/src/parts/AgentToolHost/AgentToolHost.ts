@@ -1,0 +1,577 @@
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, regex/hoist-regex, sonarjs/cognitive-complexity, unicorn/consistent-function-scoping, unicorn/max-nested-calls, unicorn/no-break-in-nested-loop, unicorn/no-declarations-before-early-exit, unicorn/prefer-code-point, unicorn/prefer-iterator-to-array */
+import {
+  exists,
+  getWorkspaceFolder,
+  readDirWithFileTypes,
+  readFile,
+  remove,
+  writeFile,
+} from '@lvce-editor/api'
+import type { ChatChangedFile } from '../ChatApi/ChatApi.ts'
+
+export interface AgentToolDefinition {
+  readonly description: string
+  readonly inputSchema: Readonly<Record<string, unknown>>
+  readonly name: string
+}
+
+export interface AgentToolCall {
+  readonly arguments: string
+  readonly callId: string
+  readonly name: string
+}
+
+export interface AgentToolResult {
+  readonly content: string
+  readonly isError: boolean
+}
+
+export interface AgentCommandOptions {
+  readonly onOutput: (chunk: string) => void
+  readonly outputLimit: number
+  readonly signal?: AbortSignal
+  readonly timeoutMs: number
+}
+
+export interface AgentCommandResult {
+  readonly exitCode: number
+  readonly output: string
+}
+
+export interface AgentCommandSandbox {
+  readonly execute: (
+    command: string,
+    options: AgentCommandOptions,
+  ) => Promise<AgentCommandResult>
+}
+
+export interface AgentEditorContext {
+  readonly activeFile?: string
+  readonly diagnostics?: readonly string[]
+  readonly selection?: string
+}
+
+export interface AgentEditorContextProvider {
+  readonly getContext: () => Promise<AgentEditorContext>
+}
+
+export interface AgentVerificationResult {
+  readonly checksPassed: number
+  readonly failed: boolean
+  readonly output: string
+}
+
+export interface AgentToolHostOptions {
+  readonly commandSandbox?: AgentCommandSandbox
+  readonly editorContextProvider?: AgentEditorContextProvider
+}
+
+export interface AgentToolHost {
+  readonly beginTurn: (taskId: string) => void
+  readonly execute: (
+    call: AgentToolCall,
+    signal?: AbortSignal,
+  ) => Promise<AgentToolResult>
+  readonly getChangedFiles: () => readonly ChatChangedFile[]
+  readonly getDefinitions: () => readonly AgentToolDefinition[]
+  readonly getWorkspaceContext: () => Promise<string>
+  readonly revert: () => Promise<readonly ChatChangedFile[]>
+  readonly verifyChanges?: (
+    signal?: AbortSignal,
+  ) => Promise<AgentVerificationResult>
+}
+
+interface FileSnapshot {
+  readonly appliedContent: string
+  readonly content: string
+  readonly existed: boolean
+  readonly uri: string
+}
+
+interface ToolArguments {
+  readonly command?: string
+  readonly endLine?: number
+  readonly expectedHash?: string
+  readonly maxResults?: number
+  readonly newText?: string
+  readonly oldText?: string
+  readonly path?: string
+  readonly query?: string
+  readonly startLine?: number
+}
+
+const directoryType = 3
+const fileType = 7
+const symlinkTypes = new Set([9, 10, 11])
+const maximumFileCharacters = 256_000
+const maximumFilesToSearch = 500
+const ignoredDirectories = new Set([
+  '.git',
+  '.hg',
+  '.svn',
+  'coverage',
+  'dist',
+  'node_modules',
+])
+
+const definitions: readonly AgentToolDefinition[] = [
+  {
+    description:
+      'Search UTF-8 workspace files for text. Returns bounded path, line, and preview matches.',
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        maxResults: { maximum: 100, minimum: 1, type: 'integer' },
+        query: { minLength: 1, type: 'string' },
+      },
+      required: ['query'],
+      type: 'object',
+    },
+    name: 'search_workspace',
+  },
+  {
+    description:
+      'Read a bounded line range from a UTF-8 file inside the workspace.',
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        endLine: { minimum: 1, type: 'integer' },
+        path: { minLength: 1, type: 'string' },
+        startLine: { minimum: 1, type: 'integer' },
+      },
+      required: ['path'],
+      type: 'object',
+    },
+    name: 'read_file',
+  },
+  {
+    description:
+      'Atomically replace exactly one text occurrence in a workspace file. Pass an empty oldText only when creating a new file.',
+    inputSchema: {
+      additionalProperties: false,
+      properties: {
+        expectedHash: { type: 'string' },
+        newText: { type: 'string' },
+        oldText: { type: 'string' },
+        path: { minLength: 1, type: 'string' },
+      },
+      required: ['path', 'oldText', 'newText'],
+      type: 'object',
+    },
+    name: 'apply_patch',
+  },
+  {
+    description:
+      'Report editor diagnostics. This portable build returns an unavailable result until Lvce exposes a diagnostics consumer API.',
+    inputSchema: {
+      additionalProperties: false,
+      properties: {},
+      type: 'object',
+    },
+    name: 'get_diagnostics',
+  },
+  {
+    description:
+      'Run a command in an enforced workspace sandbox. This tool fails closed when no portable sandbox is available.',
+    inputSchema: {
+      additionalProperties: false,
+      properties: { command: { minLength: 1, type: 'string' } },
+      required: ['command'],
+      type: 'object',
+    },
+    name: 'run_command',
+  },
+]
+
+const parseArguments = (value: string): ToolArguments => {
+  const parsed: unknown = JSON.parse(value || '{}')
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new TypeError('Tool arguments must be a JSON object')
+  }
+  return parsed
+}
+
+const getWorkspaceBase = async (): Promise<string> => {
+  const workspace = await getWorkspaceFolder()
+  if (!workspace) {
+    throw new Error('Open a workspace before running a coding task')
+  }
+  return workspace.endsWith('/') ? workspace : `${workspace}/`
+}
+
+export const validateWorkspaceRelativePath = (path: string): string => {
+  const normalized = path.replaceAll('\\', '/')
+  const segments = normalized.split('/').filter(Boolean)
+  if (
+    !normalized ||
+    normalized.startsWith('/') ||
+    /^[a-zA-Z]:/.test(normalized) ||
+    normalized.includes('://') ||
+    segments.includes('..') ||
+    segments.includes('.git')
+  ) {
+    throw new Error(`Path must stay inside the workspace: ${path}`)
+  }
+  return segments.join('/')
+}
+
+const resolveWorkspacePath = async (path: string): Promise<string> => {
+  const base = await getWorkspaceBase()
+  const relativePath = validateWorkspaceRelativePath(path)
+  const segments = relativePath.split('/')
+  let parent = base
+  for (const segment of segments) {
+    const entries = await readDirWithFileTypes(parent)
+    const entry = entries.find((item) => item.name === segment)
+    if (!entry) {
+      break
+    }
+    if (symlinkTypes.has(entry.type)) {
+      throw new Error(`Symbolic links are not allowed in agent paths: ${path}`)
+    }
+    parent += `${segment}/`
+  }
+  return `${base}${relativePath}`
+}
+
+const hashText = (value: string): string => {
+  let hash = 2_166_136_261
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16_777_619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+const success = (content: string): AgentToolResult => ({
+  content,
+  isError: false,
+})
+
+const failure = (error: unknown): AgentToolResult => ({
+  content: error instanceof Error ? error.message : String(error),
+  isError: true,
+})
+
+export const createAgentToolHost = ({
+  commandSandbox,
+  editorContextProvider,
+}: AgentToolHostOptions = {}): AgentToolHost => {
+  let changedFiles = new Map<string, ChatChangedFile>()
+  let snapshots = new Map<string, FileSnapshot>()
+  const availableDefinitions = definitions.filter((definition) => {
+    if (definition.name === 'run_command') {
+      return Boolean(commandSandbox)
+    }
+    if (definition.name === 'get_diagnostics') {
+      return Boolean(editorContextProvider)
+    }
+    return true
+  })
+
+  const searchWorkspace = async (
+    query: string,
+    maxResults: number,
+    signal?: AbortSignal,
+  ): Promise<string> => {
+    const workspace = await getWorkspaceBase()
+    const directories = ['']
+    const matches: string[] = []
+    let visitedFiles = 0
+    while (
+      directories.length > 0 &&
+      matches.length < maxResults &&
+      visitedFiles < maximumFilesToSearch
+    ) {
+      signal?.throwIfAborted()
+      const directory = directories.shift() || ''
+      const entries = await readDirWithFileTypes(`${workspace}${directory}`)
+      for (const entry of entries) {
+        const relativePath = directory
+          ? `${directory}/${entry.name}`
+          : entry.name
+        if (
+          entry.type === directoryType &&
+          !ignoredDirectories.has(entry.name)
+        ) {
+          directories.push(relativePath)
+          continue
+        }
+        if (entry.type !== fileType) {
+          continue
+        }
+        visitedFiles++
+        try {
+          const content = await readFile(`${workspace}${relativePath}`)
+          if (content.length > maximumFileCharacters) {
+            continue
+          }
+          const lines = content.split('\n')
+          for (let index = 0; index < lines.length; index++) {
+            if (!lines[index]?.toLowerCase().includes(query.toLowerCase())) {
+              continue
+            }
+
+            matches.push(
+              `${relativePath}:${index + 1}: ${lines[index]?.trim().slice(0, 240)}`,
+            )
+            if (matches.length >= maxResults) {
+              break
+            }
+          }
+        } catch {
+          // Binary, unreadable, and concurrently removed files are skipped.
+        }
+      }
+    }
+    return matches.length > 0
+      ? matches.join('\n')
+      : `No matches for ${JSON.stringify(query)}`
+  }
+
+  const readWorkspaceFile = async (
+    path: string,
+    startLine = 1,
+    endLine = startLine + 399,
+  ): Promise<string> => {
+    const content = await readFile(await resolveWorkspacePath(path))
+    const lines = content.split('\n')
+    const start = Math.max(1, startLine)
+    const end = Math.min(lines.length, Math.max(start, endLine), start + 399)
+    const body = lines
+      .slice(start - 1, end)
+      .map((line, index) => `${start + index}: ${line}`)
+      .join('\n')
+    return `${body}\n\n[hash ${hashText(content)}; lines ${start}-${end} of ${lines.length}]`
+  }
+
+  const applyPatch = async (
+    path: string,
+    oldText: string,
+    newText: string,
+    expectedHash?: string,
+  ): Promise<string> => {
+    const normalizedPath = validateWorkspaceRelativePath(path)
+    const uri = await resolveWorkspacePath(normalizedPath)
+    const existed = await exists(uri)
+    const content = existed ? await readFile(uri) : ''
+    if (expectedHash && hashText(content) !== expectedHash) {
+      throw new Error(`File changed since it was read: ${normalizedPath}`)
+    }
+    const originalSnapshot = snapshots.get(normalizedPath) || {
+      appliedContent: content,
+      content,
+      existed,
+      uri,
+    }
+    let updated: string
+    if (!existed && oldText === '') {
+      updated = newText
+    } else {
+      const firstIndex = content.indexOf(oldText)
+      const lastIndex = content.lastIndexOf(oldText)
+      if (firstIndex === -1) {
+        throw new Error(`Text to replace was not found in ${normalizedPath}`)
+      }
+      if (firstIndex !== lastIndex) {
+        throw new Error(`Text to replace is not unique in ${normalizedPath}`)
+      }
+      updated = `${content.slice(0, firstIndex)}${newText}${content.slice(firstIndex + oldText.length)}`
+    }
+    await writeFile(uri, updated)
+    snapshots.set(normalizedPath, {
+      ...originalSnapshot,
+      appliedContent: updated,
+    })
+    changedFiles.set(normalizedPath, {
+      path: normalizedPath,
+      status: existed ? 'modified' : 'added',
+    })
+    return `Updated ${normalizedPath} [hash ${hashText(updated)}]`
+  }
+
+  return {
+    beginTurn() {
+      changedFiles = new Map()
+      snapshots = new Map()
+    },
+    async execute(call, signal) {
+      try {
+        signal?.throwIfAborted()
+        const args = parseArguments(call.arguments)
+        if (call.name === 'search_workspace') {
+          if (typeof args.query !== 'string' || !args.query) {
+            throw new TypeError('search_workspace requires query')
+          }
+          return success(
+            await searchWorkspace(
+              args.query,
+              Math.min(100, Math.max(1, args.maxResults ?? 40)),
+              signal,
+            ),
+          )
+        }
+        if (call.name === 'read_file') {
+          if (typeof args.path !== 'string') {
+            throw new TypeError('read_file requires path')
+          }
+          return success(
+            await readWorkspaceFile(args.path, args.startLine, args.endLine),
+          )
+        }
+        if (call.name === 'apply_patch') {
+          if (
+            typeof args.path !== 'string' ||
+            typeof args.oldText !== 'string' ||
+            typeof args.newText !== 'string'
+          ) {
+            throw new TypeError(
+              'apply_patch requires path, oldText, and newText',
+            )
+          }
+          return success(
+            await applyPatch(
+              args.path,
+              args.oldText,
+              args.newText,
+              args.expectedHash,
+            ),
+          )
+        }
+        if (call.name === 'get_diagnostics') {
+          if (!editorContextProvider) {
+            return failure(new Error('Diagnostics are unavailable'))
+          }
+          const context = await editorContextProvider.getContext()
+          return success(
+            context.diagnostics?.join('\n') || 'No visible diagnostics',
+          )
+        }
+        if (call.name === 'run_command') {
+          if (!commandSandbox || typeof args.command !== 'string') {
+            return failure(new Error('Sandboxed command execution is disabled'))
+          }
+          const result = await commandSandbox.execute(args.command, {
+            onOutput() {},
+            outputLimit: 128_000,
+            ...(signal && { signal }),
+            timeoutMs: 120_000,
+          })
+          return result.exitCode === 0
+            ? success(result.output.slice(0, 128_000))
+            : failure(
+                new Error(
+                  `Command exited with code ${result.exitCode}\n${result.output.slice(0, 128_000)}`,
+                ),
+              )
+        }
+        return failure(new Error(`Unknown tool: ${call.name}`))
+      } catch (error) {
+        return failure(error)
+      }
+    },
+    getChangedFiles() {
+      return [...changedFiles.values()]
+    },
+    getDefinitions() {
+      return availableDefinitions
+    },
+    async getWorkspaceContext() {
+      try {
+        const workspace = await getWorkspaceBase()
+        const agentsUri = `${workspace}AGENTS.md`
+        const editorContext = editorContextProvider
+          ? await editorContextProvider.getContext()
+          : undefined
+        const contextParts = [`Workspace: ${workspace}`]
+        if (editorContext?.activeFile) {
+          contextParts.push(`Active file: ${editorContext.activeFile}`)
+        }
+        if (editorContext?.selection) {
+          contextParts.push(
+            `Selection:\n${editorContext.selection.slice(0, 8000)}`,
+          )
+        }
+        if (editorContext?.diagnostics?.length) {
+          contextParts.push(
+            `Visible diagnostics:\n${editorContext.diagnostics.slice(0, 50).join('\n')}`,
+          )
+        }
+        if (await exists(agentsUri)) {
+          const contents = await readFile(agentsUri)
+          const instructions = contents.slice(0, 16_000)
+          contextParts.push(
+            `Repository instructions from AGENTS.md:\n${instructions}`,
+          )
+        }
+        return contextParts.join('\n\n')
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error)
+      }
+    },
+    async revert() {
+      const reverted: ChatChangedFile[] = []
+      for (const [path, snapshot] of snapshots) {
+        const currentlyExists = await exists(snapshot.uri)
+        const currentContent = currentlyExists
+          ? await readFile(snapshot.uri)
+          : ''
+        if (currentContent !== snapshot.appliedContent) {
+          throw new Error(
+            `Cannot revert ${path} because it changed after the agent edit`,
+          )
+        }
+        if (snapshot.existed) {
+          await writeFile(snapshot.uri, snapshot.content)
+        } else if (await exists(snapshot.uri)) {
+          await remove(snapshot.uri)
+        }
+        reverted.push({ path, status: 'modified' })
+      }
+      changedFiles = new Map()
+      snapshots = new Map()
+      return reverted
+    },
+    ...(commandSandbox && {
+      async verifyChanges(signal?: AbortSignal) {
+        const workspace = await getWorkspaceBase()
+        const packageUri = `${workspace}package.json`
+        if (!(await exists(packageUri)) || changedFiles.size === 0) {
+          return { checksPassed: 0, failed: false, output: '' }
+        }
+        const packageJson = JSON.parse(await readFile(packageUri)) as {
+          readonly scripts?: Readonly<Record<string, string>>
+        }
+        const scripts = packageJson.scripts || {}
+        const checks = ['type-check', 'test', 'lint']
+          .filter((name) => typeof scripts[name] === 'string')
+          .slice(0, 2)
+        let checksPassed = 0
+        const outputs: string[] = []
+        for (const check of checks) {
+          signal?.throwIfAborted()
+          const result = await commandSandbox.execute(`npm run ${check}`, {
+            onOutput() {},
+            outputLimit: 128_000,
+            ...(signal && { signal }),
+            timeoutMs: 120_000,
+          })
+          outputs.push(`$ npm run ${check}\n${result.output.slice(0, 128_000)}`)
+          if (result.exitCode !== 0) {
+            return {
+              checksPassed,
+              failed: true,
+              output: outputs.join('\n\n'),
+            }
+          }
+          checksPassed++
+        }
+        return {
+          checksPassed,
+          failed: false,
+          output: outputs.join('\n\n'),
+        }
+      },
+    }),
+  }
+}

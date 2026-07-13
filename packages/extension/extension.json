@@ -2,11 +2,17 @@
   "id": "builtin.chat-view-2",
   "name": "Chat 2",
   "workerName": "Chat 2 Worker",
-  "description": "A minimal mock chat experience for Lvce Editor",
+  "description": "A focused, low-overhead coding agent for Lvce Editor",
   "repository": "https://github.com/lvce-editor/chat-view-2",
   "browser": "dist/chatMain.js",
   "isolated": true,
   "categories": ["Other"],
+  "configuration": {
+    "chat2.backendUrl": {
+      "type": "string",
+      "default": ""
+    }
+  },
   "activation": [
     "onView:chat2.views.chat",
     "onCommand:chat2.show",

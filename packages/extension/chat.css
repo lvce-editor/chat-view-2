@@ -26,6 +26,7 @@
   --ChatButtonBackground: var(--ButtonBackground, #0e639c);
   --ChatButtonForeground: var(--ButtonForeground, #ffffff);
   --ChatButtonHoverBackground: var(--ButtonHoverBackground, #1177bb);
+  --ChatErrorForeground: var(--ErrorForeground, #f48771);
 
   box-sizing: border-box;
   display: flex;
@@ -59,6 +60,11 @@
   white-space: nowrap;
 }
 
+.ChatDetailTitle {
+  flex: 1 1 auto;
+  text-transform: none;
+}
+
 .ChatTaskCount {
   margin-left: auto;
   font-size: 11px;
@@ -67,7 +73,8 @@
 }
 
 .ChatTaskList,
-.ChatMessages {
+.ChatMessages,
+.ChatEmptyState {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -82,7 +89,7 @@
 .ChatTaskButton {
   box-sizing: border-box;
   width: 100%;
-  min-height: 30px;
+  min-height: 32px;
   padding: 5px 10px;
   overflow: hidden;
   color: var(--ChatForeground);
@@ -94,15 +101,50 @@
   border-radius: 5px;
 }
 
-.ChatTaskButton:hover {
+.ChatTaskButton:hover,
+.ChatModelOption:hover,
+.ChatActivityToggle:hover,
+.ChatRevertButton:hover,
+.ChatModelButton:hover {
   background: var(--ChatHoverBackground);
+}
+
+.ChatTaskStatus-running,
+.ChatTaskStatus-stopping {
+  color: var(--ChatFocusBorder);
+}
+
+.ChatTaskStatus-failed {
+  color: var(--ChatErrorForeground);
+}
+
+.ChatEmptyState {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  text-align: center;
+}
+
+.ChatEmptyTitle {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.ChatEmptyText {
+  max-width: 280px;
+  color: var(--ChatMutedForeground);
+  line-height: 1.5;
+}
+
+.ChatComposerArea {
+  position: relative;
+  flex: 0 0 auto;
 }
 
 .ChatComposer {
   display: flex;
-  flex: 0 0 auto;
-  gap: 8px;
-  align-items: flex-end;
+  flex-direction: column;
+  gap: 6px;
   margin: 8px;
   padding: 8px;
   background: var(--ChatInputBackground);
@@ -116,7 +158,7 @@
 
 .ChatComposerInput {
   box-sizing: border-box;
-  flex: 1 1 auto;
+  width: 100%;
   min-width: 0;
   min-height: 48px;
   max-height: 180px;
@@ -128,32 +170,107 @@
   outline: 0;
 }
 
+.ChatComposerControls,
+.ChatChangesHeader {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ChatComposerSpacer {
+  flex: 1 1 auto;
+}
+
 .ChatSubmitButton,
-.ChatBackButton {
+.ChatStopButton,
+.ChatBackButton,
+.ChatNewTaskButton {
   flex: 0 0 auto;
-  min-height: 28px;
-  padding: 4px 10px;
+  min-height: 26px;
+  padding: 3px 10px;
   color: var(--ChatButtonForeground);
   background: var(--ChatButtonBackground);
   border: 0;
   border-radius: 6px;
 }
 
-.ChatSubmitButton:hover,
-.ChatBackButton:hover {
+.ChatSubmitButton:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.ChatSubmitButton:hover:not(:disabled),
+.ChatStopButton:hover,
+.ChatBackButton:hover,
+.ChatNewTaskButton:hover {
   background: var(--ChatButtonHoverBackground);
+}
+
+.ChatStopButton,
+.ChatBackButton,
+.ChatNewTaskButton {
+  color: var(--ChatForeground);
+  background: transparent;
+  border: 1px solid var(--ChatBorder);
+}
+
+.ChatModelButton,
+.ChatRevertButton,
+.ChatActivityToggle {
+  min-height: 24px;
+  padding: 2px 6px;
+  color: var(--ChatMutedForeground);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.ChatModelPicker {
+  position: absolute;
+  right: 8px;
+  bottom: calc(100% - 2px);
+  left: 8px;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  padding: 6px;
+  overflow: auto;
+  background: var(--ChatInputBackground);
+  border: 1px solid var(--ChatBorder);
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 24%);
+}
+
+.ChatModelPickerTitle {
+  padding: 5px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ChatMutedForeground);
+  text-transform: uppercase;
+}
+
+.ChatModelOption {
+  min-height: 30px;
+  padding: 5px 8px;
+  color: var(--ChatForeground);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.ChatModelOption:disabled {
+  opacity: 0.5;
 }
 
 .ChatDetailHeader {
   border-bottom: 1px solid var(--ChatBorder);
 }
 
-.ChatDetailTitle {
-  text-transform: none;
-}
-
 .ChatMessages {
-  gap: 18px;
+  gap: 16px;
   padding: 16px 14px;
 }
 
@@ -187,4 +304,62 @@
 
 .ChatMessageAssistant {
   align-self: stretch;
+}
+
+.ChatMessageStreaming {
+  opacity: 0.9;
+}
+
+.ChatActivity,
+.ChatChanges {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--ChatForeground) 4%, transparent);
+  border: 1px solid var(--ChatBorder);
+  border-radius: 8px;
+}
+
+.ChatActivityItem {
+  padding: 4px 6px;
+  border-left: 2px solid var(--ChatBorder);
+}
+
+.ChatActivity-running {
+  border-left-color: var(--ChatFocusBorder);
+}
+
+.ChatActivity-failed {
+  border-left-color: var(--ChatErrorForeground);
+}
+
+.ChatActivityLabel,
+.ChatChangesSummary {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ChatActivityDetail,
+.ChatChangedFile {
+  overflow: hidden;
+  font-family: var(--EditorFontFamily, monospace);
+  font-size: 11px;
+  color: var(--ChatMutedForeground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ChatChangesSummary {
+  flex: 1 1 auto;
+}
+
+.ChatErrorBanner {
+  padding: 8px 10px;
+  margin: 0 8px;
+  color: var(--ChatErrorForeground);
+  background: color-mix(in srgb, var(--ChatErrorForeground) 8%, transparent);
+  border: 1px solid
+    color-mix(in srgb, var(--ChatErrorForeground) 35%, transparent);
+  border-radius: 6px;
 }

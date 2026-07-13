@@ -1,0 +1,227 @@
+[
+  {
+    "id": "bug-beforeinput",
+    "category": "bug",
+    "prompt": "Fix a beforeinput crash in a quick pick without changing keyboard behavior.",
+    "success": ["regression test passes", "existing quick pick tests pass"]
+  },
+  {
+    "id": "bug-dispose-view",
+    "category": "bug",
+    "prompt": "Dispose an Electron web contents view when its owner closes and cover repeated disposal.",
+    "success": ["resource is disposed once", "test covers repeated close"]
+  },
+  {
+    "id": "bug-activity-icons",
+    "category": "bug",
+    "prompt": "Fix missing activity bar icons while preserving custom icon support.",
+    "success": ["built-in icons render", "custom icon test passes"]
+  },
+  {
+    "id": "bug-typescript-highlighting",
+    "category": "bug",
+    "prompt": "Repair TypeScript syntax highlighting for type-only imports.",
+    "success": ["fixture highlights type-only import", "tokenizer tests pass"]
+  },
+  {
+    "id": "bug-empty-commit",
+    "category": "bug",
+    "prompt": "Disable the source-control commit action when the message is empty.",
+    "success": ["empty input disables action", "non-empty input still works"]
+  },
+  {
+    "id": "bug-view-refresh",
+    "category": "bug",
+    "prompt": "Fix a running-extensions view that fails to refresh after uninstall.",
+    "success": ["view refreshes after uninstall", "regression test passes"]
+  },
+  {
+    "id": "feature-worker-memory",
+    "category": "feature",
+    "prompt": "Show worker memory usage in an existing diagnostics view with a stable unavailable state.",
+    "success": ["memory value renders", "unavailable state renders"]
+  },
+  {
+    "id": "feature-quickpick-command",
+    "category": "feature",
+    "prompt": "Add a command that opens the quick pick and selects the first enabled result.",
+    "success": ["command is contributed", "disabled entries are skipped"]
+  },
+  {
+    "id": "feature-open-preview",
+    "category": "feature",
+    "prompt": "Open an HTML file in the right-side preview from the explorer context menu.",
+    "success": ["menu entry is scoped to HTML", "preview receives correct URI"]
+  },
+  {
+    "id": "feature-extension-icon",
+    "category": "feature",
+    "prompt": "Add an extension icon and ensure the packaged extension contains it.",
+    "success": ["manifest references icon", "build archive contains icon"]
+  },
+  {
+    "id": "feature-diagnostics-e2e",
+    "category": "feature",
+    "prompt": "Add an end-to-end test for TypeScript diagnostics appearing in Problems.",
+    "success": [
+      "test waits without fixed sleeps",
+      "expected diagnostic is asserted"
+    ]
+  },
+  {
+    "id": "feature-status-item",
+    "category": "feature",
+    "prompt": "Add a status bar item for the active background task with accessible text.",
+    "success": ["item reflects active state", "accessible label is tested"]
+  },
+  {
+    "id": "refactor-context-menu",
+    "category": "refactor",
+    "prompt": "Extract a context-menu handler into a focused module without changing behavior.",
+    "success": [
+      "callers use extracted module",
+      "tests remain behaviorally identical"
+    ]
+  },
+  {
+    "id": "refactor-command-map",
+    "category": "refactor",
+    "prompt": "Replace a command switch with a typed command map while keeping lazy loading.",
+    "success": [
+      "all commands remain registered",
+      "unknown command behavior is preserved"
+    ]
+  },
+  {
+    "id": "refactor-render-helper",
+    "category": "refactor",
+    "prompt": "Simplify a virtual-DOM render helper and remove duplicated branches.",
+    "success": [
+      "render output is unchanged",
+      "branch coverage does not decrease"
+    ]
+  },
+  {
+    "id": "refactor-auth-state",
+    "category": "refactor",
+    "prompt": "Separate backend authentication state from chat presentation state.",
+    "success": [
+      "auth transitions remain covered",
+      "view no longer owns token refresh logic"
+    ]
+  },
+  {
+    "id": "refactor-file-search",
+    "category": "refactor",
+    "prompt": "Consolidate duplicate workspace text-search implementations behind one interface.",
+    "success": ["memory and file schemes work", "search limits remain enforced"]
+  },
+  {
+    "id": "refactor-picker-state",
+    "category": "refactor",
+    "prompt": "Reduce model-picker state without changing focus or keyboard navigation.",
+    "success": ["keyboard tests pass", "obsolete state is removed"]
+  },
+  {
+    "id": "test-extension-manifest",
+    "category": "test",
+    "prompt": "Add manifest tests for a contributed view, command, activation event, and keybinding.",
+    "success": [
+      "all four contributions are asserted",
+      "test reads packaged source manifest"
+    ]
+  },
+  {
+    "id": "test-stream-fragments",
+    "category": "test",
+    "prompt": "Add tests for an SSE parser receiving JSON split across arbitrary chunks.",
+    "success": [
+      "split event is reconstructed",
+      "trailing event without blank line works"
+    ]
+  },
+  {
+    "id": "test-tool-timeout",
+    "category": "test",
+    "prompt": "Add deterministic coverage for a tool timeout and child-process cleanup.",
+    "success": ["timeout returns structured failure", "cleanup is asserted"]
+  },
+  {
+    "id": "test-path-traversal",
+    "category": "test",
+    "prompt": "Cover path traversal and symlink escape attempts in a workspace file tool.",
+    "success": [
+      "outside paths are rejected",
+      "normal workspace path still works"
+    ]
+  },
+  {
+    "id": "test-persistence",
+    "category": "test",
+    "prompt": "Test recovery of task history after closing and reopening the chat view.",
+    "success": [
+      "events restore in order",
+      "active transient state is not restored"
+    ]
+  },
+  {
+    "id": "test-cancellation",
+    "category": "test",
+    "prompt": "Test cancellation while a streamed model response and tool request are active.",
+    "success": ["both operations receive abort", "task reaches stopped state"]
+  },
+  {
+    "id": "performance-lazy-worker",
+    "category": "performance",
+    "prompt": "Prevent a feature worker from loading before its view is opened.",
+    "success": ["startup does not request worker", "opening view loads it once"]
+  },
+  {
+    "id": "performance-stream-render",
+    "category": "performance",
+    "prompt": "Coalesce token updates so streaming does not rerender once per token.",
+    "success": ["render count is bounded", "final text is complete"]
+  },
+  {
+    "id": "performance-virtual-list",
+    "category": "performance",
+    "prompt": "Virtualize a task list with thousands of rows while preserving keyboard focus.",
+    "success": ["DOM row count is bounded", "focus moves across viewport"]
+  },
+  {
+    "id": "performance-bundle",
+    "category": "performance",
+    "prompt": "Lazy-load a rarely used parser and add a production bundle-size assertion.",
+    "success": ["parser is a separate chunk", "budget check fails above limit"]
+  },
+  {
+    "id": "integration-model-gating",
+    "category": "integration",
+    "prompt": "Handle a model becoming unavailable for the current subscription plan.",
+    "success": [
+      "model is disabled with reason",
+      "active task does not silently switch"
+    ]
+  },
+  {
+    "id": "integration-auth-refresh",
+    "category": "integration",
+    "prompt": "Refresh an expired backend session once and retry the original model request.",
+    "success": [
+      "only one refresh occurs",
+      "second authorization failure is surfaced"
+    ]
+  },
+  {
+    "id": "integration-tool-repair",
+    "category": "integration",
+    "prompt": "Feed a failed focused test back to the agent and let it repair the change.",
+    "success": ["failure output reaches next step", "final focused test passes"]
+  },
+  {
+    "id": "integration-revert-conflict",
+    "category": "integration",
+    "prompt": "Refuse automatic revert when a user changed the same file after the agent turn.",
+    "success": ["user edit is preserved", "conflict is clearly reported"]
+  }
+]
