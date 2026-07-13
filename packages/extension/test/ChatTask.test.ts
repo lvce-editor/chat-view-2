@@ -24,14 +24,28 @@ test('reduces messages, activity, errors, and latest changes from events', () =>
     createEvent({ text: 'Done', type: 'assistant-message' }),
     createEvent({
       checksPassed: 1,
-      files: [{ path: 'a.ts', status: 'modified' }],
+      files: [
+        {
+          additions: 1,
+          deletions: 1,
+          path: 'a.ts',
+          status: 'modified',
+        },
+      ],
       type: 'changes',
     }),
   ].reduce(appendEvent, baseTask)
 
   expect(summarizeTask(task)).toEqual(
     expect.objectContaining({
-      changedFiles: [{ path: 'a.ts', status: 'modified' }],
+      changedFiles: [
+        {
+          additions: 1,
+          deletions: 1,
+          path: 'a.ts',
+          status: 'modified',
+        },
+      ],
       checksPassed: 1,
       errorMessage: '',
     }),

@@ -1,6 +1,11 @@
 /* eslint-disable sonarjs/no-nested-conditional, unicorn/max-nested-calls, unicorn/prefer-iterator-to-array */
 import type { VirtualDomNode } from '@lvce-editor/virtual-dom-worker'
-import type { ChatModel, ChatTask, ChatTaskEvent } from '../ChatApi/ChatApi.ts'
+import type {
+  ChatChangedFile,
+  ChatModel,
+  ChatTask,
+  ChatTaskEvent,
+} from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
 import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
@@ -261,26 +266,65 @@ const renderActivity = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   ])
 }
 
-const renderChanges = (task: ChatTask): Dom.TreeNode => {
+const renderChangedFile = (file: ChatChangedFile): Dom.TreeNode => {
+  const status =
+    file.status === 'modified' ? 'M' : file.status === 'added' ? 'A' : 'D'
+  return Dom.div('ChatChangedFile', [
+    Dom.div('ChatChangedFileName', [Dom.textNode(`${status}  ${file.path}`)]),
+    Dom.div('ChatChangedFileAdditions', [
+      Dom.textNode(`+${file.additions || 0}`),
+    ]),
+    Dom.div('ChatChangedFileDeletions', [
+      Dom.textNode(`-${file.deletions || 0}`),
+    ]),
+  ])
+}
+
+const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
+  const task = state.selectedTask
+  if (!task) {
+    return Dom.div('ChatChangesHidden', [])
+  }
   const { changedFiles, checksPassed } = summarizeTask(task)
   if (changedFiles.length === 0) {
     return Dom.div('ChatChangesHidden', [])
   }
-  const summary = `Changed ${changedFiles.length} ${changedFiles.length === 1 ? 'file' : 'files'}${
-    checksPassed > 0 ? ` · ${checksPassed} checks passed` : ''
-  }`
+  const additions = changedFiles.reduce((total, file) => {
+    return total + (file.additions || 0)
+  }, 0)
+  const deletions = changedFiles.reduce((total, file) => {
+    return total + (file.deletions || 0)
+  }, 0)
+  const fileLabel = `${changedFiles.length} ${changedFiles.length === 1 ? 'file' : 'files'} changed`
   return Dom.div('ChatChanges', [
     Dom.div('ChatChangesHeader', [
-      Dom.div('ChatChangesSummary', [Dom.textNode(summary)]),
-      Dom.button('revert', 'Revert', 'ChatRevertButton'),
+      Dom.div('ChatChangesSummary', [Dom.textNode(fileLabel)]),
+      Dom.div('ChatChangeAdditions', [Dom.textNode(`+${additions}`)]),
+      Dom.div('ChatChangeDeletions', [Dom.textNode(`-${deletions}`)]),
+      Dom.div('ChatChangesSpacer', []),
+      Dom.button(
+        'toggle-changes',
+        state.changesExpanded ? 'Hide' : 'Review',
+        'ChatReviewButton',
+        { ariaExpanded: state.changesExpanded },
+      ),
     ]),
-    ...changedFiles.map((file) =>
-      Dom.div('ChatChangedFile', [
-        Dom.textNode(
-          `${file.status === 'modified' ? 'M' : file.status === 'added' ? 'A' : 'D'}  ${file.path}`,
-        ),
-      ]),
-    ),
+    ...(state.changesExpanded
+      ? [
+          Dom.div('ChatChangedFiles', changedFiles.map(renderChangedFile)),
+          Dom.div('ChatChangesActions', [
+            ...(checksPassed > 0
+              ? [
+                  Dom.div('ChatChecksPassed', [
+                    Dom.textNode(`${checksPassed} checks passed`),
+                  ]),
+                ]
+              : []),
+            Dom.div('ChatChangesSpacer', []),
+            Dom.button('revert', 'Revert', 'ChatRevertButton'),
+          ]),
+        ]
+      : []),
   ])
 }
 
@@ -309,8 +353,8 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       ...(state.errorMessage
         ? [Dom.div('ChatErrorBanner', [Dom.textNode(state.errorMessage)])]
         : []),
-      renderChanges(task),
     ]),
+    renderChanges(state),
     renderComposer(state),
   ])
 }

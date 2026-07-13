@@ -1,4 +1,5 @@
 import { expect, test } from '@jest/globals'
+import { summarizeTask } from '../src/parts/ChatTask/ChatTask.ts'
 import { createMockChatApi } from '../src/parts/MockChatApi/MockChatApi.ts'
 
 test('returns only OpenAI models', async () => {
@@ -34,4 +35,18 @@ test('keeps an append-only event history for a completed task', async () => {
   const tasks = await api.listTasks(20)
   expect(tasks).toHaveLength(20)
   expect(tasks[0]).toEqual(task)
+})
+
+test('provides a five-file change fixture with line totals', async () => {
+  const api = createMockChatApi()
+  const task = await api.createTask('Change several files', 'gpt-5.4')
+  const { changedFiles } = summarizeTask(task)
+
+  expect(changedFiles).toHaveLength(5)
+  expect(changedFiles.reduce((total, file) => total + file.additions, 0)).toBe(
+    51,
+  )
+  expect(changedFiles.reduce((total, file) => total + file.deletions, 0)).toBe(
+    10,
+  )
 })
