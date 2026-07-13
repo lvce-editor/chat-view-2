@@ -1,0 +1,17 @@
+{
+  "name": "e2e",
+  "version": "0.0.0-dev",
+  "description": "End-to-end tests for the Trello extension",
+  "main": "index.js",
+  "scripts": {
+    "build:extension": "node ../build/src/build-extension.ts",
+    "e2e": "npm run build:extension && node ./node_modules/@lvce-editor/test-with-playwright/bin/test-with-playwright.js --only-extension=../extension --test-path=.",
+    "e2e:headless": "npm run build:extension && node ./node_modules/@lvce-editor/test-with-playwright/bin/test-with-playwright.js  --only-extension=../extension --test-path=. --headless"
+  },
+  "type": "module",
+  "author": "Lvce Editor",
+  "license": "MIT",
+  "devDependencies": {
+    "@lvce-editor/test-with-playwright": "^22.3.0"
+  }
+}

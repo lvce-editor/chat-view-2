@@ -1,0 +1,142 @@
+{
+  "id": "builtin.trello",
+  "name": "Trello",
+  "workerName": "Trello Worker",
+  "description": "Browse Trello boards from Lvce Editor",
+  "repository": "https://github.com/lvce-editor/trello",
+  "browser": "dist/trelloMain.js",
+  "isolated": true,
+  "categories": ["Other"],
+  "configuration": {
+    "trello.searchEnabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "trello.boardBackgroundEnabled": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "activation": [
+    "onView:trello.views.boards",
+    "onCommand:trello.backToBoards",
+    "onCommand:trello.cancelNewCard",
+    "onCommand:trello.closeCardDetail",
+    "onCommand:trello.logout",
+    "onCommand:trello.openCard",
+    "onCommand:trello.refreshBoards",
+    "onCommand:trello.saveCardDetail",
+    "onCommand:trello.show",
+    "onCommand:trello.startAddCard",
+    "onCommand:trello.submitNewCard",
+    "onCommand:trello.test.useMockData",
+    "onCommand:trello.test.reset",
+    "onCommand:trello.addList",
+    "onCommand:trello.openMockBoard",
+    "onCommand:trello.addCard"
+  ],
+  "commands": [
+    {
+      "id": "trello.show",
+      "label": "Trello: Show"
+    },
+    {
+      "id": "trello.addList",
+      "label": "Trello: Add List"
+    },
+    {
+      "id": "trello.openMockBoard",
+      "label": "Trello: Open Mock Board"
+    },
+    {
+      "id": "trello.addCard",
+      "label": "Trello: Add Card"
+    },
+    {
+      "id": "trello.backToBoards",
+      "label": "Trello: Back to Boards"
+    },
+    {
+      "id": "trello.cancelNewCard",
+      "label": "Trello: Cancel New Card"
+    },
+    {
+      "id": "trello.closeCardDetail",
+      "label": "Trello: Close Card Detail"
+    },
+    {
+      "id": "trello.logout",
+      "label": "Trello: Sign Out"
+    },
+    {
+      "id": "trello.openCard",
+      "label": "Trello: Open Card"
+    },
+    {
+      "id": "trello.refreshBoards",
+      "label": "Trello: Refresh Boards"
+    },
+    {
+      "id": "trello.saveCardDetail",
+      "label": "Trello: Save Card Detail"
+    },
+    {
+      "id": "trello.startAddCard",
+      "label": "Trello: Add Card"
+    },
+    {
+      "id": "trello.submitNewCard",
+      "label": "Trello: Submit New Card"
+    },
+    {
+      "id": "trello.test.useMockData",
+      "label": "Trello Test: Use Mock Data"
+    },
+    {
+      "id": "trello.test.reset",
+      "label": "Trello Test: Reset"
+    }
+  ],
+  "views": [
+    {
+      "css": "trello.css",
+      "displayName": "Trello",
+      "id": "trello.views.boards",
+      "title": "Trello",
+      "icon": "trello.svg",
+      "kind": "virtualDom"
+    }
+  ],
+  "keybindings": [
+    {
+      "key": "Alt+Left",
+      "command": "trello.backToBoards",
+      "when": "trello.boardDetailFocus"
+    },
+    {
+      "key": "Ctrl+R",
+      "command": "trello.refreshBoards",
+      "when": "trello.boardsFocus"
+    },
+    {
+      "key": "Escape",
+      "command": "trello.closeCardDetail",
+      "when": "trello.cardDetailFocus"
+    },
+    {
+      "key": "Enter",
+      "command": "trello.submitNewCard",
+      "when": "trello.newCardInputFocus"
+    },
+    {
+      "key": "Escape",
+      "command": "trello.cancelNewCard",
+      "when": "trello.newCardInputFocus"
+    },
+    {
+      "key": "Ctrl+S",
+      "command": "trello.saveCardDetail",
+      "when": "trello.cardDescriptionFocus"
+    }
+  ]
+}
