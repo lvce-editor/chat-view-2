@@ -9,10 +9,12 @@ const createHost = ({
   accessToken = 'editor-token',
   backendUrl = 'https://lvce-editor.dev',
   configuredBackendUrl = '',
+  useMockBackend = false,
 }: {
   readonly accessToken?: string
   readonly backendUrl?: string
   readonly configuredBackendUrl?: string
+  readonly useMockBackend?: boolean
 } = {}): BackendConfigurationHost => {
   const executeCommand = jest.fn(async (id: string): Promise<unknown> => {
     if (id === 'Layout.getBackendUrl') {
@@ -25,7 +27,9 @@ const createHost = ({
   })
   return {
     executeCommand,
-    getPreference: jest.fn(async (_key: string) => configuredBackendUrl),
+    getPreference: jest.fn(async (key: string) =>
+      key === 'chat2.useMockBackend' ? useMockBackend : configuredBackendUrl,
+    ),
   }
 }
 
@@ -61,6 +65,16 @@ test('does not expose editor authentication to a custom backend', async () => {
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: '',
     baseUrl: 'https://backend.example.com',
+  })
+  expect(host.executeCommand).not.toHaveBeenCalledWith('Layout.getAuthState')
+})
+
+test('uses the deterministic mock backend when explicitly configured', async () => {
+  const host = createHost({ useMockBackend: true })
+
+  await expect(resolveBackendConfiguration(host)).resolves.toEqual({
+    accessToken: '',
+    baseUrl: '',
   })
   expect(host.executeCommand).not.toHaveBeenCalledWith('Layout.getAuthState')
 })

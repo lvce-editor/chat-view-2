@@ -32,6 +32,17 @@ const getPreferenceString = async (
   }
 }
 
+const getPreferenceBoolean = async (
+  host: BackendConfigurationHost,
+  key: string,
+): Promise<boolean> => {
+  try {
+    return (await host.getPreference(key)) === true
+  } catch {
+    return false
+  }
+}
+
 const executeStringCommand = async (
   host: BackendConfigurationHost,
   id: string,
@@ -68,10 +79,14 @@ const normalizeBackendUrl = (value: string): string => {
 export const resolveBackendConfiguration = async (
   host: BackendConfigurationHost = defaultHost,
 ): Promise<BackendConfiguration> => {
-  const [configuredBaseUrl, editorBaseUrl] = await Promise.all([
+  const [configuredBaseUrl, editorBaseUrl, useMockBackend] = await Promise.all([
     getPreferenceString(host, 'chat2.backendUrl'),
     executeStringCommand(host, 'Layout.getBackendUrl'),
+    getPreferenceBoolean(host, 'chat2.useMockBackend'),
   ])
+  if (useMockBackend) {
+    return { accessToken: '', baseUrl: '' }
+  }
   const baseUrl = configuredBaseUrl || editorBaseUrl
   const accessToken =
     baseUrl &&

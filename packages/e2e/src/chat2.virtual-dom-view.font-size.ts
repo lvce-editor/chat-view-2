@@ -6,6 +6,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Main.closeAllEditors()
   await Command.execute('Preferences.update', {
     'chat2.fontSize': '20px',
+    'chat2.useMockBackend': true,
   })
   await Command.executeExtensionCommand('chat2.show')
 

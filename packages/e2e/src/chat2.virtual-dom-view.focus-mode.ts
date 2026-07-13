@@ -6,6 +6,7 @@ export const skip = 1
 export const test: Test = async ({ Command, expect, Locator }) => {
   await Command.execute('Preferences.update', {
     'chat2.experimentalFocusMode': true,
+    'chat2.useMockBackend': true,
   })
   await Command.executeExtensionCommand('chat2.show')
 

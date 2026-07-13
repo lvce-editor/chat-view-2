@@ -9,17 +9,18 @@ the configured Lvce Responses API.
 
 ## Backend
 
-Set `chat2.backendUrl` to an authenticated Lvce backend that provides:
+By default, Chat 2 uses the editor's configured backend and current
+authentication. The backend provides:
 
 - `GET /v1/models`, returning `data` or `models` with OpenAI model IDs, labels,
   availability, and plan eligibility;
 - `POST /v1/responses`, proxying the OpenAI Responses streaming protocol while
   enforcing authentication, model access, usage accounting, and billing.
 
-When the setting is empty, Chat 2 uses its deterministic mock agent. This keeps
-local development and end-to-end tests independent of production credentials.
-Authentication is expected to use the editor's existing backend session; Chat 2
-does not store API keys in its task database.
+Set `chat2.backendUrl` only to override the editor backend. The editor token is
+never sent to a different override URL. Set `chat2.useMockBackend` to `true` to
+use the deterministic mock agent for local development or tests. Chat 2 does
+not store API keys in its task database.
 
 ## Agent architecture
 
