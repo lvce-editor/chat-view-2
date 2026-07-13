@@ -12,6 +12,9 @@ export const test: Test = async ({
   await Main.closeAllEditors()
   await ClipBoard.enableMemoryClipBoard()
   try {
+    await Command.execute('Preferences.update', {
+      'chat2.useMockBackend': true,
+    })
     await Command.executeExtensionCommand('chat2.show')
     await Locator('textarea[name="composer"]').type('Copy this message')
     await Command.executeExtensionCommand('chat2.submit')
