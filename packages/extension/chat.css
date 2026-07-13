@@ -329,6 +329,7 @@
 }
 
 .ChatMessage {
+  position: relative;
   display: flex;
   flex-direction: column;
   line-height: 1.55;
@@ -357,6 +358,71 @@
 .ChatMessageAssistant {
   align-self: stretch;
   padding-inline: 1px;
+}
+
+.ChatMessageMetadata {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-height: 18px;
+  padding-top: 3px;
+  color: var(--ChatMutedForeground);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 80ms ease-out;
+}
+
+.ChatMessage:hover > .ChatMessageMetadata,
+.ChatMessage:focus-within > .ChatMessageMetadata {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+.ChatMessageTimestamp {
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.ChatMessageCopyButton {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  color: var(--ChatMutedForeground);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+}
+
+.ChatMessageCopyButton::before,
+.ChatMessageCopyButton::after {
+  position: absolute;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  content: '';
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.ChatMessageCopyButton::before {
+  top: 3px;
+  left: 4px;
+}
+
+.ChatMessageCopyButton::after {
+  top: 6px;
+  left: 7px;
+}
+
+.ChatMessageCopyButton:hover {
+  color: var(--ChatForeground);
+  background: var(--ChatHoverBackground);
 }
 
 .ChatMessageStreaming {

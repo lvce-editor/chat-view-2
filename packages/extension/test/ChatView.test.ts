@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import type { ViewEvent } from '@lvce-editor/api'
-import { expect, test } from '@jest/globals'
+import { expect, jest, test } from '@jest/globals'
 import { VirtualDomElements } from '@lvce-editor/virtual-dom-worker'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
 import {
@@ -211,6 +211,37 @@ test('expands the changed-file fixture for review', async () => {
   )
   expect(getText(dom)).toContain('2 checks passed')
   expect(getText(dom)).toContain('Hide')
+})
+
+test('renders message metadata and copies a message', async () => {
+  const execute = jest.fn<
+    (id: string, ...args: readonly unknown[]) => Promise<unknown>
+  >(async () => undefined)
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+  await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
+
+  const dom = instance.render() as readonly any[]
+  expect(getNodesByClass(dom, 'ChatMessageMetadata')).toHaveLength(2)
+  expect(getNodesByClass(dom, 'ChatMessageTimestamp')).toHaveLength(2)
+  const copyButton = getNodesByClass(dom, 'ChatMessageCopyButton')[0]
+  expect(copyButton).toEqual(
+    expect.objectContaining({
+      ariaLabel: 'Copy message',
+      title: 'Copy message',
+    }),
+  )
+
+  await dispatch(instance, { name: copyButton.name, type: 'click' })
+
+  expect(execute).toHaveBeenCalledWith(
+    'ClipBoard.writeText',
+    'Add worker memory usage',
+  )
 })
 
 test('opens the OpenAI model picker without adding model controls to the header', async () => {
