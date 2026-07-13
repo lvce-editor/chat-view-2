@@ -144,7 +144,7 @@ test('falls back when the task list font size cannot be read', async () => {
   expect(instance.getState().fontSize).toBe('13px')
 })
 
-test('submits a task and shows the compact result and change summary above the composer', async () => {
+test('submits a task and shows a Codex-style changed-files summary', async () => {
   const instance = await createTestInstance()
   await dispatch(instance, {
     name: 'composer',
@@ -160,11 +160,14 @@ test('submits a task and shows the compact result and change summary above the c
   expect(getNodesByClass(dom, 'ChatMessageAuthor')).toHaveLength(0)
   expect(getText(dom)).toContain('Build a smaller chat view')
   expect(getText(dom)).toContain(mockResponse)
-  expect(getText(dom)).toContain('5 files changed')
+  expect(getText(dom)).toContain('Edited 5 files')
   expect(getText(dom)).toContain('+51')
   expect(getText(dom)).toContain('-10')
+  expect(getText(dom)).toContain('✓ 2 checks passed')
+  expect(getText(dom)).toContain('Undo ↩')
   expect(getText(dom)).toContain('Review')
-  expect(getNodesByClass(dom, 'ChatChangedFile')).toHaveLength(0)
+  expect(getNodesByClass(dom, 'ChatChangedFile')).toHaveLength(3)
+  expect(getText(dom)).toContain('Show 2 more files  ⌄')
   expect(
     dom.findIndex((node) => node.className === 'ChatChanges'),
   ).toBeLessThan(dom.findIndex((node) => node.className === 'ChatComposerArea'))
@@ -199,7 +202,7 @@ test('expands the changed-file fixture for review', async () => {
   await dispatch(instance, {
     name: 'composer',
     type: 'input',
-    value: 'Show the changed files',
+    value: 'Show all changed files',
   })
   await instance.submit()
   await dispatch(instance, { name: 'toggle-changes', type: 'click' })
@@ -207,10 +210,9 @@ test('expands the changed-file fixture for review', async () => {
   const dom = instance.render() as readonly any[]
   expect(getNodesByClass(dom, 'ChatChangedFile')).toHaveLength(5)
   expect(getText(dom)).toContain(
-    'A  packages/e2e/src/chat2.virtual-dom-view.changed-files.ts',
+    'packages/e2e/src/chat2.virtual-dom-view.changed-files.ts',
   )
-  expect(getText(dom)).toContain('2 checks passed')
-  expect(getText(dom)).toContain('Hide')
+  expect(getText(dom)).not.toContain('Show 2 more files  ⌄')
 })
 
 test('renders message metadata and copies a message', async () => {
