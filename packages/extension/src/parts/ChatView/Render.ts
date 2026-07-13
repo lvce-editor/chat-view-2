@@ -21,9 +21,9 @@ const renderMessage = (message: ChatMessage): Dom.TreeNode => {
   ])
 }
 
-const renderComposer = (draft: string): Dom.TreeNode => {
+const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   return Dom.form('composer', 'ChatComposer', [
-    Dom.textArea(draft),
+    Dom.textArea(state.draft, state.composerFocused),
     Dom.button('submit', 'Send', 'ChatSubmitButton'),
   ])
 }
@@ -36,7 +36,7 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       Dom.div('ChatTaskCount', [taskCount]),
     ]),
     renderTaskList(state.tasks),
-    renderComposer(state.draft),
+    renderComposer(state),
   ])
 }
 
@@ -51,7 +51,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       Dom.heading(1, 'ChatDetailTitle', task.title),
     ]),
     Dom.div('ChatMessages', task.messages.map(renderMessage)),
-    renderComposer(state.draft),
+    renderComposer(state),
   ])
 }
 

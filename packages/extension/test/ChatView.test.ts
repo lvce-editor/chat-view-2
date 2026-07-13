@@ -46,13 +46,14 @@ test('renders at most 20 past tasks and a composer', async () => {
   )
 })
 
-test('submits with Enter and opens the detail view', async () => {
+test('submits through the shared submit action and opens the detail view', async () => {
   const instance = await createInstance()
   await dispatch(instance, {
     name: 'composer',
     type: 'input',
-    value: 'Build a smaller chat view\n',
+    value: 'Build a smaller chat view',
   })
+  await instance.submit()
 
   const dom = instance.render() as readonly any[]
   expect(getNodesByClass(dom, 'ChatDetailView')).toHaveLength(1)

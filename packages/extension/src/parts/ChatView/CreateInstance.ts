@@ -10,6 +10,7 @@ import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
 import { render } from './Render.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
+  readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getState: () => Readonly<ChatViewState>
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
@@ -21,11 +22,22 @@ const getEventString = (event: Readonly<ViewEvent>): string => {
   return typeof event.value === 'string' ? event.value : ''
 }
 
+const activeInstances = new Set<ActiveChatViewInstance>()
+
+const getActiveInstance = (): ActiveChatViewInstance | undefined => {
+  return activeInstances.values().toArray().at(-1)
+}
+
+export const submitActiveChatViewInstance = async (): Promise<void> => {
+  await getActiveInstance()?.submit()
+}
+
 export const createInstance = async (
   _context?: ViewContext,
   api: ChatApi = createMockChatApi(),
 ): Promise<ActiveChatViewInstance> => {
   const state: ChatViewState = {
+    composerFocused: false,
     draft: '',
     selectedTask: undefined,
     tasks: await api.listTasks(20),
@@ -47,16 +59,29 @@ export const createInstance = async (
     ].slice(0, 20)
   }
 
-  return {
+  const instance: ActiveChatViewInstance = {
+    dispose(): void {
+      activeInstances.delete(instance)
+    },
+    getContext(): Readonly<Record<string, boolean>> {
+      return {
+        'chat2.composerFocus': state.composerFocused,
+      }
+    },
     getState(): Readonly<ChatViewState> {
       return state
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'input' && event.name === 'composer') {
         state.draft = getEventString(event)
-        if (state.draft.endsWith('\n')) {
-          await submit()
-        }
+        return
+      }
+      if (event.type === 'focus' && event.name === 'composer') {
+        state.composerFocused = true
+        return
+      }
+      if (event.type === 'blur' && event.name === 'composer') {
+        state.composerFocused = false
         return
       }
       if (event.type !== 'click') {
@@ -90,4 +115,6 @@ export const createInstance = async (
     },
     submit,
   }
+  activeInstances.add(instance)
+  return instance
 }

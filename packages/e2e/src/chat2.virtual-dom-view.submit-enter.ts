@@ -8,7 +8,11 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await showChat2(Command)
 
   const composer = Locator('textarea[name="composer"]')
+  // eslint-disable-next-line e2e/no-direct-click
+  await composer.click()
   await composer.type('Build a smaller chat view')
+  const focusedComposer = Locator('.ChatComposerInputFocused')
+  await expect(focusedComposer).toBeVisible()
   await composer.type('\n')
 
   const detail = Locator('.ChatDetailView')

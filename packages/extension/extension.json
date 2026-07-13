@@ -7,11 +7,19 @@
   "browser": "dist/chatMain.js",
   "isolated": true,
   "categories": ["Other"],
-  "activation": ["onView:chat2.views.chat", "onCommand:chat2.show"],
+  "activation": [
+    "onView:chat2.views.chat",
+    "onCommand:chat2.show",
+    "onCommand:chat2.submit"
+  ],
   "commands": [
     {
       "id": "chat2.show",
       "label": "Chat 2: Show"
+    },
+    {
+      "id": "chat2.submit",
+      "label": "Chat 2: Submit Message"
     }
   ],
   "views": [
@@ -22,6 +30,13 @@
       "title": "Chat 2",
       "icon": "chat.svg",
       "kind": "virtualDom"
+    }
+  ],
+  "keybindings": [
+    {
+      "key": "Enter",
+      "command": "chat2.submit",
+      "when": "chat2.composerFocus"
     }
   ]
 }
