@@ -102,6 +102,7 @@ export const createInstance = async (
   const focusModeEnabled = await getFocusModeEnabled()
   const state: ChatViewState = {
     activityExpanded: false,
+    changesExpanded: false,
     composerFocused: false,
     draft: '',
     errorMessage,
@@ -217,6 +218,7 @@ export const createInstance = async (
         state.selectedTask = undefined
         state.draft = ''
         state.activityExpanded = false
+        state.changesExpanded = false
         return
       }
       if (event.name === 'model-picker') {
@@ -225,6 +227,10 @@ export const createInstance = async (
       }
       if (event.name === 'toggle-activity') {
         state.activityExpanded = !state.activityExpanded
+        return
+      }
+      if (event.name === 'toggle-changes') {
+        state.changesExpanded = !state.changesExpanded
         return
       }
       if (event.name === 'revert' && state.selectedTask) {
@@ -255,6 +261,7 @@ export const createInstance = async (
         }
         state.draft = ''
         state.activityExpanded = false
+        state.changesExpanded = false
       }
     },
     render(): readonly VirtualDomNode[] {

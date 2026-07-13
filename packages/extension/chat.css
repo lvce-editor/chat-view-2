@@ -27,6 +27,11 @@
   --ChatButtonForeground: var(--ButtonForeground, #ffffff);
   --ChatButtonHoverBackground: var(--ButtonHoverBackground, #1177bb);
   --ChatErrorForeground: var(--ErrorForeground, #f48771);
+  --ChatAddedForeground: var(--GitDecorationAddedResourceForeground, #73c991);
+  --ChatDeletedForeground: var(
+    --GitDecorationDeletedResourceForeground,
+    #f14c4c
+  );
 
   box-sizing: border-box;
   display: flex;
@@ -42,6 +47,7 @@
 .ChatFocusMode > .ChatEmptyState,
 .ChatFocusMode > .ChatDetailHeader,
 .ChatFocusMode > .ChatMessages,
+.ChatFocusMode > .ChatChanges,
 .ChatFocusMode > .ChatComposerArea,
 .ChatFocusMode > .ChatErrorBanner {
   box-sizing: border-box;
@@ -122,6 +128,7 @@
 .ChatModelOption:hover,
 .ChatActivityToggle:hover,
 .ChatRevertButton:hover,
+.ChatReviewButton:hover,
 .ChatModelButton:hover {
   background: var(--ChatHoverBackground);
 }
@@ -189,6 +196,7 @@
 }
 
 .ChatComposerControls,
+.ChatChangesActions,
 .ChatChangesHeader {
   display: flex;
   gap: 6px;
@@ -260,6 +268,7 @@
 
 .ChatModelButton,
 .ChatRevertButton,
+.ChatReviewButton,
 .ChatActivityToggle {
   min-height: 24px;
   padding: 2px 6px;
@@ -354,8 +363,7 @@
   opacity: 0.9;
 }
 
-.ChatActivity,
-.ChatChanges {
+.ChatActivity {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -363,6 +371,72 @@
   background: color-mix(in srgb, var(--ChatForeground) 4%, transparent);
   border: 1px solid var(--ChatBorder);
   border-radius: 8px;
+}
+
+.ChatChanges {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 8px;
+  margin: 0 6px;
+  background: color-mix(in srgb, var(--ChatForeground) 4%, transparent);
+  border: 1px solid var(--ChatBorder);
+  border-radius: 8px;
+}
+
+.ChatChangesHeader {
+  gap: 4px;
+  min-width: 0;
+}
+
+.ChatReviewButton {
+  padding-inline: 3px;
+  font-size: 11px;
+}
+
+.ChatChangesSpacer {
+  flex: 1 1 auto;
+}
+
+.ChatChangeAdditions,
+.ChatChangedFileAdditions {
+  color: var(--ChatAddedForeground);
+}
+
+.ChatChangeDeletions,
+.ChatChangedFileDeletions {
+  color: var(--ChatDeletedForeground);
+}
+
+.ChatChangedFiles {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 160px;
+  padding-top: 7px;
+  overflow: auto;
+  border-top: 1px solid var(--ChatBorder);
+}
+
+.ChatChangedFile {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 2px 4px;
+}
+
+.ChatChangedFileName {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ChatChangesActions {
+  min-height: 24px;
 }
 
 .ChatActivityItem {
@@ -385,7 +459,8 @@
 }
 
 .ChatActivityDetail,
-.ChatChangedFile {
+.ChatChangedFile,
+.ChatChecksPassed {
   overflow: hidden;
   font-family: var(--EditorFontFamily, monospace);
   font-size: 11px;
@@ -395,7 +470,10 @@
 }
 
 .ChatChangesSummary {
-  flex: 1 1 auto;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ChatErrorBanner {

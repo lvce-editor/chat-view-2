@@ -215,6 +215,46 @@ export const validateWorkspaceRelativePath = (path: string): string => {
   return segments.join('/')
 }
 
+const getLines = (text: string): readonly string[] => {
+  if (!text) {
+    return []
+  }
+  const lines = text.split('\n')
+  if (text.endsWith('\n')) {
+    lines.pop()
+  }
+  return lines
+}
+
+export const getLineChanges = (
+  oldText: string,
+  newText: string,
+): Readonly<{ additions: number; deletions: number }> => {
+  const oldLines = getLines(oldText)
+  const newLines = getLines(newText)
+  let prefix = 0
+  while (
+    prefix < oldLines.length &&
+    prefix < newLines.length &&
+    oldLines[prefix] === newLines[prefix]
+  ) {
+    prefix++
+  }
+  let suffix = 0
+  while (
+    suffix < oldLines.length - prefix &&
+    suffix < newLines.length - prefix &&
+    oldLines[oldLines.length - suffix - 1] ===
+      newLines[newLines.length - suffix - 1]
+  ) {
+    suffix++
+  }
+  return {
+    additions: newLines.length - prefix - suffix,
+    deletions: oldLines.length - prefix - suffix,
+  }
+}
+
 const resolveWorkspacePath = async (path: string): Promise<string> => {
   const base = await getWorkspaceBase()
   const relativePath = validateWorkspaceRelativePath(path)
@@ -383,9 +423,13 @@ export const createAgentToolHost = ({
       ...originalSnapshot,
       appliedContent: updated,
     })
+    const previousChange = changedFiles.get(normalizedPath)
+    const lineChanges = getLineChanges(oldText, newText)
     changedFiles.set(normalizedPath, {
+      additions: (previousChange?.additions || 0) + lineChanges.additions,
+      deletions: (previousChange?.deletions || 0) + lineChanges.deletions,
       path: normalizedPath,
-      status: existed ? 'modified' : 'added',
+      status: originalSnapshot.existed ? 'modified' : 'added',
     })
     return `Updated ${normalizedPath} [hash ${hashText(updated)}]`
   }
@@ -526,7 +570,7 @@ export const createAgentToolHost = ({
         } else if (await exists(snapshot.uri)) {
           await remove(snapshot.uri)
         }
-        reverted.push({ path, status: 'modified' })
+        reverted.push({ additions: 0, deletions: 0, path, status: 'modified' })
       }
       changedFiles = new Map()
       snapshots = new Map()

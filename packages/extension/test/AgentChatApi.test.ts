@@ -46,7 +46,14 @@ test('runs a multi-step tool loop and records a compact event history', async ()
     beginTurn() {},
     execute,
     getChangedFiles() {
-      return [{ path: 'package.json', status: 'modified' }]
+      return [
+        {
+          additions: 2,
+          deletions: 1,
+          path: 'package.json',
+          status: 'modified',
+        },
+      ]
     },
     getDefinitions() {
       return []
@@ -81,7 +88,14 @@ test('runs a multi-step tool loop and records a compact event history', async ()
   ])
   expect(summarizeTask(task)).toEqual(
     expect.objectContaining({
-      changedFiles: [{ path: 'package.json', status: 'modified' }],
+      changedFiles: [
+        {
+          additions: 2,
+          deletions: 1,
+          path: 'package.json',
+          status: 'modified',
+        },
+      ],
       messages: expect.arrayContaining([
         expect.objectContaining({ text: 'The repository is ready.' }),
       ]),
@@ -176,7 +190,14 @@ test('returns automatic verification failures to the model for repair', async ()
       return { content: 'Updated src/a.ts', isError: false }
     },
     getChangedFiles() {
-      return [{ path: 'src/a.ts', status: 'modified' }]
+      return [
+        {
+          additions: 1,
+          deletions: 1,
+          path: 'src/a.ts',
+          status: 'modified',
+        },
+      ]
     },
     getDefinitions() {
       return []

@@ -145,7 +145,33 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
           checksPassed: 2,
           files: [
             {
+              additions: 18,
+              deletions: 4,
               path: 'packages/extension/src/parts/ChatView/ChatView.ts',
+              status: 'modified',
+            },
+            {
+              additions: 12,
+              deletions: 3,
+              path: 'packages/extension/chat.css',
+              status: 'modified',
+            },
+            {
+              additions: 8,
+              deletions: 1,
+              path: 'packages/extension/src/parts/MockChatApi/MockChatApi.ts',
+              status: 'modified',
+            },
+            {
+              additions: 9,
+              deletions: 0,
+              path: 'packages/e2e/src/chat2.virtual-dom-view.changed-files.ts',
+              status: 'added',
+            },
+            {
+              additions: 4,
+              deletions: 2,
+              path: 'packages/extension/test/ChatView.test.ts',
               status: 'modified',
             },
           ],
@@ -190,13 +216,16 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
       return tasks.slice(0, Math.max(0, limit))
     },
     async revertTask(task) {
+      const changedFileCount =
+        task.events.findLast((event) => event.type === 'changes')?.files
+          .length || 0
       const updated = appendEvent(
         appendEvent(
           task,
           createEvent({ checksPassed: 0, files: [], type: 'changes' }),
         ),
         createEvent({
-          text: 'Reverted 1 changed file.',
+          text: `Reverted ${changedFileCount} changed ${changedFileCount === 1 ? 'file' : 'files'}.`,
           type: 'assistant-message',
         }),
       )

@@ -2,6 +2,7 @@ import type { ChatModel, ChatTask } from '../ChatApi/ChatApi.ts'
 
 export interface ChatViewState {
   activityExpanded: boolean
+  changesExpanded: boolean
   composerFocused: boolean
   draft: string
   errorMessage: string
