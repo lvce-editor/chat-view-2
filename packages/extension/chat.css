@@ -331,6 +331,12 @@
   overflow-wrap: anywhere;
 }
 
+.ChatMessageLink {
+  color: #4d94ff;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .ChatMessageUser {
   align-self: flex-end;
   max-width: min(78%, 520px);
