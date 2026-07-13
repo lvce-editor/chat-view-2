@@ -9,12 +9,14 @@ import {
 } from '@lvce-editor/api'
 import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
+import type { ReadPreference } from './FontSize.ts'
 import {
   getFocusMode,
   getFocusModeEnabled,
   toggleFocusMode,
 } from '../ChatFocusMode/ChatFocusMode.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
+import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
@@ -66,6 +68,7 @@ export const toggleActiveChatViewFocusMode = async (): Promise<void> => {
 export const createInstance = async (
   context?: ViewContext,
   providedApi?: ChatApi,
+  readPreference?: ReadPreference,
 ): Promise<ActiveChatViewInstance> => {
   let api = providedApi
   if (!api) {
@@ -85,6 +88,7 @@ export const createInstance = async (
   })
   const preferredModelId =
     saved.selectedModelId || (await getPreferredModelId())
+  const fontSize = await readFontSize(readPreference)
   const selectedModelId =
     models.find(
       (model) =>
@@ -103,6 +107,7 @@ export const createInstance = async (
     errorMessage,
     focusMode: focusModeEnabled && (await getFocusMode()),
     focusModeEnabled,
+    fontSize,
     modelPickerOpen: false,
     models,
     selectedModelId,
