@@ -110,6 +110,9 @@ test('submits a task and shows the compact result and change summary', async () 
 
   const dom = instance.render() as readonly any[]
   expect(getNodesByClass(dom, 'ChatDetailView')).toHaveLength(1)
+  expect(getNodesByClass(dom, 'ChatMessageUser')).toHaveLength(1)
+  expect(getNodesByClass(dom, 'ChatMessageAssistant')).toHaveLength(1)
+  expect(getNodesByClass(dom, 'ChatMessageAuthor')).toHaveLength(0)
   expect(getText(dom)).toContain('Build a smaller chat view')
   expect(getText(dom)).toContain(mockResponse)
   expect(getText(dom)).toContain('Changed 1 file · 2 checks passed')

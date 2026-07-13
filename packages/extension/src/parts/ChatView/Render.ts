@@ -51,18 +51,15 @@ const renderMessage = (
     { type: 'assistant-message' | 'user-message' }
   >,
 ): Dom.TreeNode => {
-  const author = message.type === 'user-message' ? 'You' : 'Chat 2'
   const roleClass =
     message.type === 'user-message' ? 'ChatMessageUser' : 'ChatMessageAssistant'
   return Dom.div(`ChatMessage ${roleClass}`, [
-    Dom.div('ChatMessageAuthor', [Dom.textNode(author)]),
     Dom.div('ChatMessageText', [Dom.textNode(message.text)]),
   ])
 }
 
 const renderStreamingMessage = (text: string): Dom.TreeNode => {
   return Dom.div('ChatMessage ChatMessageAssistant ChatMessageStreaming', [
-    Dom.div('ChatMessageAuthor', [Dom.textNode('Chat 2')]),
     Dom.div('ChatMessageText', [Dom.textNode(text)]),
   ])
 }
