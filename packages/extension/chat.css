@@ -37,6 +37,18 @@
   background: var(--ChatBackground);
 }
 
+.ChatFocusMode > .ChatTaskListHeader,
+.ChatFocusMode > .ChatTaskList,
+.ChatFocusMode > .ChatEmptyState,
+.ChatFocusMode > .ChatDetailHeader,
+.ChatFocusMode > .ChatMessages,
+.ChatFocusMode > .ChatComposerArea,
+.ChatFocusMode > .ChatErrorBanner {
+  box-sizing: border-box;
+  width: min(100%, 960px);
+  margin-inline: auto;
+}
+
 .ChatTaskListHeader,
 .ChatDetailHeader {
   display: flex;
@@ -66,10 +78,13 @@
 }
 
 .ChatTaskCount {
-  margin-left: auto;
   font-size: 11px;
   color: var(--ChatMutedForeground);
   white-space: nowrap;
+}
+
+.ChatHeaderSpacer {
+  flex: 1 1 auto;
 }
 
 .ChatTaskList,
@@ -184,7 +199,8 @@
 .ChatSubmitButton,
 .ChatStopButton,
 .ChatBackButton,
-.ChatNewTaskButton {
+.ChatNewTaskButton,
+.ChatFocusModeButton {
   flex: 0 0 auto;
   min-height: 26px;
   padding: 3px 10px;
@@ -202,13 +218,15 @@
 .ChatSubmitButton:hover:not(:disabled),
 .ChatStopButton:hover,
 .ChatBackButton:hover,
-.ChatNewTaskButton:hover {
+.ChatNewTaskButton:hover,
+.ChatFocusModeButton:hover {
   background: var(--ChatButtonHoverBackground);
 }
 
 .ChatStopButton,
 .ChatBackButton,
-.ChatNewTaskButton {
+.ChatNewTaskButton,
+.ChatFocusModeButton {
   color: var(--ChatForeground);
   background: transparent;
   border: 1px solid var(--ChatBorder);

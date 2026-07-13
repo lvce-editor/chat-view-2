@@ -11,12 +11,18 @@
     "chat2.backendUrl": {
       "type": "string",
       "default": ""
+    },
+    "chat2.experimentalFocusMode": {
+      "type": "boolean",
+      "default": false,
+      "description": "Show an experimental control that lets Chat 2 temporarily take over the workbench."
     }
   },
   "activation": [
     "onView:chat2.views.chat",
     "onCommand:chat2.show",
-    "onCommand:chat2.submit"
+    "onCommand:chat2.submit",
+    "onCommand:chat2.toggleFocusMode"
   ],
   "commands": [
     {
@@ -26,6 +32,10 @@
     {
       "id": "chat2.submit",
       "label": "Chat 2: Submit Message"
+    },
+    {
+      "id": "chat2.toggleFocusMode",
+      "label": "Chat 2: Toggle Focus Mode"
     }
   ],
   "views": [
