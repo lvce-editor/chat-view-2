@@ -39,6 +39,7 @@ export const button = (
   label: string,
   className: string,
   options: Readonly<{
+    ariaLabel?: string
     ariaExpanded?: boolean
     disabled?: boolean
     title?: string
@@ -49,6 +50,7 @@ export const button = (
     {
       buttonType: 'button',
       className,
+      ...(options.ariaLabel && { ariaLabel: options.ariaLabel }),
       ...(typeof options.ariaExpanded === 'boolean' && {
         ariaExpanded: options.ariaExpanded,
       }),
