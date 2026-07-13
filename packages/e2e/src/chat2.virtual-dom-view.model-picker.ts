@@ -4,6 +4,7 @@ export const name = 'chat2.virtual-dom-view.model-picker'
 
 export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Main.closeAllEditors()
+  await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
   await Command.executeExtensionCommand('chat2.show')
 
   const toggle = Locator('button[name="model-picker"]')
