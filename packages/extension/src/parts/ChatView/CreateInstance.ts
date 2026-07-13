@@ -73,6 +73,7 @@ export const createInstance = async (
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'input' && event.name === 'composer') {
+        state.composerFocused = true
         state.draft = getEventString(event)
         return
       }

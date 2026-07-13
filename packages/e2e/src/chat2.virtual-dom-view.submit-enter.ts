@@ -3,7 +3,13 @@ import { showChat2 } from './_chat2.virtual-dom-view.shared.ts'
 
 export const name = 'chat2.virtual-dom-view.submit-enter'
 
-export const test: Test = async ({ Command, expect, Locator, Main }) => {
+export const test: Test = async ({
+  Command,
+  expect,
+  KeyBoard,
+  Locator,
+  Main,
+}) => {
   await Main.closeAllEditors()
   await showChat2(Command)
 
@@ -13,7 +19,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await composer.type('Build a smaller chat view')
   const focusedComposer = Locator('.ChatComposerInputFocused')
   await expect(focusedComposer).toBeVisible()
-  await composer.type('\n')
+  await KeyBoard.press('Enter')
 
   const detail = Locator('.ChatDetailView')
   const userMessage = Locator('.ChatMessageUser')
