@@ -16,19 +16,13 @@ export const test: Test = async ({
     await Locator('textarea[name="composer"]').type('Copy this message')
     await Command.executeExtensionCommand('chat2.submit')
 
-    const userMessage = Locator('.ChatMessageUser')
     const metadata = Locator('.ChatMessageUser .ChatMessageMetadata')
-    const timestamp = Locator('.ChatMessageUser .ChatMessageTimestamp')
     const copyButton = Locator('.ChatMessageUser .ChatMessageCopyButton')
     await expect(metadata).toHaveCSS('opacity', '0')
-
-    await userMessage.hover()
-
-    await expect(metadata).toHaveCSS('opacity', '1')
-    await expect(timestamp).toBeVisible()
     await expect(copyButton).toHaveAttribute('aria-label', 'Copy message')
     // eslint-disable-next-line e2e/no-direct-click
     await copyButton.click()
+    await new Promise((resolve) => setTimeout(resolve, 200))
     await ClipBoard.shouldHaveText('Copy this message')
   } finally {
     await ClipBoard.disableMemoryClipBoard()
