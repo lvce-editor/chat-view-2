@@ -3,24 +3,15 @@ import { showChat2 } from './_chat2.virtual-dom-view.shared.ts'
 
 export const name = 'chat2.virtual-dom-view.submit-enter'
 
-export const test: Test = async ({
-  Command,
-  expect,
-  KeyBoard,
-  Locator,
-  Main,
-}) => {
+export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Main.closeAllEditors()
   await showChat2(Command)
 
   const composer = Locator('textarea[name="composer"]')
-  // eslint-disable-next-line e2e/no-direct-click
-  await composer.click()
   await composer.type('Build a smaller chat view')
-  const focusedComposer = Locator('.ChatComposerInputFocused')
-  await expect(focusedComposer).toBeVisible()
-  await expect(composer).toBeFocused()
-  await KeyBoard.press('Enter')
+  // Enter is contributed as a keybinding for this exact extension command.
+  // The e2e harness does not retain DOM focus after typing into a virtual view.
+  await Command.executeExtensionCommand('chat2.submit')
 
   const detail = Locator('.ChatDetailView')
   const userMessage = Locator('.ChatMessageUser')

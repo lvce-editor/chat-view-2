@@ -76,12 +76,10 @@ export const heading = (
   return node(type, { className }, [textNode(value)])
 }
 
-export const textArea = (value: string, focused: boolean): TreeNode => {
+export const textArea = (value: string): TreeNode => {
   return node(VirtualDomElements.TextArea, {
     ariaLabel: 'Message',
-    className: focused
-      ? 'ChatComposerInput ChatComposerInputFocused'
-      : 'ChatComposerInput',
+    className: 'ChatComposerInput',
     name: 'composer',
     onBlur: 'handleBlur',
     onFocus: 'handleFocus',

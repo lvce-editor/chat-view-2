@@ -23,7 +23,7 @@ const renderMessage = (message: ChatMessage): Dom.TreeNode => {
 
 const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   return Dom.form('composer', 'ChatComposer', [
-    Dom.textArea(state.draft, state.composerFocused),
+    Dom.textArea(state.draft),
     Dom.button('submit', 'Send', 'ChatSubmitButton'),
   ])
 }

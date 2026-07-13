@@ -35,7 +35,8 @@
   "keybindings": [
     {
       "key": "Enter",
-      "command": "chat2.submit"
+      "command": "chat2.submit",
+      "when": "chat2.composerFocus"
     }
   ]
 }
