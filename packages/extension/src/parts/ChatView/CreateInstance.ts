@@ -10,7 +10,6 @@ import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
 import { render } from './Render.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
-  readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getState: () => Readonly<ChatViewState>
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
@@ -27,7 +26,6 @@ export const createInstance = async (
   api: ChatApi = createMockChatApi(),
 ): Promise<ActiveChatViewInstance> => {
   const state: ChatViewState = {
-    composerFocused: false,
     draft: '',
     selectedTask: undefined,
     tasks: await api.listTasks(20),
@@ -50,25 +48,15 @@ export const createInstance = async (
   }
 
   return {
-    getContext(): Readonly<Record<string, boolean>> {
-      return {
-        'chat2.composerFocus': state.composerFocused,
-      }
-    },
     getState(): Readonly<ChatViewState> {
       return state
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'input' && event.name === 'composer') {
         state.draft = getEventString(event)
-        return
-      }
-      if (event.type === 'focus' && event.name === 'composer') {
-        state.composerFocused = true
-        return
-      }
-      if (event.type === 'blur' && event.name === 'composer') {
-        state.composerFocused = false
+        if (state.draft.endsWith('\n')) {
+          await submit()
+        }
         return
       }
       if (event.type !== 'click') {
