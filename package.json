@@ -1,0 +1,36 @@
+{
+  "name": "builtin.chat-view-2-monorepo",
+  "version": "0.0.0-dev",
+  "description": "Chat 2 extension monorepo for Lvce Editor",
+  "type": "module",
+  "scripts": {
+    "build": "node packages/build/src/build.ts",
+    "build:extension": "node packages/build/src/build-extension.ts",
+    "build:static": "node scripts/build-static.ts",
+    "build:watch": "./packages/build/node_modules/.bin/esbuild --format=esm --bundle --external:electron --external:node:* --watch packages/extension/src/chatMain.ts --outfile=packages/extension/dist/chatMain.js",
+    "dev": "node packages/build/src/dev.ts",
+    "e2e": "cd packages/e2e && npm run e2e",
+    "e2e:headless": "cd packages/e2e && npm run e2e:headless",
+    "format": "prettier --write .",
+    "postinstall": "lerna bootstrap --ci",
+    "install:extension": "node packages/build/src/install-extension.ts",
+    "lint": "eslint . && prettier --check .",
+    "test": "lerna run test",
+    "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
+    "type-check": "tsc -b"
+  },
+  "author": "Lvce Editor",
+  "license": "MIT",
+  "devDependencies": {
+    "@lerna/legacy-package-management": "^8.2.4",
+    "@lvce-editor/eslint-config": "^16.4.0",
+    "eslint": "^10.7.0",
+    "lerna": "^8.2.3",
+    "prettier": "^4.0.0-alpha.10",
+    "typescript": "^6.0.3"
+  },
+  "prettier": {
+    "semi": false,
+    "singleQuote": true
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "builtin.chat-view-2",
+  "version": "0.0.0-dev",
+  "description": "A minimal mock chat extension for Lvce Editor",
+  "main": "dist/chatMain.js",
+  "scripts": {
+    "test": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --detectOpenHandles --forceExit",
+    "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch"
+  },
+  "author": "Lvce Editor",
+  "license": "MIT",
+  "type": "module",
+  "jest": {
+    "injectGlobals": false,
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    },
+    "transform": {
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "useESM": true
+        }
+      ]
+    }
+  },
+  "devDependencies": {
+    "@lvce-editor/api": "^8.47.0",
+    "@lvce-editor/virtual-dom-worker": "^11.5.0",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "builtin.chat-view-2-server",
+  "version": "0.0.0-dev",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node ./node_modules/@lvce-editor/server/bin/server.js --only-extension=../extension --test-path=../e2e"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@lvce-editor/server": "0.88.0"
+  }
+}

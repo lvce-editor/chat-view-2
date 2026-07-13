@@ -1,0 +1,42 @@
+{
+  "id": "builtin.chat-view-2",
+  "name": "Chat 2",
+  "workerName": "Chat 2 Worker",
+  "description": "A minimal mock chat experience for Lvce Editor",
+  "repository": "https://github.com/lvce-editor/chat-view-2",
+  "browser": "dist/chatMain.js",
+  "isolated": true,
+  "categories": ["Other"],
+  "activation": [
+    "onView:chat2.views.chat",
+    "onCommand:chat2.show",
+    "onCommand:chat2.submit"
+  ],
+  "commands": [
+    {
+      "id": "chat2.show",
+      "label": "Chat 2: Show"
+    },
+    {
+      "id": "chat2.submit",
+      "label": "Chat 2: Submit Message"
+    }
+  ],
+  "views": [
+    {
+      "css": "chat.css",
+      "displayName": "Chat 2",
+      "id": "chat2.views.chat",
+      "title": "Chat 2",
+      "icon": "chat.svg",
+      "kind": "virtualDom"
+    }
+  ],
+  "keybindings": [
+    {
+      "key": "Enter",
+      "command": "chat2.submit",
+      "when": "chat2.composerFocus"
+    }
+  ]
+}

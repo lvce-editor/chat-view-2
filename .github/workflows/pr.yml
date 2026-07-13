@@ -1,0 +1,56 @@
+name: PR
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  pr:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+      - name: Compute node modules cache key
+        id: nodeModulesCacheKey
+        run: |
+          value=$(node scripts/computeNodeModulesCacheKey.ts)
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - uses: actions/cache@v5
+        id: npm-cache
+        with:
+          path: '**/node_modules'
+          key: ${{ runner.os }}-cacheNodeModules-${{ steps.nodeModulesCacheKey.outputs.value }}
+      - name: npm ci
+        run: npm ci
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+      - run: npm test
+      - run: npm run type-check
+      - run: npm run lint
+      - name: install playwright dependencies
+        working-directory: ./packages/e2e
+        run: npx playwright install chromium
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Run headless test
+        run: npm run e2e:headless
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Build release archive
+        run: node scripts/build.ts
+      - name: Ensure static build dependencies
+        run: node -e "const { createRequire } = require('node:module'); createRequire(process.cwd() + '/packages/server/package.json').resolve('@lvce-editor/shared-process')" || npm ci
+        shell: bash
+      - name: Build static site
+        run: node scripts/build-static.ts
+        env:
+          PATH_PREFIX: auto
