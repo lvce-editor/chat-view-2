@@ -57,13 +57,13 @@ jobs:
       - name: npm ci
         run: npm ci
         if: steps.npm-cache.outputs.cache-hit != 'true'
-      - run: npm run type-check
       - run: npm test
+      - run: npm run type-check
       - run: node scripts/build.ts
       - name: Build archive
         shell: bash
         run: |
-          staging="trello-${{ needs.create-release.outputs.rg_version }}"
+          staging="chat-view-2-${{ needs.create-release.outputs.rg_version }}"
           mv "extension.tar.br" "$staging.tar.br"
           echo "ASSET=$staging.tar.br" >> $GITHUB_ENV
 
