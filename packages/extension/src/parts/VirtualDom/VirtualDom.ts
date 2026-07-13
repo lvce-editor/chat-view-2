@@ -42,6 +42,24 @@ export const div = (
   )
 }
 
+export const link = (
+  href: string,
+  label: string,
+  className: string,
+): TreeNode => {
+  return node(
+    VirtualDomElements.A,
+    {
+      className,
+      href,
+      rel: 'noopener noreferrer',
+      target: '_blank',
+      title: href,
+    },
+    [textNode(label)],
+  )
+}
+
 export const button = (
   name: string,
   label: string,

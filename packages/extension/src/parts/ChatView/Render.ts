@@ -50,6 +50,48 @@ const renderTaskList = (
   })
 }
 
+const urlPattern = /https?:\/\/[^\s<>"']+/gu
+const trailingPunctuation = new Set(['!', ',', '.', ':', ';', '?'])
+
+const trimUrl = (value: string): string => {
+  let url = value
+  while (url && trailingPunctuation.has(url.at(-1) || '')) {
+    url = url.slice(0, -1)
+  }
+  const pairs = [
+    ['(', ')'],
+    ['[', ']'],
+    ['{', '}'],
+  ] as const
+  for (const [opening, closing] of pairs) {
+    const openingCount = url.split(opening).length - 1
+    const closingCount = url.split(closing).length - 1
+    if (closingCount > openingCount && url.endsWith(closing)) {
+      url = url.slice(0, -1)
+    }
+  }
+  return url
+}
+
+const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
+  const children: Dom.TreeNode[] = []
+  let previousIndex = 0
+  for (const match of text.matchAll(urlPattern)) {
+    const matchIndex = match.index
+    if (matchIndex > previousIndex) {
+      children.push(Dom.textNode(text.slice(previousIndex, matchIndex)))
+    }
+    const matchedText = match[0]
+    const url = trimUrl(matchedText)
+    children.push(Dom.link(url, url, 'ChatMessageLink'))
+    previousIndex = matchIndex + url.length
+  }
+  if (previousIndex < text.length) {
+    children.push(Dom.textNode(text.slice(previousIndex)))
+  }
+  return children
+}
+
 const renderMessage = (
   message: Extract<
     ChatTaskEvent,
@@ -59,13 +101,13 @@ const renderMessage = (
   const roleClass =
     message.type === 'user-message' ? 'ChatMessageUser' : 'ChatMessageAssistant'
   return Dom.div(`ChatMessage ${roleClass}`, [
-    Dom.div('ChatMessageText', [Dom.textNode(message.text)]),
+    Dom.div('ChatMessageText', renderMessageText(message.text)),
   ])
 }
 
 const renderStreamingMessage = (text: string): Dom.TreeNode => {
   return Dom.div('ChatMessage ChatMessageAssistant ChatMessageStreaming', [
-    Dom.div('ChatMessageText', [Dom.textNode(text)]),
+    Dom.div('ChatMessageText', renderMessageText(text)),
   ])
 }
 

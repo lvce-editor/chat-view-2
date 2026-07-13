@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import type { ViewEvent } from '@lvce-editor/api'
 import { expect, test } from '@jest/globals'
+import { VirtualDomElements } from '@lvce-editor/virtual-dom-worker'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
 import {
   createMockChatApi,
@@ -162,6 +163,28 @@ test('submits a task and shows the compact result and change summary', async () 
   expect(getText(dom)).toContain('Changed 1 file · 2 checks passed')
   expect(instance.renderTitle()).toBe('Chat 2: Build a smaller chat view')
   expect(instance.getState().draft).toBe('')
+})
+
+test('renders message urls as external links and preserves punctuation', async () => {
+  const instance = await createTestInstance()
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Inspect https://example.com/docs?q=chat.',
+  })
+  await instance.submit()
+
+  const dom = instance.render() as readonly any[]
+  expect(dom).toContainEqual({
+    childCount: 1,
+    className: 'ChatMessageLink',
+    href: 'https://example.com/docs?q=chat',
+    rel: 'noopener noreferrer',
+    target: '_blank',
+    title: 'https://example.com/docs?q=chat',
+    type: VirtualDomElements.A,
+  })
+  expect(getText(dom)).toContain('Inspect \nhttps://example.com/docs?q=chat\n.')
 })
 
 test('opens the OpenAI model picker without adding model controls to the header', async () => {
