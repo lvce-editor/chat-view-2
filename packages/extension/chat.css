@@ -314,22 +314,14 @@
 }
 
 .ChatMessages {
-  gap: 16px;
-  padding: 16px 14px;
+  gap: 24px;
+  padding: 18px 18px 24px;
 }
 
 .ChatMessage {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  line-height: 1.5;
-}
-
-.ChatMessageAuthor {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--ChatMutedForeground);
-  text-transform: uppercase;
+  line-height: 1.55;
 }
 
 .ChatMessageText {
@@ -340,14 +332,15 @@
 
 .ChatMessageUser {
   align-self: flex-end;
-  max-width: 92%;
-  padding: 9px 11px;
-  background: var(--ChatHoverBackground);
-  border-radius: 10px;
+  max-width: min(78%, 520px);
+  padding: 10px 13px;
+  background: color-mix(in srgb, var(--ChatForeground) 6%, transparent);
+  border-radius: 16px;
 }
 
 .ChatMessageAssistant {
   align-self: stretch;
+  padding-inline: 1px;
 }
 
 .ChatMessageStreaming {
