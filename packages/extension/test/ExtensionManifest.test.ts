@@ -25,3 +25,15 @@ test('keeps experimental focus mode disabled by default', async () => {
   )
   expect(manifest.activation).toContain('onCommand:chat2.toggleFocusMode')
 })
+
+test('uses the full sidebar without the default header', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.views).toContainEqual(
+    expect.objectContaining({
+      id: 'chat2.views.chat',
+      showSideBarHeader: false,
+    }),
+  )
+})

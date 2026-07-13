@@ -50,7 +50,8 @@
       "id": "chat2.views.chat",
       "title": "Chat 2",
       "icon": "chat.svg",
-      "kind": "virtualDom"
+      "kind": "virtualDom",
+      "showSideBarHeader": false
     }
   ],
   "keybindings": [
