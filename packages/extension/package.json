@@ -28,8 +28,8 @@
     }
   },
   "devDependencies": {
-    "@lvce-editor/api": "^8.44.0",
-    "@lvce-editor/virtual-dom-worker": "^11.4.0",
+    "@lvce-editor/api": "^8.47.0",
+    "@lvce-editor/virtual-dom-worker": "^11.5.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11"
   }

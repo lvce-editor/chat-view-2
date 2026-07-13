@@ -15,7 +15,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderTitle: () => string
-  readonly submit: () => Promise<void>
+  readonly submit: (requestRerender?: boolean) => Promise<void>
 }
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
@@ -29,11 +29,11 @@ const getActiveInstance = (): ActiveChatViewInstance | undefined => {
 }
 
 export const submitActiveChatViewInstance = async (): Promise<void> => {
-  await getActiveInstance()?.submit()
+  await getActiveInstance()?.submit(true)
 }
 
 export const createInstance = async (
-  _context?: ViewContext,
+  context?: ViewContext,
   api: ChatApi = createMockChatApi(),
 ): Promise<ActiveChatViewInstance> => {
   const state: ChatViewState = {
@@ -43,7 +43,7 @@ export const createInstance = async (
     tasks: await api.listTasks(20),
   }
 
-  const submit = async (): Promise<void> => {
+  const submit = async (requestRerender = false): Promise<void> => {
     const message = state.draft.trim()
     if (!message) {
       return
@@ -57,6 +57,9 @@ export const createInstance = async (
       task,
       ...state.tasks.filter((item) => item.id !== task.id),
     ].slice(0, 20)
+    if (requestRerender) {
+      await context?.requestRerender()
+    }
   }
 
   const instance: ActiveChatViewInstance = {
