@@ -1,7 +1,7 @@
 {
   "name": "builtin.chat-view-2",
   "version": "0.0.0-dev",
-  "description": "A minimal mock chat extension for Lvce Editor",
+  "description": "A focused, low-overhead coding agent for Lvce Editor",
   "main": "dist/chatMain.js",
   "scripts": {
     "test": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --detectOpenHandles --forceExit",

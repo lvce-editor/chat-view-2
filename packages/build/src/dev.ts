@@ -5,15 +5,18 @@ import { root } from './root.ts'
 
 const extension = path.join(root, 'packages', 'extension')
 const entryPoint = path.join(extension, 'src', 'chatMain.ts')
-const outfile = path.join(extension, 'dist', 'chatMain.js')
+const outdir = path.join(extension, 'dist')
 
 const context = await esbuild.context({
   bundle: true,
   entryPoints: [entryPoint],
   external: ['electron', 'node:*'],
   format: 'esm',
-  outfile,
+  outdir,
   platform: 'browser',
+  splitting: true,
+  entryNames: 'chatMain',
+  chunkNames: 'chunks/[name]-[hash]',
   sourcemap: true,
   target: 'esnext',
 })

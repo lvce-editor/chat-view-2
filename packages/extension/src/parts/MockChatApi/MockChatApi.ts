@@ -1,7 +1,29 @@
-import type { ChatApi, ChatMessage, ChatTask } from '../ChatApi/ChatApi.ts'
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-promise-reject-errors, @typescript-eslint/prefer-readonly-parameter-types */
+import type {
+  ChatApi,
+  ChatModel,
+  ChatRunOptions,
+  ChatTask,
+} from '../ChatApi/ChatApi.ts'
+import { appendEvent, createEvent, setStatus } from '../ChatTask/ChatTask.ts'
 
-const mockResponse =
-  'This is a mock response. Chat 2 is not connected to an API yet.'
+export const mockResponse =
+  'I inspected the relevant files, made the scoped change, and verified the result.'
+
+const models: readonly ChatModel[] = [
+  {
+    available: true,
+    id: 'gpt-5.4',
+    label: 'GPT-5.4',
+    planEligible: true,
+  },
+  {
+    available: true,
+    id: 'gpt-5.4-mini',
+    label: 'GPT-5.4 Mini',
+    planEligible: true,
+  },
+]
 
 const taskTitles = [
   'Add worker memory usage',
@@ -26,25 +48,24 @@ const taskTitles = [
   'Triage open PRs',
 ] as const
 
-const createMockMessages = (title: string): readonly ChatMessage[] => {
-  return [
-    {
-      role: 'user',
-      text: title,
-    },
-    {
-      role: 'assistant',
-      text: mockResponse,
-    },
-  ]
-}
-
-const createMockTasks = (): readonly ChatTask[] => {
-  return taskTitles.map((title, index) => ({
-    id: `mock-task-${index + 1}`,
-    messages: createMockMessages(title),
+const createTask = (
+  id: string,
+  title: string,
+  modelId = models[0].id,
+): ChatTask => {
+  const timestamp = new Date().toISOString()
+  return {
+    createdAt: timestamp,
+    events: [
+      createEvent({ text: title, type: 'user-message' }),
+      createEvent({ text: mockResponse, type: 'assistant-message' }),
+    ],
+    id,
+    modelId,
+    status: 'completed',
     title,
-  }))
+    updatedAt: timestamp,
+  }
 }
 
 const getTitle = (message: string): string => {
@@ -52,35 +73,145 @@ const getTitle = (message: string): string => {
   return firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine
 }
 
-export const createMockChatApi = (): ChatApi => {
-  let tasks = createMockTasks()
+const wait = async (delayMs: number, signal?: AbortSignal): Promise<void> => {
+  if (delayMs <= 0) {
+    signal?.throwIfAborted()
+    return
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(resolve, delayMs)
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timeout)
+        reject(signal.reason)
+      },
+      { once: true },
+    )
+  })
+}
+
+const emit = async (
+  task: ChatTask,
+  options?: ChatRunOptions,
+): Promise<ChatTask> => {
+  await options?.onUpdate?.(task)
+  return task
+}
+
+export const createMockChatApi = (delayMs = 0): ChatApi => {
+  let tasks = taskTitles.map((title, index) =>
+    createTask(`mock-task-${index + 1}`, title),
+  )
   let nextTaskId = tasks.length + 1
+  const steering = new Map<string, string[]>()
+
+  const run = async (
+    initialTask: ChatTask,
+    options?: ChatRunOptions,
+  ): Promise<ChatTask> => {
+    let task = await emit(setStatus(initialTask, 'running'), options)
+    const activity = createEvent({
+      detail: 'search_workspace',
+      label: 'Inspecting workspace',
+      status: 'running' as const,
+      type: 'activity' as const,
+    })
+    task = await emit(appendEvent(task, activity), options)
+    try {
+      await wait(delayMs, options?.signal)
+      task = appendEvent(
+        task,
+        createEvent({
+          detail: '3 relevant files',
+          label: 'Inspecting workspace',
+          status: 'completed',
+          type: 'activity',
+        }),
+      )
+      const updates = steering.get(task.id) || []
+      steering.delete(task.id)
+      const response =
+        updates.length > 0
+          ? `${mockResponse}\n\nApplied steering: ${updates.join(' ')}`
+          : mockResponse
+      task = appendEvent(
+        task,
+        createEvent({ text: response, type: 'assistant-message' }),
+      )
+      task = appendEvent(
+        task,
+        createEvent({
+          checksPassed: 2,
+          files: [
+            {
+              path: 'packages/extension/src/parts/ChatView/ChatView.ts',
+              status: 'modified',
+            },
+          ],
+          type: 'changes',
+        }),
+      )
+      task = setStatus(task, 'completed')
+    } catch {
+      task = appendEvent(
+        task,
+        createEvent({ text: 'Stopped.', type: 'assistant-message' }),
+      )
+      task = setStatus(task, 'completed')
+    }
+    tasks = [task, ...tasks.filter((item) => item.id !== task.id)].slice(0, 20)
+    return emit(task, options)
+  }
 
   return {
-    async createTask(message: string): Promise<ChatTask> {
-      const task: ChatTask = {
-        id: `mock-task-${nextTaskId++}`,
-        messages: createMockMessages(message),
-        title: getTitle(message),
+    async createTask(message, modelId, options) {
+      const task = createTask(
+        `mock-task-${nextTaskId++}`,
+        getTitle(message),
+        modelId,
+      )
+      const initial: ChatTask = {
+        ...task,
+        events: [createEvent({ text: message, type: 'user-message' })],
+        status: 'idle',
       }
-      tasks = [task, ...tasks].slice(0, 20)
-      return task
+      tasks = [initial, ...tasks].slice(0, 20)
+      await emit(initial, options)
+      return run(initial, options)
     },
-    async getTask(id: string): Promise<ChatTask | undefined> {
+    async getTask(id) {
       return tasks.find((task) => task.id === id)
     },
-    async listTasks(limit: number): Promise<readonly ChatTask[]> {
+    async listModels() {
+      return models
+    },
+    async listTasks(limit) {
       return tasks.slice(0, Math.max(0, limit))
     },
-    async sendMessage(task: ChatTask, message: string): Promise<ChatTask> {
-      const updatedTask: ChatTask = {
-        ...task,
-        messages: [...task.messages, ...createMockMessages(message)],
-      }
-      tasks = tasks.map((item) => (item.id === task.id ? updatedTask : item))
-      return updatedTask
+    async revertTask(task) {
+      const updated = appendEvent(
+        appendEvent(
+          task,
+          createEvent({ checksPassed: 0, files: [], type: 'changes' }),
+        ),
+        createEvent({
+          text: 'Reverted 1 changed file.',
+          type: 'assistant-message',
+        }),
+      )
+      tasks = tasks.map((item) => (item.id === task.id ? updated : item))
+      return updated
+    },
+    async sendMessage(task, message, options) {
+      const updated = appendEvent(
+        task,
+        createEvent({ text: message, type: 'user-message' }),
+      )
+      return run(updated, options)
+    },
+    async steer(taskId, message) {
+      steering.set(taskId, [...(steering.get(taskId) || []), message])
     },
   }
 }
-
-export { mockResponse }

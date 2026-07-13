@@ -8,6 +8,7 @@
     "build:extension": "node packages/build/src/build-extension.ts",
     "build:static": "node scripts/build-static.ts",
     "build:watch": "./packages/build/node_modules/.bin/esbuild --format=esm --bundle --external:electron --external:node:* --watch packages/extension/src/chatMain.ts --outfile=packages/extension/dist/chatMain.js",
+    "check:budgets": "node scripts/check-budgets.ts",
     "dev": "node packages/build/src/dev.ts",
     "e2e": "cd packages/e2e && npm run e2e",
     "e2e:headless": "cd packages/e2e && npm run e2e:headless",
@@ -15,7 +16,7 @@
     "postinstall": "lerna bootstrap --ci",
     "install:extension": "node packages/build/src/install-extension.ts",
     "lint": "eslint . && prettier --check .",
-    "test": "lerna run test",
+    "test": "lerna run test && node scripts/validate-evaluation.ts",
     "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
     "type-check": "tsc -b"
   },
