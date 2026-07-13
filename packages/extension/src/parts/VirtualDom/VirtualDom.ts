@@ -30,8 +30,16 @@ export const node = (
 export const div = (
   className: string,
   children: readonly TreeNode[],
+  options: Readonly<{ style?: string }> = {},
 ): TreeNode => {
-  return node(VirtualDomElements.Div, { className }, children)
+  return node(
+    VirtualDomElements.Div,
+    {
+      className,
+      ...(options.style && { style: options.style }),
+    },
+    children,
+  )
 }
 
 export const button = (

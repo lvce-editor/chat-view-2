@@ -28,8 +28,11 @@ const dispatch = async (
   await instance.handleEvent?.(event)
 }
 
-const createTestInstance = async (delayMs = 0) => {
-  return createInstance(undefined, createMockChatApi(delayMs))
+const createTestInstance = async (
+  delayMs = 0,
+  readPreference?: (key: string) => Promise<unknown>,
+) => {
+  return createInstance(undefined, createMockChatApi(delayMs), readPreference)
 }
 
 test('renders a focused task list, model control, and composer', async () => {
@@ -97,6 +100,47 @@ test('renders the experimental focus mode control when enabled', async () => {
       className: 'ChatView ChatListView ChatFocusMode',
     }),
   )
+})
+
+test('uses the configured task list font size', async () => {
+  const instance = await createTestInstance(0, async (key) => {
+    return key === 'chat2.fontSize' ? ' 20px ' : undefined
+  })
+
+  expect(instance.getState().fontSize).toBe('20px')
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      className: 'ChatTaskList',
+      style: '--ChatTaskFontSize: 20px',
+    }),
+  )
+})
+
+test.each([undefined, 20, '', '-2px', 'calc(20px)', '20px; color: red'])(
+  'falls back for invalid task list font size %p',
+  async (fontSize) => {
+    const instance = await createTestInstance(0, async (key) => {
+      return key === 'chat2.fontSize' ? fontSize : undefined
+    })
+
+    expect(instance.getState().fontSize).toBe('13px')
+    expect(instance.render()).toContainEqual(
+      expect.objectContaining({
+        className: 'ChatTaskList',
+        style: '--ChatTaskFontSize: 13px',
+      }),
+    )
+  },
+)
+
+test('falls back when the task list font size cannot be read', async () => {
+  const instance = await createTestInstance(0, async (key) => {
+    if (key === 'chat2.fontSize') {
+      throw new Error('preferences unavailable')
+    }
+  })
+
+  expect(instance.getState().fontSize).toBe('13px')
 })
 
 test('submits a task and shows the compact result and change summary', async () => {

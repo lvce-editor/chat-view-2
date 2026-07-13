@@ -9,6 +9,7 @@ const createState = (): ChatViewState => ({
   errorMessage: '',
   focusMode: false,
   focusModeEnabled: true,
+  fontSize: '13px',
   modelPickerOpen: false,
   models: [],
   selectedModelId: '',

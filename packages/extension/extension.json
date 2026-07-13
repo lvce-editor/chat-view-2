@@ -16,6 +16,11 @@
       "type": "boolean",
       "default": false,
       "description": "Show an experimental control that lets Chat 2 temporarily take over the workbench."
+    },
+    "chat2.fontSize": {
+      "type": "string",
+      "default": "13px",
+      "description": "Font size for chat task list items, for example 20px."
     }
   },
   "activation": [
