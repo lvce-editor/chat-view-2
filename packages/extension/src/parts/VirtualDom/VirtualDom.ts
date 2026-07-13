@@ -9,27 +9,23 @@ export interface TreeNode {
   readonly node: VirtualDomNode
 }
 
-export const textNode = (value: string): TreeNode => {
-  return {
-    children: [],
-    node: text(value),
-  }
-}
+export const textNode = (value: string): TreeNode => ({
+  children: [],
+  node: text(value),
+})
 
 export const node = (
   type: number,
   properties: Readonly<Record<string, unknown>> = {},
   children: readonly TreeNode[] = [],
-): TreeNode => {
-  return {
-    children,
-    node: {
-      ...properties,
-      childCount: children.length,
-      type,
-    },
-  }
-}
+): TreeNode => ({
+  children,
+  node: {
+    ...properties,
+    childCount: children.length,
+    type,
+  },
+})
 
 export const div = (
   className: string,
@@ -38,8 +34,20 @@ export const div = (
   return node(VirtualDomElements.Div, { className }, children)
 }
 
-export const label = (text: string): TreeNode => {
-  return node(VirtualDomElements.Label, {}, [textNode(text)])
+export const button = (
+  name: string,
+  label: string,
+  className: string,
+): TreeNode => {
+  return node(
+    VirtualDomElements.Button,
+    {
+      className,
+      name,
+      onClick: 'handleClick',
+    },
+    [textNode(label)],
+  )
 }
 
 export const form = (
@@ -58,82 +66,27 @@ export const form = (
   )
 }
 
-export const button = (
-  name: string,
-  label: string,
-  className = 'TrelloButton',
+export const heading = (
+  level: 1 | 2,
+  className: string,
+  value: string,
 ): TreeNode => {
-  return node(
-    VirtualDomElements.Button,
-    {
-      className,
-      name,
-      onClick: 'handleClick',
-    },
-    [textNode(label)],
-  )
+  const type =
+    level === 1 ? VirtualDomElements.H1 : VirtualDomElements.H2
+  return node(type, { className }, [textNode(value)])
 }
 
-export const input = (
-  name: string,
-  value: string,
-  placeholder: string,
-  inputType?: string,
-): TreeNode => {
-  return node(VirtualDomElements.Input, {
-    className: 'TrelloInput',
-    ...(inputType && { inputType }),
-    name,
-    onBlur: 'handleBlur',
-    onFocus: 'handleFocus',
-    onInput: 'handleInput',
-    placeholder,
-    value,
-  })
-}
-
-export const textArea = (
-  name: string,
-  value: string,
-  placeholder: string,
-): TreeNode => {
+export const textArea = (value: string): TreeNode => {
   return node(VirtualDomElements.TextArea, {
-    className: 'TrelloTextArea',
-    name,
-    onBlur: 'handleBlur',
-    onFocus: 'handleFocus',
+    ariaLabel: 'Message',
+    className: 'ChatComposerInput',
+    name: 'composer',
     onInput: 'handleInput',
-    placeholder,
+    onKeyDown: 'handleKeyDown',
+    placeholder: 'Ask for follow-up changes',
+    spellcheck: true,
     value,
   })
-}
-
-export const image = (
-  className: string,
-  src: string,
-  alt: string,
-): TreeNode => {
-  return node(VirtualDomElements.Img, {
-    alt,
-    className,
-    src,
-  })
-}
-
-export const link = (
-  className: string,
-  href: string,
-  text: string,
-): TreeNode => {
-  return node(
-    VirtualDomElements.A,
-    {
-      className,
-      href,
-      target: '_blank',
-    },
-    [textNode(text)],
-  )
 }
 
 export const flatten = (tree: TreeNode): readonly VirtualDomNode[] => {

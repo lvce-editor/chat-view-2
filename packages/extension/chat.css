@@ -1,0 +1,174 @@
+.ChatView {
+  --ChatBackground: var(--SideBarBackground, var(--MainBackground, #181a1b));
+  --ChatForeground: var(--SideBarForeground, var(--WorkbenchForeground, #cccccc));
+  --ChatMutedForeground: color-mix(in srgb, var(--ChatForeground) 62%, transparent);
+  --ChatBorder: var(--SideBarBorder, color-mix(in srgb, var(--ChatForeground) 18%, transparent));
+  --ChatHoverBackground: var(--ListHoverBackground, color-mix(in srgb, var(--ChatForeground) 8%, transparent));
+  --ChatInputBackground: var(--InputBackground, color-mix(in srgb, var(--ChatForeground) 7%, var(--ChatBackground)));
+  --ChatInputForeground: var(--InputForeground, var(--ChatForeground));
+  --ChatFocusBorder: var(--FocusBorder, #3794ff);
+  --ChatButtonBackground: var(--ButtonBackground, #0e639c);
+  --ChatButtonForeground: var(--ButtonForeground, #ffffff);
+  --ChatButtonHoverBackground: var(--ButtonHoverBackground, #1177bb);
+
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--ChatForeground);
+  background: var(--ChatBackground);
+}
+
+.ChatTaskListHeader,
+.ChatDetailHeader {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 12px 14px 8px;
+}
+
+.ChatTitle,
+.ChatDetailTitle {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ChatTaskCount {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--ChatMutedForeground);
+  white-space: nowrap;
+}
+
+.ChatTaskList,
+.ChatMessages {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ChatTaskList {
+  padding: 0 6px 8px;
+}
+
+.ChatTaskButton {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 10px;
+  overflow: hidden;
+  color: var(--ChatForeground);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+}
+
+.ChatTaskButton:hover {
+  background: var(--ChatHoverBackground);
+}
+
+.ChatComposer {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  align-items: flex-end;
+  margin: 8px;
+  padding: 8px;
+  background: var(--ChatInputBackground);
+  border: 1px solid var(--ChatBorder);
+  border-radius: 10px;
+}
+
+.ChatComposer:focus-within {
+  border-color: var(--ChatFocusBorder);
+}
+
+.ChatComposerInput {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+  max-height: 180px;
+  padding: 4px;
+  color: var(--ChatInputForeground);
+  resize: vertical;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.ChatSubmitButton,
+.ChatBackButton {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 10px;
+  color: var(--ChatButtonForeground);
+  background: var(--ChatButtonBackground);
+  border: 0;
+  border-radius: 6px;
+}
+
+.ChatSubmitButton:hover,
+.ChatBackButton:hover {
+  background: var(--ChatButtonHoverBackground);
+}
+
+.ChatDetailHeader {
+  border-bottom: 1px solid var(--ChatBorder);
+}
+
+.ChatDetailTitle {
+  text-transform: none;
+}
+
+.ChatMessages {
+  gap: 18px;
+  padding: 16px 14px;
+}
+
+.ChatMessage {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  line-height: 1.5;
+}
+
+.ChatMessageAuthor {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ChatMutedForeground);
+  text-transform: uppercase;
+}
+
+.ChatMessageText {
+  user-select: text;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ChatMessageUser {
+  align-self: flex-end;
+  max-width: 92%;
+  padding: 9px 11px;
+  background: var(--ChatHoverBackground);
+  border-radius: 10px;
+}
+
+.ChatMessageAssistant {
+  align-self: stretch;
+}
