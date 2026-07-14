@@ -72,6 +72,24 @@ test('renders a focused task list, model control, and composer', async () => {
   expect(modelIndex).toBeLessThan(submitIndex)
 })
 
+test('shows a clear error when chat models cannot be loaded', async () => {
+  const api = {
+    ...createMockChatApi(),
+    async listModels() {
+      throw new TypeError('Failed to fetch')
+    },
+  }
+
+  const instance = await createInstance(undefined, api)
+  const dom = instance.render() as readonly any[]
+
+  expect(instance.getState().errorMessage).toBe(
+    'Chat Models could not be loaded from server',
+  )
+  expect(getText(dom)).toContain('Chat Models could not be loaded from server')
+  expect(getText(dom)).not.toContain('Failed to fetch')
+})
+
 test('renders the experimental focus mode control when enabled', async () => {
   const instance = await createTestInstance()
   const state = instance.getState() as {
