@@ -1,12 +1,21 @@
 import type { ChatApi } from '../ChatApi/ChatApi.ts'
 import { createAgentChatApi } from '../AgentChatApi/AgentChatApi.ts'
-import { createAgentToolHost } from '../AgentToolHost/AgentToolHost.ts'
+import {
+  createAgentToolHost,
+  type AgentFileSystemAccess,
+} from '../AgentToolHost/AgentToolHost.ts'
 import { resolveBackendConfiguration } from '../BackendConfiguration/BackendConfiguration.ts'
 import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
 import { createResponsesBackend } from '../ResponsesBackend/ResponsesBackend.ts'
 import { createIndexedDbTaskStore } from '../TaskStore/TaskStore.ts'
 
-export const createDefaultChatApi = async (): Promise<ChatApi> => {
+export interface DefaultChatApiOptions {
+  readonly fileSystemAccess?: AgentFileSystemAccess
+}
+
+export const createDefaultChatApi = async ({
+  fileSystemAccess,
+}: DefaultChatApiOptions = {}): Promise<ChatApi> => {
   const { accessToken, baseUrl } = await resolveBackendConfiguration()
   if (!baseUrl) {
     return createMockChatApi(120)
@@ -17,6 +26,8 @@ export const createDefaultChatApi = async (): Promise<ChatApi> => {
       baseUrl,
     }),
     store: createIndexedDbTaskStore(),
-    toolHost: createAgentToolHost(),
+    toolHost: createAgentToolHost({
+      ...(fileSystemAccess && { fileSystemAccess }),
+    }),
   })
 }

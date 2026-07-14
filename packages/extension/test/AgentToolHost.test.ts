@@ -62,3 +62,61 @@ test('removes commands and diagnostics from the catalog when their secure hosts 
     expect.arrayContaining(['search_workspace', 'read_file', 'apply_patch']),
   )
 })
+
+test('exposes read tools but not write tools in a read-only workspace sandbox', async () => {
+  const host = createAgentToolHost({
+    fileSystemAccess: {
+      allowRead: true,
+      allowWrite: false,
+      root: '.',
+    },
+  })
+  const names = host.getDefinitions().map((definition) => definition.name)
+
+  expect(names).toEqual(
+    expect.arrayContaining(['search_workspace', 'read_file']),
+  )
+  expect(names).not.toContain('apply_patch')
+  await expect(
+    host.execute({
+      arguments: JSON.stringify({
+        newText: 'after',
+        oldText: 'before',
+        path: 'a.ts',
+      }),
+      callId: 'call-1',
+      name: 'apply_patch',
+    }),
+  ).resolves.toEqual({
+    content: 'Tool apply_patch is disabled by the file system sandbox',
+    isError: true,
+  })
+})
+
+test('write access implies workspace read access', () => {
+  const names = createAgentToolHost({
+    fileSystemAccess: {
+      allowRead: false,
+      allowWrite: true,
+      root: '.',
+    },
+  })
+    .getDefinitions()
+    .map((definition) => definition.name)
+
+  expect(names).toEqual(
+    expect.arrayContaining(['search_workspace', 'read_file', 'apply_patch']),
+  )
+})
+
+test('rejects unsupported sandbox roots', () => {
+  expect(() =>
+    createAgentToolHost({
+      fileSystemAccess: {
+        allowRead: true,
+        allowWrite: false,
+        root: '/tmp' as '.',
+      },
+    }),
+  ).toThrow('Unsupported agent sandbox root: /tmp')
+})

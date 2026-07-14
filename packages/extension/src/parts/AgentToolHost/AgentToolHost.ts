@@ -61,9 +61,16 @@ export interface AgentVerificationResult {
   readonly output: string
 }
 
+export interface AgentFileSystemAccess {
+  readonly allowRead: boolean
+  readonly allowWrite: boolean
+  readonly root: '.'
+}
+
 export interface AgentToolHostOptions {
   readonly commandSandbox?: AgentCommandSandbox
   readonly editorContextProvider?: AgentEditorContextProvider
+  readonly fileSystemAccess?: AgentFileSystemAccess
 }
 
 export interface AgentToolHost {
@@ -113,6 +120,8 @@ const ignoredDirectories = new Set([
   'dist',
   'node_modules',
 ])
+const readToolNames = new Set(['read_file', 'search_workspace'])
+const writeToolNames = new Set(['apply_patch'])
 
 export const workspaceContextLabel =
   'Workspace root: .\nAll tool paths must be relative to this root.'
@@ -299,10 +308,28 @@ const failure = (error: unknown): AgentToolResult => ({
 export const createAgentToolHost = ({
   commandSandbox,
   editorContextProvider,
+  fileSystemAccess,
 }: AgentToolHostOptions = {}): AgentToolHost => {
+  if (fileSystemAccess && fileSystemAccess.root !== '.') {
+    throw new Error(
+      `Unsupported agent sandbox root: ${fileSystemAccess.root}. Only "." is supported.`,
+    )
+  }
+  const allowRead =
+    fileSystemAccess === undefined ||
+    fileSystemAccess.allowRead ||
+    fileSystemAccess.allowWrite
+  const allowWrite =
+    fileSystemAccess === undefined || fileSystemAccess.allowWrite
   let changedFiles = new Map<string, ChatChangedFile>()
   let snapshots = new Map<string, FileSnapshot>()
   const availableDefinitions = definitions.filter((definition) => {
+    if (readToolNames.has(definition.name)) {
+      return allowRead
+    }
+    if (writeToolNames.has(definition.name)) {
+      return allowWrite
+    }
     if (definition.name === 'run_command') {
       return Boolean(commandSandbox)
     }
@@ -445,6 +472,16 @@ export const createAgentToolHost = ({
     async execute(call, signal) {
       try {
         signal?.throwIfAborted()
+        if (readToolNames.has(call.name) && !allowRead) {
+          throw new Error(
+            `Tool ${call.name} is disabled by the file system sandbox`,
+          )
+        }
+        if (writeToolNames.has(call.name) && !allowWrite) {
+          throw new Error(
+            `Tool ${call.name} is disabled by the file system sandbox`,
+          )
+        }
         const args = parseArguments(call.arguments)
         if (call.name === 'search_workspace') {
           if (typeof args.query !== 'string' || !args.query) {
@@ -531,6 +568,13 @@ export const createAgentToolHost = ({
           ? await editorContextProvider.getContext()
           : undefined
         const contextParts = [workspaceContextLabel]
+        if (fileSystemAccess) {
+          contextParts.push(
+            allowWrite
+              ? 'File system sandbox: read and write access is limited to .'
+              : 'File system sandbox: read-only access is limited to .',
+          )
+        }
         if (editorContext?.activeFile) {
           contextParts.push(`Active file: ${editorContext.activeFile}`)
         }
@@ -557,6 +601,9 @@ export const createAgentToolHost = ({
       }
     },
     async revert() {
+      if (!allowWrite) {
+        throw new Error('File writes are disabled by the file system sandbox')
+      }
       const reverted: ChatChangedFile[] = []
       for (const [path, snapshot] of snapshots) {
         const currentlyExists = await exists(snapshot.uri)

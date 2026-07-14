@@ -1,5 +1,9 @@
+import type { AgentFileSystemAccess } from '../AgentToolHost/AgentToolHost.ts'
 import type { ChatApi, ChatTask, ChatTraceMessage } from '../ChatApi/ChatApi.ts'
-import { createDefaultChatApi } from '../DefaultChatApi/DefaultChatApi.ts'
+import {
+  createDefaultChatApi,
+  type DefaultChatApiOptions,
+} from '../DefaultChatApi/DefaultChatApi.ts'
 
 interface HeadlessChatSession {
   readonly api: ChatApi
@@ -17,10 +21,14 @@ export interface HeadlessChatRunResult {
 }
 
 export interface HeadlessChatCommands {
-  readonly createSession: (requestedModelId?: unknown) => Promise<string>
+  readonly createSession: (
+    requestedModelId?: unknown,
+    fileSystemAccess?: unknown,
+  ) => Promise<string>
   readonly runPrompt: (
     message: unknown,
     requestedModelId?: unknown,
+    fileSystemAccess?: unknown,
   ) => Promise<HeadlessChatRunResult>
   readonly sendMessage: (
     sessionIdOrMessage: unknown,
@@ -28,13 +36,39 @@ export interface HeadlessChatCommands {
   ) => Promise<ChatTask>
 }
 
-type CreateChatApi = () => Promise<ChatApi>
+type CreateChatApi = (options?: DefaultChatApiOptions) => Promise<ChatApi>
 
 const getString = (value: unknown, name: string): string => {
   if (typeof value !== 'string' || !value.trim()) {
     throw new TypeError(`${name} must be a non-empty string`)
   }
   return value.trim()
+}
+
+const getFileSystemAccess = (
+  value: unknown,
+): AgentFileSystemAccess | undefined => {
+  if (value === undefined) {
+    return undefined
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('fileSystemAccess must be an object')
+  }
+  const access = value as Readonly<Record<string, unknown>>
+  if (
+    access.root !== '.' ||
+    typeof access.allowRead !== 'boolean' ||
+    typeof access.allowWrite !== 'boolean'
+  ) {
+    throw new TypeError(
+      'fileSystemAccess must specify root "." and boolean allowRead/allowWrite values',
+    )
+  }
+  return {
+    allowRead: access.allowRead || access.allowWrite,
+    allowWrite: access.allowWrite,
+    root: '.',
+  }
 }
 
 export const createHeadlessChatCommands = (
@@ -44,8 +78,14 @@ export const createHeadlessChatCommands = (
   let activeSessionId = ''
   let nextSessionId = 1
 
-  const createSession = async (requestedModelId?: unknown): Promise<string> => {
-    const api = await createChatApi()
+  const createSession = async (
+    requestedModelId?: unknown,
+    fileSystemAccessValue?: unknown,
+  ): Promise<string> => {
+    const fileSystemAccess = getFileSystemAccess(fileSystemAccessValue)
+    const api = await createChatApi({
+      ...(fileSystemAccess && { fileSystemAccess }),
+    })
     const models = await api.listModels()
     const modelId =
       typeof requestedModelId === 'string' ? requestedModelId.trim() : ''
@@ -104,11 +144,12 @@ export const createHeadlessChatCommands = (
   const runPrompt = async (
     messageValue: unknown,
     requestedModelId?: unknown,
+    fileSystemAccess?: unknown,
   ): Promise<HeadlessChatRunResult> => {
     let sessionId = ''
     try {
       const message = getString(messageValue, 'message')
-      sessionId = await createSession(requestedModelId)
+      sessionId = await createSession(requestedModelId, fileSystemAccess)
       const task = await sendMessage(sessionId, message)
       const session = sessions.get(sessionId)
       return {

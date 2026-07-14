@@ -140,6 +140,56 @@ test('returns a complete prompt result with collected trace messages', async () 
   })
 })
 
+test('forwards a normalized file system sandbox to the chat API', async () => {
+  const task = completedTask('task-1')
+  const api = {
+    createTask: jest.fn(async () => task),
+    listModels: jest.fn(async () => [
+      {
+        available: true,
+        id: 'test-model',
+        label: 'Test model',
+        planEligible: true,
+      },
+    ]),
+  } as unknown as ChatApi
+  const createChatApi = jest.fn(async (_options?: unknown) => api)
+  const commands = createHeadlessChatCommands(createChatApi)
+
+  const result = await commands.runPrompt('Inspect the tests', undefined, {
+    allowRead: false,
+    allowWrite: true,
+    root: '.',
+  })
+
+  expect(result.status).toBe('completed')
+  expect(createChatApi).toHaveBeenCalledWith({
+    fileSystemAccess: {
+      allowRead: true,
+      allowWrite: true,
+      root: '.',
+    },
+  })
+})
+
+test('fails closed for an unsupported file system sandbox root', async () => {
+  const commands = createHeadlessChatCommands()
+
+  const result = await commands.runPrompt('Inspect the tests', undefined, {
+    allowRead: true,
+    allowWrite: false,
+    root: '/tmp',
+  })
+
+  expect(result).toEqual({
+    error:
+      'fileSystemAccess must specify root "." and boolean allowRead/allowWrite values',
+    sessionId: '',
+    status: 'failed',
+    trace: [],
+  })
+})
+
 test('returns failed prompt details instead of losing the task', async () => {
   const task: ChatTask = {
     ...completedTask('failed-task'),
