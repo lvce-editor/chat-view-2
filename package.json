@@ -12,6 +12,8 @@
     "dev": "node packages/build/src/dev.ts",
     "e2e": "cd packages/e2e && npm run e2e",
     "e2e:headless": "cd packages/e2e && npm run e2e:headless",
+    "evaluation:prepare": "npm --prefix packages/evaluation run prepare-scenario --",
+    "evaluation:proxy": "npm --prefix packages/evaluation run proxy --",
     "format": "prettier --write .",
     "postinstall": "lerna bootstrap --ci",
     "install:extension": "node packages/build/src/install-extension.ts",

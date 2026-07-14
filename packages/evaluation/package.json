@@ -1,0 +1,18 @@
+{
+  "name": "chat-view-2-evaluation",
+  "version": "0.0.0-dev",
+  "description": "Deterministic coding-agent evaluation fixtures and recording proxy",
+  "type": "module",
+  "scripts": {
+    "prepare-scenario": "node src/cli.ts prepare",
+    "proxy": "node src/cli.ts proxy",
+    "test": "node --test test/*.test.ts",
+    "type-check": "tsc -b"
+  },
+  "author": "Lvce Editor",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^6.0.3"
+  }
+}

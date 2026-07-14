@@ -2,6 +2,8 @@
 .tmp
 extension.tar.br
 dist2
+packages/evaluation/results/*.json
+packages/evaluation/workspaces/
 
 # Logs
 logs

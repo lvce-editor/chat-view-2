@@ -44,10 +44,10 @@ a 300 KB budget. `npm run check:budgets` enforces both after a production build.
 
 ## Evaluation
 
-The versioned task set in `packages/evaluation/v1/tasks.json` is the release-quality
-baseline. Each task should be run from the same base commit in Chat 2 and Codex.
-Record solve status, tests, interventions, duration, token use, and peak client
-memory using the schema described in `packages/evaluation/README.md`.
+The scenario fixtures and deterministic recording proxy live in
+`packages/evaluation`. Cached model responses can be replayed in CI without an
+API key or another paid request. See `packages/evaluation/README.md` for the
+scenario format and the current manual evaluation flow.
 
 ## Development
 
