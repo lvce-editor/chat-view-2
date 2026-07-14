@@ -12,11 +12,8 @@ const context = await esbuild.context({
   entryPoints: [entryPoint],
   external: ['electron', 'node:*'],
   format: 'esm',
-  outdir,
+  outfile: path.join(outdir, 'chatMain.js'),
   platform: 'browser',
-  splitting: true,
-  entryNames: 'chatMain',
-  chunkNames: 'chunks/[name]-[hash]',
   sourcemap: true,
   target: 'esnext',
 })

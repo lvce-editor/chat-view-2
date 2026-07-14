@@ -1,10 +1,13 @@
 import { access, cp, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path, { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import './build.ts'
 import { root } from './root.ts'
 
 const extensionId = 'builtin.chat-view-2'
+const serverPackagePath = join(root, 'packages', 'server', 'package.json')
+const serverRequire = createRequire(serverPackagePath)
+const { exportStatic } = serverRequire('@lvce-editor/shared-process')
 
 const assertFileExists = async (file: string): Promise<void> => {
   try {
@@ -91,18 +94,6 @@ const assertStaticChatExtension = async (commitHash: string): Promise<void> => {
     )
   }
 }
-
-const serverPackagePath = join(root, 'packages', 'server', 'package.json')
-const serverRequire = createRequire(serverPackagePath)
-const sharedProcessPath = serverRequire.resolve('@lvce-editor/shared-process')
-
-const sharedProcessUrl = pathToFileURL(sharedProcessPath).toString()
-
-const sharedProcess = await import(sharedProcessUrl)
-
-const { exportStatic } = sharedProcess
-
-await import('./build.ts')
 
 await cp(path.join(root, 'dist'), path.join(root, 'dist2'), {
   recursive: true,

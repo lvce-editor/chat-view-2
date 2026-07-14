@@ -41,10 +41,9 @@ const bundle = await rollup({
 })
 
 await bundle.write({
-  chunkFileNames: 'chunks/[name]-[hash].js',
-  dir: join(root, 'dist', 'dist'),
-  entryFileNames: 'chatMain.js',
+  file: join(root, 'dist', 'dist', 'chatMain.js'),
   format: 'esm',
+  inlineDynamicImports: true,
 })
 
 await bundle.close()

@@ -9,6 +9,7 @@ import {
   submitActiveChatViewInstance,
   toggleActiveChatViewFocusMode,
 } from '../ChatView/CreateInstance.ts'
+import { headlessChatCommands } from '../HeadlessChat/HeadlessChat.ts'
 
 const state = {
   activated: false,
@@ -23,8 +24,6 @@ export const activate = async (): Promise<void> => {
   registerView(view)
   registerCommand({
     async execute(modelId?: unknown) {
-      const { headlessChatCommands } =
-        await import('../HeadlessChat/HeadlessChat.ts')
       return headlessChatCommands.createSession(modelId)
     },
     id: 'chat2.createSession',
@@ -35,16 +34,12 @@ export const activate = async (): Promise<void> => {
       modelId?: unknown,
       fileSystemAccess?: unknown,
     ) {
-      const { headlessChatCommands } =
-        await import('../HeadlessChat/HeadlessChat.ts')
       return headlessChatCommands.runPrompt(message, modelId, fileSystemAccess)
     },
     id: 'chat2.runPrompt',
   })
   registerCommand({
     async execute(message: unknown) {
-      const { headlessChatCommands } =
-        await import('../HeadlessChat/HeadlessChat.ts')
       return headlessChatCommands.sendMessage(message)
     },
     id: 'chat2.sendMessage',
