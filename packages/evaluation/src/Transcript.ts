@@ -87,7 +87,7 @@ export const createTranscriptWriter = (
   path: string,
   scenarioId: string,
   model: string,
-  temperature: number,
+  temperature?: number,
 ): TranscriptWriter => {
   const startedAt = new Date().toISOString()
   const exchanges: EvaluationExchange[] = []
@@ -100,7 +100,7 @@ export const createTranscriptWriter = (
         scenarioId,
         schemaVersion: 1,
         startedAt,
-        temperature,
+        ...(temperature !== undefined && { temperature }),
         updatedAt: new Date().toISOString(),
       }
       await mkdir(dirname(path), { recursive: true })

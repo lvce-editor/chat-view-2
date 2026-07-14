@@ -24,7 +24,7 @@ export interface EvaluationProxyOptions {
   readonly model: string
   readonly port?: number
   readonly scenarioId: string
-  readonly temperature: number
+  readonly temperature?: number
   readonly transcriptPath: string
   readonly upstreamBaseUrl: string
 }
@@ -169,7 +169,9 @@ export const startEvaluationProxy = async (
       const requestBody = {
         ...incomingBody,
         model: options.model,
-        temperature: options.temperature,
+        ...(options.temperature !== undefined && {
+          temperature: options.temperature,
+        }),
       }
       const cacheRequest = {
         body: requestBody,

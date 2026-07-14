@@ -2,7 +2,7 @@
 
 This package is the deterministic foundation for running real coding tasks
 through Chat 2. A scenario contains its own workspace fixture, prompt, pinned
-model, temperature, timeout, and objective checks.
+model, timeout, objective checks, and an optional temperature.
 
 ## Layout
 
@@ -15,9 +15,10 @@ workspaces/<id>/              generated working copy, not committed
 ```
 
 The cache key covers the complete normalized `/v1/responses` request after the
-proxy pins its model snapshot and temperature. This includes tool outputs and
-previous response IDs, so a cached multi-step run is replayed only when the
-conversation is identical. The proxy never forwards editor authentication.
+proxy pins its model snapshot and any configured temperature. This includes
+tool outputs and previous response IDs, so a cached multi-step run is replayed
+only when the conversation is identical. The proxy never forwards editor
+authentication.
 
 ## Run all scenarios
 
@@ -58,9 +59,9 @@ npm run evaluation:proxy -- hello-world-html
 
 Open the generated workspace in Lvce Editor, set `chat2.backendUrl` to the URL
 printed by the proxy, open Chat 2, and submit the printed prompt. The proxy
-forces the scenario's model and temperature, serves the model picker locally,
-and writes every AI request/response plus extracted tool calls/results to
-`results/<id>.json`.
+forces the scenario's model and any configured temperature, serves the model
+picker locally, and writes every AI request/response plus extracted tool
+calls/results to `results/<id>.json`.
 
 ## Starter scenarios
 

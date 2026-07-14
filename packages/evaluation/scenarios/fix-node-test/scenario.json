@@ -1,7 +1,6 @@
 {
   "id": "fix-node-test",
   "model": "gpt-5-mini-2025-08-07",
-  "temperature": 0,
   "timeoutMs": 120000,
   "prompt": "Fix the obvious bug in this Node.js project so that npm test passes. Keep the change scoped to the bug.",
   "checks": [{ "type": "command", "command": "npm test" }]

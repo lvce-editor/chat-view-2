@@ -1,7 +1,6 @@
 {
   "id": "hello-world-html",
   "model": "gpt-5-mini-2025-08-07",
-  "temperature": 0,
   "timeoutMs": 120000,
   "prompt": "Create a simple Hello World HTML page in index.html with a title, heading, and a short welcome message.",
   "checks": [
