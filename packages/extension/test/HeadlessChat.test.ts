@@ -2,6 +2,8 @@ import { expect, jest, test } from '@jest/globals'
 import type { ChatApi, ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createHeadlessChatCommands } from '../src/parts/HeadlessChat/HeadlessChat.ts'
 
+const sessionIdRegex = /^session-/
+
 const completedTask = (id: string): ChatTask => ({
   createdAt: '2026-07-14T00:00:00.000Z',
   events: [],
@@ -36,8 +38,16 @@ test('creates a session and sends messages through the real chat API surface', a
   expect(sessionId.startsWith('session-')).toBe(true)
   expect(created).toBe(firstTask)
   expect(continued).toBe(secondTask)
-  expect(api.createTask).toHaveBeenCalledWith('First message', 'test-model')
-  expect(api.sendMessage).toHaveBeenCalledWith(firstTask, 'Second message')
+  expect(api.createTask).toHaveBeenCalledWith(
+    'First message',
+    'test-model',
+    expect.objectContaining({ onTrace: expect.any(Function) }),
+  )
+  expect(api.sendMessage).toHaveBeenCalledWith(
+    firstTask,
+    'Second message',
+    expect.objectContaining({ onTrace: expect.any(Function) }),
+  )
 })
 
 test('rejects unavailable models and unknown sessions', async () => {
@@ -84,4 +94,89 @@ test('propagates a failed agent task through the command boundary', async () => 
   await expect(commands.sendMessage('Hello')).rejects.toThrow(
     'Model request failed',
   )
+})
+
+test('returns a complete prompt result with collected trace messages', async () => {
+  const task = completedTask('task-1')
+  const api = {
+    async createTask(
+      _message: string,
+      _modelId: string,
+      options?: { readonly onTrace?: (message: unknown) => void },
+    ) {
+      options?.onTrace?.({
+        content: 'Fix the tests',
+        role: 'user',
+        timestamp: 1,
+      })
+      return task
+    },
+    async listModels() {
+      return [
+        {
+          available: true,
+          id: 'test-model',
+          label: 'Test model',
+          planEligible: true,
+        },
+      ]
+    },
+  } as unknown as ChatApi
+  const commands = createHeadlessChatCommands(async () => api)
+
+  const result = await commands.runPrompt('Fix the tests', 'test-model')
+
+  expect(result).toEqual({
+    sessionId: expect.stringMatching(sessionIdRegex),
+    status: 'completed',
+    task,
+    trace: [
+      {
+        content: 'Fix the tests',
+        role: 'user',
+        timestamp: 1,
+      },
+    ],
+  })
+})
+
+test('returns failed prompt details instead of losing the task', async () => {
+  const task: ChatTask = {
+    ...completedTask('failed-task'),
+    events: [
+      {
+        id: 'error-1',
+        message: 'Model request failed',
+        timestamp: '2026-07-14T00:00:00.000Z',
+        type: 'error',
+      },
+    ],
+    status: 'failed',
+  }
+  const api = {
+    async createTask() {
+      return task
+    },
+    async listModels() {
+      return [
+        {
+          available: true,
+          id: 'test-model',
+          label: 'Test model',
+          planEligible: true,
+        },
+      ]
+    },
+  } as unknown as ChatApi
+  const commands = createHeadlessChatCommands(async () => api)
+
+  const result = await commands.runPrompt('Fix the tests')
+
+  expect(result).toEqual({
+    error: 'Model request failed',
+    sessionId: expect.stringMatching(sessionIdRegex),
+    status: 'failed',
+    task,
+    trace: [],
+  })
 })

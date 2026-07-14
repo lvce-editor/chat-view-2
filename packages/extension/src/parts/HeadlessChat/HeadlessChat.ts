@@ -1,14 +1,27 @@
-import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
+import type { ChatApi, ChatTask, ChatTraceMessage } from '../ChatApi/ChatApi.ts'
 import { createDefaultChatApi } from '../DefaultChatApi/DefaultChatApi.ts'
 
 interface HeadlessChatSession {
   readonly api: ChatApi
   readonly modelId: string
   task?: ChatTask
+  readonly trace: ChatTraceMessage[]
+}
+
+export interface HeadlessChatRunResult {
+  readonly error?: string
+  readonly sessionId: string
+  readonly status: 'completed' | 'failed'
+  readonly task?: ChatTask
+  readonly trace: readonly ChatTraceMessage[]
 }
 
 export interface HeadlessChatCommands {
   readonly createSession: (requestedModelId?: unknown) => Promise<string>
+  readonly runPrompt: (
+    message: unknown,
+    requestedModelId?: unknown,
+  ) => Promise<HeadlessChatRunResult>
   readonly sendMessage: (
     sessionIdOrMessage: unknown,
     message?: unknown,
@@ -31,55 +44,95 @@ export const createHeadlessChatCommands = (
   let activeSessionId = ''
   let nextSessionId = 1
 
-  return {
-    async createSession(requestedModelId): Promise<string> {
-      const api = await createChatApi()
-      const models = await api.listModels()
-      const modelId =
-        typeof requestedModelId === 'string' ? requestedModelId.trim() : ''
-      const model = modelId
-        ? models.find(
-            (item) =>
-              item.id === modelId && item.available && item.planEligible,
-          )
-        : models.find((item) => item.available && item.planEligible)
-      if (!model) {
-        throw new Error(
-          modelId
-            ? `Chat model is not available: ${modelId}`
-            : 'No available chat model was found',
+  const createSession = async (requestedModelId?: unknown): Promise<string> => {
+    const api = await createChatApi()
+    const models = await api.listModels()
+    const modelId =
+      typeof requestedModelId === 'string' ? requestedModelId.trim() : ''
+    const model = modelId
+      ? models.find(
+          (item) => item.id === modelId && item.available && item.planEligible,
         )
-      }
-      const id = `session-${Date.now()}-${nextSessionId++}`
-      sessions.set(id, { api, modelId: model.id })
-      activeSessionId = id
-      return id
-    },
-    async sendMessage(sessionIdOrMessage, messageValue): Promise<ChatTask> {
-      const hasExplicitSession = messageValue !== undefined
-      const sessionId = hasExplicitSession
-        ? getString(sessionIdOrMessage, 'sessionId')
-        : activeSessionId
-      const message = getString(
-        hasExplicitSession ? messageValue : sessionIdOrMessage,
-        'message',
+      : models.find((item) => item.available && item.planEligible)
+    if (!model) {
+      throw new Error(
+        modelId
+          ? `Chat model is not available: ${modelId}`
+          : 'No available chat model was found',
       )
+    }
+    const id = `session-${Date.now()}-${nextSessionId++}`
+    sessions.set(id, { api, modelId: model.id, trace: [] })
+    activeSessionId = id
+    return id
+  }
+
+  const sendMessage = async (
+    sessionIdOrMessage: unknown,
+    messageValue?: unknown,
+  ): Promise<ChatTask> => {
+    const hasExplicitSession = messageValue !== undefined
+    const sessionId = hasExplicitSession
+      ? getString(sessionIdOrMessage, 'sessionId')
+      : activeSessionId
+    const message = getString(
+      hasExplicitSession ? messageValue : sessionIdOrMessage,
+      'message',
+    )
+    const session = sessions.get(sessionId)
+    if (!session) {
+      throw new Error(`Headless chat session was not found: ${sessionId}`)
+    }
+    const options = {
+      onTrace(traceMessage: ChatTraceMessage): void {
+        session.trace.push(traceMessage)
+      },
+    }
+    const task = session.task
+      ? await session.api.sendMessage(session.task, message, options)
+      : await session.api.createTask(message, session.modelId, options)
+    session.task = task
+    if (task.status !== 'completed') {
+      const error = task.events.find((event) => event.type === 'error')
+      throw new Error(
+        error?.message || `Chat task ended with status ${task.status}`,
+      )
+    }
+    return task
+  }
+
+  const runPrompt = async (
+    messageValue: unknown,
+    requestedModelId?: unknown,
+  ): Promise<HeadlessChatRunResult> => {
+    let sessionId = ''
+    try {
+      const message = getString(messageValue, 'message')
+      sessionId = await createSession(requestedModelId)
+      const task = await sendMessage(sessionId, message)
       const session = sessions.get(sessionId)
-      if (!session) {
-        throw new Error(`Headless chat session was not found: ${sessionId}`)
+      return {
+        sessionId,
+        status: 'completed',
+        task,
+        trace: session ? [...session.trace] : [],
       }
-      const task = session.task
-        ? await session.api.sendMessage(session.task, message)
-        : await session.api.createTask(message, session.modelId)
-      session.task = task
-      if (task.status !== 'completed') {
-        const error = task.events.find((event) => event.type === 'error')
-        throw new Error(
-          error?.message || `Chat task ended with status ${task.status}`,
-        )
+    } catch (error) {
+      const session = sessions.get(sessionId)
+      return {
+        error: error instanceof Error ? error.message : String(error),
+        sessionId,
+        status: 'failed',
+        ...(session?.task && { task: session.task }),
+        trace: session ? [...session.trace] : [],
       }
-      return task
-    },
+    }
+  }
+
+  return {
+    createSession,
+    runPrompt,
+    sendMessage,
   }
 }
 

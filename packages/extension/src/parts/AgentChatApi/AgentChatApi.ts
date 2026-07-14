@@ -10,6 +10,7 @@ import type {
   ChatRunOptions,
   ChatTask,
   ChatTaskEvent,
+  ChatTraceMessage,
 } from '../ChatApi/ChatApi.ts'
 import type { TaskStore } from '../TaskStore/TaskStore.ts'
 import { appendEvent, createEvent, setStatus } from '../ChatTask/ChatTask.ts'
@@ -39,6 +40,21 @@ const notify = async (
   options?: ChatRunOptions,
 ): Promise<void> => {
   await options?.onUpdate?.(task)
+}
+
+const trace = async (
+  message: ChatTraceMessage,
+  options?: ChatRunOptions,
+): Promise<void> => {
+  await options?.onTrace?.(message)
+}
+
+const parseToolArguments = (value: string): unknown => {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
+  }
 }
 
 const isAbortError = (error: unknown): boolean => {
@@ -110,6 +126,14 @@ export const createAgentChatApi = ({
     options?: ChatRunOptions,
   ): Promise<ChatTask> => {
     let task = setStatus(initialTask, 'running')
+    await trace(
+      {
+        content: message,
+        role: 'user',
+        timestamp: Date.now(),
+      },
+      options,
+    )
     toolHost.beginTurn(task.id)
     await store.save(task)
     await notify(task, options)
@@ -160,6 +184,26 @@ export const createAgentChatApi = ({
           ...(options?.signal && { signal: options.signal }),
           tools: toolHost.getDefinitions(),
         })
+        await trace(
+          {
+            content: [
+              ...(result.text
+                ? [{ text: result.text, type: 'text' as const }]
+                : []),
+              ...result.toolCalls.map((call) => ({
+                arguments: parseToolArguments(call.arguments),
+                id: call.callId,
+                name: call.name,
+                type: 'toolCall' as const,
+              })),
+            ],
+            model: task.modelId,
+            responseId: result.responseId,
+            role: 'assistant',
+            timestamp: Date.now(),
+          },
+          options,
+        )
         previousResponseId = result.responseId || previousResponseId
         const { streamingText: _streamingText, ...taskWithoutStreamingText } =
           task
@@ -200,6 +244,16 @@ export const createAgentChatApi = ({
               options,
             )
             const verification = await toolHost.verifyChanges(options?.signal)
+            await trace(
+              {
+                content: verification.output,
+                customType: 'verification',
+                isError: verification.failed,
+                role: 'custom',
+                timestamp: Date.now(),
+              },
+              options,
+            )
             task = await withEvent(
               task,
               createEvent({
@@ -268,6 +322,21 @@ export const createAgentChatApi = ({
           toolHost,
           options?.signal,
         )
+        for (let index = 0; index < result.toolCalls.length; index++) {
+          const call = result.toolCalls[index]
+          const output = outputs[index]
+          await trace(
+            {
+              content: [{ text: output.content, type: 'text' }],
+              isError: output.isError,
+              role: 'toolResult',
+              timestamp: Date.now(),
+              toolCallId: call.callId,
+              toolName: call.name,
+            },
+            options,
+          )
+        }
         for (let index = 0; index < activities.length; index++) {
           const activity = activities[index]
           const output = outputs[index]

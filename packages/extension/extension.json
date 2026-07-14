@@ -31,6 +31,7 @@
   "activation": [
     "onView:chat2.views.chat",
     "onCommand:chat2.createSession",
+    "onCommand:chat2.runPrompt",
     "onCommand:chat2.sendMessage",
     "onCommand:chat2.show",
     "onCommand:chat2.submit",
@@ -40,6 +41,10 @@
     {
       "id": "chat2.createSession",
       "label": "Chat 2: Create Headless Session"
+    },
+    {
+      "id": "chat2.runPrompt",
+      "label": "Chat 2: Run Headless Prompt"
     },
     {
       "id": "chat2.sendMessage",
