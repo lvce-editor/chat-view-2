@@ -71,7 +71,9 @@ const main = async (): Promise<void> => {
     model: scenario.model,
     port,
     scenarioId,
-    temperature: scenario.temperature,
+    ...(scenario.temperature !== undefined && {
+      temperature: scenario.temperature,
+    }),
     transcriptPath: join(packageRoot, 'results', `${scenario.id}.json`),
     upstreamBaseUrl:
       process.env.EVALUATION_UPSTREAM_URL || 'https://api.openai.com/v1',

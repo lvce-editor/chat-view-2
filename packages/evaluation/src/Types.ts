@@ -3,7 +3,7 @@ export interface EvaluationScenario {
   readonly id: string
   readonly model: string
   readonly prompt: string
-  readonly temperature: number
+  readonly temperature?: number
   readonly timeoutMs: number
 }
 
@@ -58,6 +58,6 @@ export interface EvaluationTranscript {
   readonly scenarioId: string
   readonly schemaVersion: 1
   readonly startedAt: string
-  readonly temperature: number
+  readonly temperature?: number
   readonly updatedAt: string
 }

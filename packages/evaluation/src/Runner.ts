@@ -169,7 +169,9 @@ const runScenario = async (
     model: scenario.model,
     port: 0,
     scenarioId,
-    temperature: scenario.temperature,
+    ...(scenario.temperature !== undefined && {
+      temperature: scenario.temperature,
+    }),
     transcriptPath,
     upstreamBaseUrl: options.upstreamBaseUrl,
   })

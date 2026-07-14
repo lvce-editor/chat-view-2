@@ -60,7 +60,6 @@ void test('records and replays response and tool data', async () => {
     cacheDirectory: join(temporaryDirectory, 'cache'),
     model: 'test-model',
     scenarioId: 'test-scenario',
-    temperature: 0,
     transcriptPath,
     upstreamBaseUrl: `http://127.0.0.1:${address.port}/v1`,
   })
@@ -102,7 +101,6 @@ void test('records and replays response and tool data', async () => {
   deepStrictEqual(receivedBodies[0], {
     ...requestBody,
     model: 'test-model',
-    temperature: 0,
   })
 
   const transcript = JSON.parse(

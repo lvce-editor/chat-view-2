@@ -22,6 +22,16 @@ const isCheck = (value: unknown): value is ScenarioCheck => {
   )
 }
 
+const isTemperature = (value: unknown): value is number | undefined => {
+  return (
+    value === undefined ||
+    (typeof value === 'number' &&
+      Number.isFinite(value) &&
+      value >= 0 &&
+      value <= 2)
+  )
+}
+
 export const parseScenario = (value: unknown): EvaluationScenario => {
   if (!value || typeof value !== 'object') {
     throw new Error('Scenario must be a JSON object')
@@ -34,10 +44,7 @@ export const parseScenario = (value: unknown): EvaluationScenario => {
     !scenario.model ||
     typeof scenario.prompt !== 'string' ||
     !scenario.prompt ||
-    typeof scenario.temperature !== 'number' ||
-    !Number.isFinite(scenario.temperature) ||
-    scenario.temperature < 0 ||
-    scenario.temperature > 2 ||
+    !isTemperature(scenario.temperature) ||
     typeof scenario.timeoutMs !== 'number' ||
     !Number.isSafeInteger(scenario.timeoutMs) ||
     scenario.timeoutMs <= 0 ||
