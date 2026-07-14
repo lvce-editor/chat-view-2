@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readdirSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -11,7 +11,10 @@ const getPackageLocations = (): string[] => {
   const packagesFolder = join(root, 'packages')
   const dirents = readdirSync(packagesFolder).sort()
   for (const dirent of dirents) {
-    packageLocations.push(`packages/${dirent}/package-lock.json`)
+    const packageLock = `packages/${dirent}/package-lock.json`
+    if (existsSync(join(root, packageLock))) {
+      packageLocations.push(packageLock)
+    }
   }
   packageLocations.push('package-lock.json')
   return packageLocations
