@@ -120,15 +120,24 @@ const renderMessage = (
     message.type === 'user-message' ? 'ChatMessageUser' : 'ChatMessageAssistant'
   return Dom.div(`ChatMessage ${roleClass}`, [
     Dom.div('ChatMessageText', renderMessageText(message.text)),
-    Dom.div('ChatMessageMetadata', [
-      Dom.div('ChatMessageTimestamp', [
-        Dom.textNode(formatMessageDate(message.timestamp)),
-      ]),
-      Dom.button(`copy-message:${message.id}`, '', 'ChatMessageCopyButton', {
-        ariaLabel: 'Copy message',
-        title: 'Copy message',
-      }),
-    ]),
+    ...(message.type === 'user-message'
+      ? [
+          Dom.div('ChatMessageMetadata', [
+            Dom.div('ChatMessageTimestamp', [
+              Dom.textNode(formatMessageDate(message.timestamp)),
+            ]),
+            Dom.button(
+              `copy-message:${message.id}`,
+              '',
+              'ChatMessageCopyButton',
+              {
+                ariaLabel: 'Copy message',
+                title: 'Copy message',
+              },
+            ),
+          ]),
+        ]
+      : []),
   ])
 }
 

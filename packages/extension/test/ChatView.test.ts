@@ -275,7 +275,7 @@ test('expands the changed-file fixture for review', async () => {
   expect(getText(dom)).not.toContain('Show 2 more files  ⌄')
 })
 
-test('renders message metadata and copies a message', async () => {
+test('renders metadata only for user messages and copies a message', async () => {
   const execute = jest.fn<
     (id: string, ...args: readonly unknown[]) => Promise<unknown>
   >(async () => undefined)
@@ -288,8 +288,9 @@ test('renders message metadata and copies a message', async () => {
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
 
   const dom = instance.render() as readonly any[]
-  expect(getNodesByClass(dom, 'ChatMessageMetadata')).toHaveLength(2)
-  expect(getNodesByClass(dom, 'ChatMessageTimestamp')).toHaveLength(2)
+  expect(getNodesByClass(dom, 'ChatMessageMetadata')).toHaveLength(1)
+  expect(getNodesByClass(dom, 'ChatMessageTimestamp')).toHaveLength(1)
+  expect(getNodesByClass(dom, 'ChatMessageCopyButton')).toHaveLength(1)
   const copyButton = getNodesByClass(dom, 'ChatMessageCopyButton')[0]
   expect(copyButton).toEqual(
     expect.objectContaining({
