@@ -6,6 +6,7 @@ const createState = (): ChatViewState => ({
   activityExpanded: false,
   changesExpanded: false,
   composerFocused: false,
+  copiedMessageId: '',
   draft: '',
   errorMessage: '',
   focusMode: false,

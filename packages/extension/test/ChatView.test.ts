@@ -275,7 +275,7 @@ test('expands the changed-file fixture for review', async () => {
   expect(getText(dom)).not.toContain('Show 2 more files  ⌄')
 })
 
-test('renders metadata only for user messages and copies a message', async () => {
+test('renders user message actions and shows feedback after copying', async () => {
   const execute = jest.fn<
     (id: string, ...args: readonly unknown[]) => Promise<unknown>
   >(async () => undefined)
@@ -305,6 +305,18 @@ test('renders metadata only for user messages and copies a message', async () =>
     'ClipBoard.writeText',
     'Add worker memory usage',
   )
+  const copiedButton = getNodesByClass(
+    instance.render() as readonly any[],
+    'ChatMessageCopyButton',
+  )[0]
+  expect(copiedButton).toEqual(
+    expect.objectContaining({
+      ariaLabel: 'Copied',
+      className: 'ChatMessageCopyButton ChatMessageCopyButtonCopied',
+      title: 'Copied',
+    }),
+  )
+  instance.dispose?.()
 })
 
 test('opens the OpenAI model picker without adding model controls to the header', async () => {

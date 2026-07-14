@@ -41,6 +41,8 @@ type ExecuteCommand = (
   ...args: readonly unknown[]
 ) => Promise<unknown>
 
+const copyFeedbackDuration = 2000
+
 const getEventString = (event: Readonly<ViewEvent>): string => {
   return typeof event.value === 'string' ? event.value : ''
 }
@@ -113,6 +115,7 @@ export const createInstance = async (
     activityExpanded: false,
     changesExpanded: false,
     composerFocused: false,
+    copiedMessageId: '',
     draft: '',
     errorMessage,
     focusMode: focusModeEnabled && (await getFocusMode()),
@@ -126,6 +129,25 @@ export const createInstance = async (
     tasks,
   }
   let activeController: AbortController | undefined
+  let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
+
+  const resetCopyFeedback = (): void => {
+    if (copyFeedbackTimeout) {
+      clearTimeout(copyFeedbackTimeout)
+      copyFeedbackTimeout = undefined
+    }
+    state.copiedMessageId = ''
+  }
+
+  const showCopyFeedback = (messageId: string): void => {
+    resetCopyFeedback()
+    state.copiedMessageId = messageId
+    copyFeedbackTimeout = setTimeout(() => {
+      copyFeedbackTimeout = undefined
+      state.copiedMessageId = ''
+      void context?.requestRerender()
+    }, copyFeedbackDuration)
+  }
 
   const updateTask = async (task: ChatTask): Promise<void> => {
     state.selectedTask = task
@@ -180,6 +202,7 @@ export const createInstance = async (
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       activeController?.abort()
+      resetCopyFeedback()
       activeInstances.delete(instance)
     },
     getContext(): Readonly<Record<string, boolean>> {
@@ -225,6 +248,7 @@ export const createInstance = async (
         return
       }
       if (event.name === 'back' || event.name === 'new-task') {
+        resetCopyFeedback()
         state.selectedTask = undefined
         state.draft = ''
         state.activityExpanded = false
@@ -266,6 +290,7 @@ export const createInstance = async (
           message?.type === 'user-message'
         ) {
           await execute('ClipBoard.writeText', message.text)
+          showCopyFeedback(message.id)
         }
         return
       }
@@ -280,6 +305,7 @@ export const createInstance = async (
         return
       }
       if (event.name?.startsWith('task:')) {
+        resetCopyFeedback()
         state.selectedTask = await api.getTask(event.name.slice(5))
         if (state.selectedTask) {
           state.selectedModelId = state.selectedTask.modelId

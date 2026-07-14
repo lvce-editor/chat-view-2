@@ -4,6 +4,7 @@ export interface ChatViewState {
   activityExpanded: boolean
   changesExpanded: boolean
   composerFocused: boolean
+  copiedMessageId: string
   draft: string
   errorMessage: string
   focusMode: boolean
