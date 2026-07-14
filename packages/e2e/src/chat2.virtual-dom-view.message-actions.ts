@@ -21,8 +21,16 @@ export const test: Test = async ({
 
     const metadata = Locator('.ChatMessageUser .ChatMessageMetadata')
     const copyButton = Locator('.ChatMessageUser .ChatMessageCopyButton')
+    const assistantMetadata = Locator(
+      '.ChatMessageAssistant .ChatMessageMetadata',
+    )
+    const assistantCopyButton = Locator(
+      '.ChatMessageAssistant .ChatMessageCopyButton',
+    )
     await expect(metadata).toHaveCSS('opacity', '0')
     await expect(copyButton).toHaveAttribute('aria-label', 'Copy message')
+    await expect(assistantMetadata).toHaveCount(0)
+    await expect(assistantCopyButton).toHaveCount(0)
     // eslint-disable-next-line e2e/no-direct-click
     await copyButton.click()
     await new Promise((resolve) => setTimeout(resolve, 200))
