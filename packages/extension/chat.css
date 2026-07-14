@@ -249,6 +249,12 @@
   outline: 0;
 }
 
+.ChatComposerInput::placeholder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ChatComposerControls,
 .ChatChangesActions,
 .ChatChangesHeader {
