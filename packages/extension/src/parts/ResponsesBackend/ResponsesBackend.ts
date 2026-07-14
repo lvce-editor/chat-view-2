@@ -12,6 +12,7 @@ export interface ResponsesBackendOptions {
   readonly accessToken?: string
   readonly baseUrl: string
   readonly fetch?: typeof fetch
+  readonly supportsStreaming?: boolean
 }
 
 interface ResponseEvent {
@@ -201,10 +202,85 @@ const readEvents = async (
   return { responseId, text, toolCalls: [...toolCalls.values()] }
 }
 
+const getRecord = (
+  value: unknown,
+): Readonly<Record<string, unknown>> | undefined =>
+  value && typeof value === 'object'
+    ? (value as Readonly<Record<string, unknown>>)
+    : undefined
+
+const getResponseText = (
+  response: Readonly<Record<string, unknown>>,
+): string => {
+  if (typeof response.output_text === 'string') {
+    return response.output_text
+  }
+  if (!Array.isArray(response.output)) {
+    return ''
+  }
+  const chunks: string[] = []
+  for (const outputItem of response.output) {
+    const item = getRecord(outputItem)
+    if (item?.type !== 'message' || !Array.isArray(item.content)) {
+      continue
+    }
+    for (const contentPart of item.content) {
+      const part = getRecord(contentPart)
+      if (
+        (part?.type === 'output_text' || part?.type === 'text') &&
+        typeof part.text === 'string'
+      ) {
+        chunks.push(part.text)
+      }
+    }
+  }
+  return chunks.join('')
+}
+
+const getResponseToolCalls = (
+  response: Readonly<Record<string, unknown>>,
+): readonly AgentToolCall[] => {
+  if (!Array.isArray(response.output)) {
+    return []
+  }
+  const toolCalls: AgentToolCall[] = []
+  for (const outputItem of response.output) {
+    const item = getRecord(outputItem)
+    if (item?.type !== 'function_call' || typeof item.name !== 'string') {
+      continue
+    }
+    const callId =
+      typeof item.call_id === 'string'
+        ? item.call_id
+        : typeof item.id === 'string'
+          ? item.id
+          : `call-${toolCalls.length + 1}`
+    toolCalls.push({
+      arguments: typeof item.arguments === 'string' ? item.arguments : '{}',
+      callId,
+      name: item.name,
+    })
+  }
+  return toolCalls
+}
+
+const readResponse = async (response: Response): Promise<AgentStepResult> => {
+  const value = getRecord(await response.json())
+  if (!value) {
+    throw new Error('The model returned an invalid response')
+  }
+  return {
+    responseId: typeof value.id === 'string' ? value.id : '',
+    text: getResponseText(value),
+    toolCalls: getResponseToolCalls(value),
+  }
+}
+
 export const createResponsesBackend = ({
   accessToken,
   baseUrl,
   fetch: fetchImplementation = globalThis.fetch,
+  supportsStreaming = false,
 }: ResponsesBackendOptions): AgentBackend => {
   const root = trimTrailingSlash(baseUrl)
   return {
@@ -242,7 +318,7 @@ export const createResponsesBackend = ({
           ...(options.previousResponseId && {
             previous_response_id: options.previousResponseId,
           }),
-          stream: true,
+          stream: supportsStreaming,
           tools: options.tools.map((tool) => ({
             description: tool.description,
             name: tool.name,
@@ -260,7 +336,9 @@ export const createResponsesBackend = ({
           `Model request failed (${response.status}): ${await getErrorMessage(response)}`,
         )
       }
-      return readEvents(response, options)
+      return supportsStreaming
+        ? readEvents(response, options)
+        : readResponse(response)
     },
   }
 }

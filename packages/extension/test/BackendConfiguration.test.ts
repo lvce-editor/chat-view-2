@@ -9,11 +9,13 @@ const createHost = ({
   accessToken = 'editor-token',
   backendUrl = 'https://lvce-editor.dev',
   configuredBackendUrl = '',
+  supportsStreaming = false,
   useMockBackend = false,
 }: {
   readonly accessToken?: string
   readonly backendUrl?: string
   readonly configuredBackendUrl?: string
+  readonly supportsStreaming?: boolean
   readonly useMockBackend?: boolean
 } = {}): BackendConfigurationHost => {
   const executeCommand = jest.fn(async (id: string): Promise<unknown> => {
@@ -25,9 +27,14 @@ const createHost = ({
   return {
     executeCommand,
     getAccessToken: jest.fn(async () => accessToken),
-    getPreference: jest.fn(async (key: string) =>
-      key === 'chat2.useMockBackend' ? useMockBackend : configuredBackendUrl,
-    ),
+    getPreference: jest.fn(async (key: string) => {
+      if (key === 'chat2.supportsStreaming') {
+        return supportsStreaming
+      }
+      return key === 'chat2.useMockBackend'
+        ? useMockBackend
+        : configuredBackendUrl
+    }),
   }
 }
 
@@ -37,6 +44,7 @@ test('uses the editor backend and authentication by default', async () => {
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
     baseUrl: 'https://lvce-editor.dev',
+    supportsStreaming: false,
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.backendUrl')
   expect(host.executeCommand).toHaveBeenCalledWith('Layout.getBackendUrl')
@@ -52,6 +60,7 @@ test('uses editor authentication for an equivalent configured backend URL', asyn
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
     baseUrl: 'https://lvce-editor.dev',
+    supportsStreaming: false,
   })
 })
 
@@ -63,6 +72,7 @@ test('does not expose editor authentication to a custom backend', async () => {
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: '',
     baseUrl: 'https://backend.example.com',
+    supportsStreaming: false,
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
 })
@@ -73,6 +83,7 @@ test('uses the deterministic mock backend when explicitly configured', async () 
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: '',
     baseUrl: '',
+    supportsStreaming: false,
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
 })
@@ -93,5 +104,17 @@ test('falls back to the mock backend when editor configuration is unavailable', 
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: '',
     baseUrl: '',
+    supportsStreaming: false,
   })
+})
+
+test('enables streaming only when explicitly configured', async () => {
+  const host = createHost({ supportsStreaming: true })
+
+  await expect(resolveBackendConfiguration(host)).resolves.toEqual({
+    accessToken: 'editor-token',
+    baseUrl: 'https://lvce-editor.dev',
+    supportsStreaming: true,
+  })
+  expect(host.getPreference).toHaveBeenCalledWith('chat2.supportsStreaming')
 })

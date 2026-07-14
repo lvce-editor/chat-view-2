@@ -105,6 +105,7 @@ export const test = async ({ Command, Workspace }) => {
   await Command.execute('Preferences.update', {
     'chat2.backendUrl': configuration.backendOrigin,
     'chat2.selectedModelId': configuration.model,
+    'chat2.supportsStreaming': true,
     'chat2.useMockBackend': false,
   })
   await Command.executeExtensionCommand(
