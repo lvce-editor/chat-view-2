@@ -41,6 +41,15 @@ test('renders a focused task list, model control, and composer', async () => {
   const dom = instance.render() as readonly any[]
 
   expect(getNodesByClass(dom, 'ChatTaskButton')).toHaveLength(20)
+  expect(getNodesByClass(dom, 'ChatTaskArchiveButton')).toHaveLength(20)
+  expect(dom).toContainEqual(
+    expect.objectContaining({
+      ariaLabel: 'Archive Add worker memory usage',
+      className: 'ChatTaskArchiveButton',
+      name: 'archive-task:mock-task-1',
+      title: 'Archive',
+    }),
+  )
   expect(dom).toContainEqual(
     expect.objectContaining({
       className: 'ChatComposerInput',
@@ -88,6 +97,23 @@ test('shows a clear error when chat models cannot be loaded', async () => {
   )
   expect(getText(dom)).toContain('Chat Models could not be loaded from server')
   expect(getText(dom)).not.toContain('Failed to fetch')
+})
+
+test('archives a task from the task list', async () => {
+  const instance = await createTestInstance()
+
+  await dispatch(instance, {
+    name: 'archive-task:mock-task-1',
+    type: 'click',
+  })
+
+  expect(instance.getState().tasks).toHaveLength(19)
+  expect(instance.getState().tasks.map((task) => task.id)).not.toContain(
+    'mock-task-1',
+  )
+  expect(
+    getNodesByClass(instance.render(), 'ChatTaskArchiveButton'),
+  ).toHaveLength(19)
 })
 
 test('renders the experimental focus mode control when enabled', async () => {

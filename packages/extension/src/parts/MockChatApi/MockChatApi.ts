@@ -103,6 +103,7 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
   let tasks = taskTitles.map((title, index) =>
     createTask(`mock-task-${index + 1}`, title),
   )
+  const archivedTaskIds = new Set<string>()
   let nextTaskId = tasks.length + 1
   const steering = new Map<string, string[]>()
 
@@ -191,6 +192,9 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
   }
 
   return {
+    async archiveTask(id) {
+      archivedTaskIds.add(id)
+    },
     async createTask(message, modelId, options) {
       const task = createTask(
         `mock-task-${nextTaskId++}`,
@@ -213,7 +217,9 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
       return models
     },
     async listTasks(limit) {
-      return tasks.slice(0, Math.max(0, limit))
+      return tasks
+        .filter((task) => !archivedTaskIds.has(task.id))
+        .slice(0, Math.max(0, limit))
     },
     async revertTask(task) {
       const changedFileCount =

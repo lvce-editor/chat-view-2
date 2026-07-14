@@ -107,9 +107,23 @@
   padding: 0 6px 8px;
 }
 
+.ChatTaskItem {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+  border-radius: 5px;
+}
+
+.ChatTaskItem:hover,
+.ChatTaskItem:focus-within {
+  background: var(--ChatHoverBackground);
+}
+
 .ChatTaskButton {
   box-sizing: border-box;
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   min-height: 32px;
   padding: 5px 10px;
   overflow: hidden;
@@ -125,7 +139,6 @@
   border-radius: 5px;
 }
 
-.ChatTaskButton:hover,
 .ChatModelOption:hover,
 .ChatActivityToggle:hover,
 .ChatRevertButton:hover,
@@ -133,6 +146,43 @@
 .ChatShowMoreButton:hover,
 .ChatModelButton:hover {
   background: var(--ChatHoverBackground);
+}
+
+.ChatTaskArchiveButton {
+  display: flex;
+  flex: 0 0 28px;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin-right: 2px;
+  color: var(--ChatMutedForeground);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ChatTaskItem:hover .ChatTaskArchiveButton,
+.ChatTaskItem:focus-within .ChatTaskArchiveButton {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ChatTaskArchiveButton:hover {
+  color: var(--ChatForeground);
+  background: color-mix(in srgb, var(--ChatForeground) 12%, transparent);
+}
+
+.ChatTaskArchiveIcon {
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  mask: url('/icons/archive.svg') center / 16px no-repeat;
+  pointer-events: none;
 }
 
 .ChatTaskStatus-running,

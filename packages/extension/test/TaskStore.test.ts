@@ -22,3 +22,31 @@ test('lists persisted tasks newest first and applies a limit', async () => {
     expect.objectContaining({ id: 'newer' }),
   ])
 })
+
+test('archives a task without deleting its persisted data', async () => {
+  const task = createTask('task-1', '2026-01-01T00:00:00.000Z')
+  const store = createMemoryTaskStore([task])
+
+  await store.archive(task.id)
+
+  await expect(store.list(20)).resolves.toEqual([])
+  await expect(store.get(task.id)).resolves.toEqual(
+    expect.objectContaining({ archived: true, id: task.id }),
+  )
+})
+
+test('keeps a task archived when a background update is saved', async () => {
+  const task = createTask('task-1', '2026-01-01T00:00:00.000Z')
+  const store = createMemoryTaskStore([task])
+  await store.archive(task.id)
+
+  await store.save({ ...task, title: 'Updated in the background' })
+
+  await expect(store.list(20)).resolves.toEqual([])
+  await expect(store.get(task.id)).resolves.toEqual(
+    expect.objectContaining({
+      archived: true,
+      title: 'Updated in the background',
+    }),
+  )
+})

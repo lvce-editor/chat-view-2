@@ -320,6 +320,9 @@ export const createAgentChatApi = ({
   }
 
   return {
+    archiveTask(id) {
+      return store.archive(id)
+    },
     async createTask(message, modelId, options) {
       const now = new Date().toISOString()
       const task: ChatTask = {

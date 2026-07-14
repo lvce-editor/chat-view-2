@@ -41,11 +41,20 @@ const getStatusLabel = (task: ChatTask): string => {
 
 const renderTask = (task: ChatTask): Dom.TreeNode => {
   const status = getStatusLabel(task)
-  return Dom.button(
-    `task:${task.id}`,
-    status ? `${task.title} · ${status}` : task.title,
-    `ChatTaskButton ChatTaskStatus-${task.status}`,
-  )
+  return Dom.div('ChatTaskItem', [
+    Dom.button(
+      `task:${task.id}`,
+      status ? `${task.title} · ${status}` : task.title,
+      `ChatTaskButton ChatTaskStatus-${task.status}`,
+    ),
+    Dom.iconButton(
+      `archive-task:${task.id}`,
+      'ChatTaskArchiveButton',
+      'ChatTaskArchiveIcon',
+      `Archive ${task.title}`,
+      'Archive',
+    ),
+  ])
 }
 
 const renderTaskList = (

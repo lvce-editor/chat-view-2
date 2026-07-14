@@ -130,6 +130,7 @@ export const createInstance = async (
   }
   let activeController: AbortController | undefined
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
+  const archivedTaskIds = new Set<string>()
 
   const resetCopyFeedback = (): void => {
     if (copyFeedbackTimeout) {
@@ -150,6 +151,10 @@ export const createInstance = async (
   }
 
   const updateTask = async (task: ChatTask): Promise<void> => {
+    if (archivedTaskIds.has(task.id)) {
+      await context?.requestRerender()
+      return
+    }
     state.selectedTask = task
     state.tasks = [
       task,
@@ -291,6 +296,22 @@ export const createInstance = async (
         ) {
           await execute('ClipBoard.writeText', message.text)
           showCopyFeedback(message.id)
+        }
+        return
+      }
+      if (event.name?.startsWith('archive-task:')) {
+        const id = event.name.slice('archive-task:'.length)
+        if (state.tasks.every((task) => task.id !== id)) {
+          return
+        }
+        try {
+          await api.archiveTask(id)
+          archivedTaskIds.add(id)
+          state.tasks = state.tasks.filter((task) => task.id !== id)
+          state.errorMessage = ''
+        } catch (error) {
+          state.errorMessage =
+            error instanceof Error ? error.message : String(error)
         }
         return
       }
