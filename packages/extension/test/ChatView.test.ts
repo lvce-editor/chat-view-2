@@ -112,7 +112,7 @@ test('uses the configured task list font size', async () => {
   expect(instance.render()).toContainEqual(
     expect.objectContaining({
       className: 'ChatTaskList',
-      style: '--ChatTaskFontSize: 20px',
+      style: '--ChatTaskFontFamily: inherit; --ChatTaskFontSize: 20px',
     }),
   )
 })
@@ -128,7 +128,7 @@ test.each([undefined, 20, '', '-2px', 'calc(20px)', '20px; color: red'])(
     expect(instance.render()).toContainEqual(
       expect.objectContaining({
         className: 'ChatTaskList',
-        style: '--ChatTaskFontSize: 13px',
+        style: '--ChatTaskFontFamily: inherit; --ChatTaskFontSize: 13px',
       }),
     )
   },
@@ -142,6 +142,48 @@ test('falls back when the task list font size cannot be read', async () => {
   })
 
   expect(instance.getState().fontSize).toBe('13px')
+})
+
+test('uses the configured task list font family', async () => {
+  const instance = await createTestInstance(0, async (key) => {
+    return key === 'chat2.fontFamily' ? ' "Fira Code", monospace ' : undefined
+  })
+
+  expect(instance.getState().fontFamily).toBe('"Fira Code", monospace')
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      className: 'ChatTaskList',
+      style:
+        '--ChatTaskFontFamily: "Fira Code", monospace; --ChatTaskFontSize: 13px',
+    }),
+  )
+})
+
+test.each([undefined, 20, '', 'Arial; color: red', 'Arial\nmonospace'])(
+  'falls back for invalid task list font family %p',
+  async (fontFamily) => {
+    const instance = await createTestInstance(0, async (key) => {
+      return key === 'chat2.fontFamily' ? fontFamily : undefined
+    })
+
+    expect(instance.getState().fontFamily).toBe('inherit')
+    expect(instance.render()).toContainEqual(
+      expect.objectContaining({
+        className: 'ChatTaskList',
+        style: '--ChatTaskFontFamily: inherit; --ChatTaskFontSize: 13px',
+      }),
+    )
+  },
+)
+
+test('falls back when the task list font family cannot be read', async () => {
+  const instance = await createTestInstance(0, async (key) => {
+    if (key === 'chat2.fontFamily') {
+      throw new Error('preferences unavailable')
+    }
+  })
+
+  expect(instance.getState().fontFamily).toBe('inherit')
 })
 
 test('submits a task and shows a Codex-style changed-files summary', async () => {

@@ -113,6 +113,7 @@
   min-height: 32px;
   padding: 5px 10px;
   overflow: hidden;
+  font-family: var(--ChatTaskFontFamily, inherit);
   font-size: var(--ChatTaskFontSize, 13px);
   color: var(--ChatForeground);
   cursor: pointer;

@@ -50,6 +50,7 @@ const renderTask = (task: ChatTask): Dom.TreeNode => {
 
 const renderTaskList = (
   tasks: readonly ChatTask[],
+  fontFamily: string,
   fontSize: string,
 ): Dom.TreeNode => {
   if (tasks.length === 0) {
@@ -63,7 +64,7 @@ const renderTaskList = (
     ])
   }
   return Dom.div('ChatTaskList', tasks.map(renderTask), {
-    style: `--ChatTaskFontSize: ${fontSize}`,
+    style: `--ChatTaskFontFamily: ${fontFamily}; --ChatTaskFontSize: ${fontSize}`,
   })
 }
 
@@ -242,7 +243,7 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     ...(state.errorMessage
       ? [Dom.div('ChatErrorBanner', [Dom.textNode(state.errorMessage)])]
       : []),
-    renderTaskList(state.tasks, state.fontSize),
+    renderTaskList(state.tasks, state.fontFamily, state.fontSize),
     renderComposer(state),
   ])
 }
