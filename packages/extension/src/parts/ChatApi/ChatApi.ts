@@ -67,6 +67,7 @@ export type ChatTaskEvent =
   | ChatUserMessageEvent
 
 export interface ChatTask {
+  readonly archived?: boolean
   readonly createdAt: string
   readonly events: readonly ChatTaskEvent[]
   readonly id: string
@@ -84,6 +85,7 @@ export interface ChatRunOptions {
 }
 
 export interface ChatApi {
+  readonly archiveTask: (id: string) => Promise<void>
   readonly createTask: (
     message: string,
     modelId: string,

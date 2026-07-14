@@ -2,6 +2,7 @@
 import type { ChatTask } from '../ChatApi/ChatApi.ts'
 
 export interface TaskStore {
+  readonly archive: (id: string) => Promise<void>
   readonly get: (id: string) => Promise<ChatTask | undefined>
   readonly list: (limit: number) => Promise<readonly ChatTask[]>
   readonly save: (task: ChatTask) => Promise<void>
@@ -12,16 +13,24 @@ export const createMemoryTaskStore = (
 ): TaskStore => {
   const tasks = new Map(initialTasks.map((task) => [task.id, task]))
   return {
+    async archive(id) {
+      const task = tasks.get(id)
+      if (task) {
+        tasks.set(id, { ...task, archived: true })
+      }
+    },
     async get(id) {
       return tasks.get(id)
     },
     async list(limit) {
       return [...tasks.values()]
+        .filter((task) => !task.archived)
         .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, Math.max(0, limit))
     },
     async save(task) {
-      tasks.set(task.id, task)
+      const archived = tasks.get(task.id)?.archived
+      tasks.set(task.id, archived ? { ...task, archived: true } : task)
     },
   }
 }
@@ -55,6 +64,19 @@ export const createIndexedDbTaskStore = (): TaskStore => {
     return createMemoryTaskStore()
   }
   return {
+    async archive(id) {
+      const database = await openDatabase()
+      try {
+        const transaction = database.transaction(storeName, 'readwrite')
+        const store = transaction.objectStore(storeName)
+        const task = await requestToPromise<ChatTask | undefined>(store.get(id))
+        if (task) {
+          await requestToPromise(store.put({ ...task, archived: true }))
+        }
+      } finally {
+        database.close()
+      }
+    },
     async get(id) {
       const database = await openDatabase()
       try {
@@ -75,6 +97,7 @@ export const createIndexedDbTaskStore = (): TaskStore => {
           transaction.objectStore(storeName).getAll(),
         )
         return tasks
+          .filter((task) => !task.archived)
           .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
           .slice(0, Math.max(0, limit))
       } finally {
@@ -85,7 +108,13 @@ export const createIndexedDbTaskStore = (): TaskStore => {
       const database = await openDatabase()
       try {
         const transaction = database.transaction(storeName, 'readwrite')
-        await requestToPromise(transaction.objectStore(storeName).put(task))
+        const store = transaction.objectStore(storeName)
+        const existing = await requestToPromise<ChatTask | undefined>(
+          store.get(task.id),
+        )
+        await requestToPromise(
+          store.put(existing?.archived ? { ...task, archived: true } : task),
+        )
       } finally {
         database.close()
       }

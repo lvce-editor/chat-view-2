@@ -17,6 +17,16 @@ test('limits the number of returned tasks', async () => {
   await expect(api.listTasks(100)).resolves.toHaveLength(20)
 })
 
+test('archives a task from the task list', async () => {
+  const api = createMockChatApi()
+  const [task] = await api.listTasks(1)
+
+  await api.archiveTask(task.id)
+
+  await expect(api.listTasks(20)).resolves.toHaveLength(19)
+  await expect(api.getTask(task.id)).resolves.toEqual(task)
+})
+
 test('keeps an append-only event history for a completed task', async () => {
   const api = createMockChatApi()
   const task = await api.createTask('A new task', 'gpt-5.4')
