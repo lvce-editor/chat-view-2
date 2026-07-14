@@ -17,6 +17,7 @@ import {
   toggleFocusMode,
 } from '../ChatFocusMode/ChatFocusMode.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
+import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
 
@@ -95,6 +96,7 @@ export const createInstance = async (
   })
   const preferredModelId =
     saved.selectedModelId || (await getPreferredModelId())
+  const fontFamily = await readFontFamily(readPreference)
   const fontSize = await readFontSize(readPreference)
   const selectedModelId =
     models.find(
@@ -115,6 +117,7 @@ export const createInstance = async (
     errorMessage,
     focusMode: focusModeEnabled && (await getFocusMode()),
     focusModeEnabled,
+    fontFamily,
     fontSize,
     modelPickerOpen: false,
     models,

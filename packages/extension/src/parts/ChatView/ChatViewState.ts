@@ -8,6 +8,7 @@ export interface ChatViewState {
   errorMessage: string
   focusMode: boolean
   focusModeEnabled: boolean
+  fontFamily: string
   fontSize: string
   modelPickerOpen: boolean
   models: readonly ChatModel[]

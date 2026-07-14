@@ -17,6 +17,11 @@
       "default": false,
       "description": "Show an experimental control that lets Chat 2 temporarily take over the workbench."
     },
+    "chat2.fontFamily": {
+      "type": "string",
+      "default": "inherit",
+      "description": "Font family for chat task list items, for example monospace."
+    },
     "chat2.fontSize": {
       "type": "string",
       "default": "13px",
