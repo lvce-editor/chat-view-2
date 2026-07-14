@@ -3,9 +3,8 @@ import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const outputDirectory = fileURLToPath(new URL('../dist/dist/', import.meta.url))
-const entryBudget = 150_000
-const totalBudget = 300_000
-const staticImportRegex = /from ['"]\.\/(.+)['"]/
+const bundleBudget = 300_000
+const dynamicImportRegex = /\bimport\s*\(/
 
 const visit = async (directory: string): Promise<readonly string[]> => {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -22,28 +21,22 @@ const visit = async (directory: string): Promise<readonly string[]> => {
 }
 
 const files = await visit(outputDirectory)
+if (files.length !== 1 || basename(files[0]) !== 'chatMain.js') {
+  throw new Error(
+    `Expected one JavaScript bundle named chatMain.js, found: ${files.join(', ')}`,
+  )
+}
 const sizes = await Promise.all(
   files.map(async (file) => ({ file, size: (await stat(file)).size })),
 )
-const entry = sizes.find(({ file }) => basename(file) === 'chatMain.js')
-if (!entry) {
-  throw new Error('Could not find dist/dist/chatMain.js')
+const [bundle] = sizes
+const bundleSource = await readFile(bundle.file, 'utf8')
+if (dynamicImportRegex.test(bundleSource)) {
+  throw new Error('Chat 2 bundle contains a dynamic import')
 }
-const total = sizes.reduce((sum, item) => sum + item.size, 0)
-const entrySource = await readFile(entry.file, 'utf8')
-const staticImport = staticImportRegex.exec(entrySource)?.[1]
-const staticChunk = staticImport
-  ? sizes.find(({ file }) => file.replaceAll('\\', '/').endsWith(staticImport))
-  : undefined
-const initial = entry.size + (staticChunk?.size || 0)
-if (initial > entryBudget) {
+if (bundle.size > bundleBudget) {
   throw new Error(
-    `Initial Chat 2 bundle is ${initial} bytes; budget is ${entryBudget}`,
+    `Chat 2 bundle is ${bundle.size} bytes; budget is ${bundleBudget}`,
   )
 }
-if (total > totalBudget) {
-  throw new Error(
-    `Chat 2 JavaScript is ${total} bytes; budget is ${totalBudget}`,
-  )
-}
-console.log(`Chat 2 bundle budgets passed: initial=${initial}, total=${total}`)
+console.log(`Chat 2 bundle checks passed: size=${bundle.size}`)

@@ -1,9 +1,8 @@
 import { cp, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import './build-static.ts'
 import { root } from './root.ts'
-
-await import('./build-static.ts')
 
 const source = path.join(root, 'dist2')
 const target = path.join(

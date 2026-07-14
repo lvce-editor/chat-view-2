@@ -17,6 +17,7 @@ import {
   toggleFocusMode,
 } from '../ChatFocusMode/ChatFocusMode.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
+import { createDefaultChatApi } from '../DefaultChatApi/DefaultChatApi.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
@@ -82,8 +83,6 @@ export const createInstance = async (
 ): Promise<ActiveChatViewInstance> => {
   let api = providedApi
   if (!api) {
-    const { createDefaultChatApi } =
-      await import('../DefaultChatApi/DefaultChatApi.ts')
     api = await createDefaultChatApi()
   }
   const saved = getSavedState(context?.state)
