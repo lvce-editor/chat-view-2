@@ -29,6 +29,8 @@ not store API keys in its task database.
 - Independent read tools run in parallel; mutations remain serialized.
 - Workspace searches and reads are bounded. Atomic edits use exact text and an
   optional content hash to reject stale changes.
+- Agent context identifies the workspace as `.` so tool paths and evaluation
+  cache keys remain portable across machines.
 - Each active turn snapshots files before the first edit and can revert them.
 - A portable host contract accepts bounded editor context, diagnostics, and a
   cancellable command sandbox on both desktop and web. When present, it runs up
@@ -44,10 +46,13 @@ a 300 KB budget. `npm run check:budgets` enforces both after a production build.
 
 ## Evaluation
 
-The scenario fixtures and deterministic recording proxy live in
-`packages/evaluation`. Cached model responses can be replayed in CI without an
-API key or another paid request. Run every scenario and its objective checks
-with `npm run evaluation`. See `packages/evaluation/README.md` for the scenario
+The scenario fixtures, headless browser runner, and deterministic recording
+proxy live in `packages/evaluation`. Evaluations invoke the extension's
+headless session commands inside Lvce Editor, exercising the real agent loop,
+API client, tools, editor file-system APIs, and test server without rendering
+the chat UI. Cached model responses can be replayed in CI without an API key or
+another paid request. Run every scenario and its objective checks with
+`npm run evaluation`. See `packages/evaluation/README.md` for the scenario
 format and cache-recording details.
 
 ## Development

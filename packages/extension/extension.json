@@ -30,11 +30,21 @@
   },
   "activation": [
     "onView:chat2.views.chat",
+    "onCommand:chat2.createSession",
+    "onCommand:chat2.sendMessage",
     "onCommand:chat2.show",
     "onCommand:chat2.submit",
     "onCommand:chat2.toggleFocusMode"
   ],
   "commands": [
+    {
+      "id": "chat2.createSession",
+      "label": "Chat 2: Create Headless Session"
+    },
+    {
+      "id": "chat2.sendMessage",
+      "label": "Chat 2: Send Headless Message"
+    },
     {
       "id": "chat2.show",
       "label": "Chat 2: Show"

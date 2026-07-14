@@ -7,7 +7,7 @@ import type {
   EvaluationTranscript,
   ScenarioCheck,
 } from './Types.ts'
-import { runAgent } from './Agent.ts'
+import { createEvaluationBrowser, type EvaluationBrowser } from './Browser.ts'
 import { startEvaluationProxy } from './Proxy.ts'
 import { loadScenario, prepareScenarioWorkspace } from './Scenario.ts'
 
@@ -20,6 +20,7 @@ export interface EvaluationPaths {
 
 export interface RunEvaluationsOptions extends EvaluationPaths {
   readonly apiKey?: string
+  readonly browser?: EvaluationBrowser
   readonly log?: (message: string) => void
   readonly upstreamBaseUrl: string
 }
@@ -163,6 +164,9 @@ const runScenario = async (
   )
   const transcriptPath = join(options.resultsDirectory, `${scenarioId}.json`)
   await rm(transcriptPath, { force: true })
+  if (!options.browser) {
+    throw new Error('Evaluation browser was not prepared')
+  }
   const proxy = await startEvaluationProxy({
     ...(options.apiKey && { apiKey: options.apiKey }),
     cacheDirectory: options.cacheDirectory,
@@ -177,11 +181,12 @@ const runScenario = async (
   })
   const signal = AbortSignal.timeout(scenario.timeoutMs)
   try {
-    await runAgent({
+    await options.browser.run({
       backendOrigin: proxy.origin,
       model: scenario.model,
       prompt: scenario.prompt,
-      signal,
+      scenarioId,
+      timeoutMs: scenario.timeoutMs,
       workspace,
     })
   } catch (error) {
@@ -219,11 +224,14 @@ export const runEvaluations = async (
     throw new Error('No evaluation scenarios found')
   }
   const log = options.log || ((_message: string): void => {})
+  const browser = options.browser || createEvaluationBrowser()
+  await browser.prepare()
+  const runOptions = { ...options, browser }
   log(`Running ${scenarioIds.length} evaluation scenarios`)
   const results: EvaluationRunResult[] = []
   for (const scenarioId of scenarioIds) {
     log(`- ${scenarioId}`)
-    const result = await runScenario(scenarioId, options)
+    const result = await runScenario(scenarioId, runOptions)
     results.push(result)
     log(`  passed (${formatSources(result)})`)
   }

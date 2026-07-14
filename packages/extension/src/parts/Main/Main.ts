@@ -22,6 +22,22 @@ export const activate = async (): Promise<void> => {
   await activateExtensionApi()
   registerView(view)
   registerCommand({
+    async execute(modelId?: unknown) {
+      const { headlessChatCommands } =
+        await import('../HeadlessChat/HeadlessChat.ts')
+      return headlessChatCommands.createSession(modelId)
+    },
+    id: 'chat2.createSession',
+  })
+  registerCommand({
+    async execute(message: unknown) {
+      const { headlessChatCommands } =
+        await import('../HeadlessChat/HeadlessChat.ts')
+      return headlessChatCommands.sendMessage(message)
+    },
+    id: 'chat2.sendMessage',
+  })
+  registerCommand({
     execute() {
       return executeCommand('SideBar.show', viewId, true)
     },
