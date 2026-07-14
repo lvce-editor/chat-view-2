@@ -7,7 +7,7 @@ interface EvaluationTask {
   readonly success: readonly string[]
 }
 
-const url = new URL('../evaluation/v1/tasks.json', import.meta.url)
+const url = new URL('../packages/evaluation/v1/tasks.json', import.meta.url)
 const tasks = JSON.parse(
   await readFile(url, 'utf8'),
 ) as readonly EvaluationTask[]

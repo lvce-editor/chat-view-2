@@ -44,10 +44,10 @@ a 300 KB budget. `npm run check:budgets` enforces both after a production build.
 
 ## Evaluation
 
-The versioned task set in `evaluation/v1/tasks.json` is the release-quality
+The versioned task set in `packages/evaluation/v1/tasks.json` is the release-quality
 baseline. Each task should be run from the same base commit in Chat 2 and Codex.
 Record solve status, tests, interventions, duration, token use, and peak client
-memory using the schema described in `evaluation/README.md`.
+memory using the schema described in `packages/evaluation/README.md`.
 
 ## Development
 
