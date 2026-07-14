@@ -115,9 +115,11 @@ const renderMessage = (
     ChatTaskEvent,
     { type: 'assistant-message' | 'user-message' }
   >,
+  copiedMessageId: string,
 ): Dom.TreeNode => {
   const roleClass =
     message.type === 'user-message' ? 'ChatMessageUser' : 'ChatMessageAssistant'
+  const copied = message.id === copiedMessageId
   return Dom.div(`ChatMessage ${roleClass}`, [
     Dom.div('ChatMessageText', renderMessageText(message.text)),
     ...(message.type === 'user-message'
@@ -129,10 +131,10 @@ const renderMessage = (
             Dom.button(
               `copy-message:${message.id}`,
               '',
-              'ChatMessageCopyButton',
+              `ChatMessageCopyButton${copied ? ' ChatMessageCopyButtonCopied' : ''}`,
               {
-                ariaLabel: 'Copy message',
-                title: 'Copy message',
+                ariaLabel: copied ? 'Copied' : 'Copy message',
+                title: copied ? 'Copied' : 'Copy message',
               },
             ),
           ]),
@@ -390,7 +392,9 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       Dom.button('new-task', 'New', 'ChatNewTaskButton'),
     ]),
     Dom.div('ChatMessages', [
-      ...summary.messages.map(renderMessage),
+      ...summary.messages.map((message) =>
+        renderMessage(message, state.copiedMessageId),
+      ),
       ...(task.streamingText
         ? [renderStreamingMessage(task.streamingText)]
         : []),
