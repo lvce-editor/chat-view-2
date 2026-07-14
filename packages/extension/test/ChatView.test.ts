@@ -55,6 +55,7 @@ test('renders a focused task list, model control, and composer', async () => {
       className: 'ChatComposerInput',
       name: 'composer',
       placeholder: 'Describe a programming task',
+      rows: 1,
     }),
   )
   expect(dom).toContainEqual(

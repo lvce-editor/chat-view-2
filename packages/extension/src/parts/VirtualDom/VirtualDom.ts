@@ -144,6 +144,7 @@ export const textArea = (value: string, placeholder: string): TreeNode => {
     onFocus: 'handleFocus',
     onInput: 'handleInput',
     placeholder,
+    rows: 1,
     spellcheck: true,
     value,
   })
