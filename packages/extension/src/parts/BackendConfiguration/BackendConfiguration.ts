@@ -1,4 +1,4 @@
-import { executeCommand, getPreference } from '@lvce-editor/api'
+import { executeCommand, getAccessToken, getPreference } from '@lvce-editor/api'
 
 export interface BackendConfiguration {
   readonly accessToken: string
@@ -10,11 +10,13 @@ interface BackendConfigurationHost {
     id: string,
     ...args: readonly unknown[]
   ) => Promise<unknown>
+  readonly getAccessToken: () => Promise<unknown>
   readonly getPreference: (key: string) => Promise<unknown>
 }
 
 const defaultHost: BackendConfigurationHost = {
   executeCommand,
+  getAccessToken,
   getPreference,
 }
 
@@ -54,15 +56,11 @@ const executeStringCommand = async (
   }
 }
 
-const getAccessToken = async (
+const resolveAccessToken = async (
   host: BackendConfigurationHost,
 ): Promise<string> => {
   try {
-    const value = await host.executeCommand('Layout.getAuthState')
-    if (!value || typeof value !== 'object') {
-      return ''
-    }
-    return getString((value as Readonly<Record<string, unknown>>).accessToken)
+    return getString(await host.getAccessToken())
   } catch {
     return ''
   }
@@ -92,7 +90,7 @@ export const resolveBackendConfiguration = async (
     baseUrl &&
     editorBaseUrl &&
     normalizeBackendUrl(baseUrl) === normalizeBackendUrl(editorBaseUrl)
-      ? await getAccessToken(host)
+      ? await resolveAccessToken(host)
       : ''
   return { accessToken, baseUrl }
 }

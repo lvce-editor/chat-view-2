@@ -20,13 +20,11 @@ const createHost = ({
     if (id === 'Layout.getBackendUrl') {
       return backendUrl
     }
-    if (id === 'Layout.getAuthState') {
-      return { accessToken, signInState: 'loggedIn' }
-    }
     throw new Error(`Unexpected command: ${id}`)
   })
   return {
     executeCommand,
+    getAccessToken: jest.fn(async () => accessToken),
     getPreference: jest.fn(async (key: string) =>
       key === 'chat2.useMockBackend' ? useMockBackend : configuredBackendUrl,
     ),
@@ -42,7 +40,7 @@ test('uses the editor backend and authentication by default', async () => {
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.backendUrl')
   expect(host.executeCommand).toHaveBeenCalledWith('Layout.getBackendUrl')
-  expect(host.executeCommand).toHaveBeenCalledWith('Layout.getAuthState')
+  expect(host.getAccessToken).toHaveBeenCalledTimes(1)
 })
 
 test('uses editor authentication for an equivalent configured backend URL', async () => {
@@ -66,7 +64,7 @@ test('does not expose editor authentication to a custom backend', async () => {
     accessToken: '',
     baseUrl: 'https://backend.example.com',
   })
-  expect(host.executeCommand).not.toHaveBeenCalledWith('Layout.getAuthState')
+  expect(host.getAccessToken).not.toHaveBeenCalled()
 })
 
 test('uses the deterministic mock backend when explicitly configured', async () => {
@@ -76,13 +74,16 @@ test('uses the deterministic mock backend when explicitly configured', async () 
     accessToken: '',
     baseUrl: '',
   })
-  expect(host.executeCommand).not.toHaveBeenCalledWith('Layout.getAuthState')
+  expect(host.getAccessToken).not.toHaveBeenCalled()
 })
 
 test('falls back to the mock backend when editor configuration is unavailable', async () => {
   const host = {
     executeCommand: jest.fn(async () => {
       throw new Error('Command unavailable')
+    }),
+    getAccessToken: jest.fn(async () => {
+      throw new Error('Auth unavailable')
     }),
     getPreference: jest.fn(async () => {
       throw new Error('Preferences unavailable')
