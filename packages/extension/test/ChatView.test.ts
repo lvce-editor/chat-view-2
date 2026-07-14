@@ -99,6 +99,21 @@ test('shows a clear error when chat models cannot be loaded', async () => {
   expect(getText(dom)).not.toContain('Failed to fetch')
 })
 
+test('shows the model loading error provided by the backend', async () => {
+  const api = {
+    ...createMockChatApi(),
+    async listModels() {
+      throw new Error('Log in to access the chat.')
+    },
+  }
+
+  const instance = await createInstance(undefined, api)
+  const dom = instance.render() as readonly any[]
+
+  expect(instance.getState().errorMessage).toBe('Log in to access the chat.')
+  expect(getText(dom)).toContain('Log in to access the chat.')
+})
+
 test('archives a task from the task list', async () => {
   const instance = await createTestInstance()
 

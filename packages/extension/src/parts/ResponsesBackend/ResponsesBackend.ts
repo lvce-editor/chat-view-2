@@ -91,15 +91,34 @@ const parseModels = (value: unknown): readonly ChatModel[] => {
   })
 }
 
-const getErrorMessage = async (response: Response): Promise<string> => {
-  try {
-    const value = (await response.json()) as {
-      readonly error?: { readonly message?: string }
-      readonly message?: string
+const parseErrorMessage = (value: unknown): string => {
+  if (typeof value === 'string') {
+    return value
+  }
+  if (!value || typeof value !== 'object') {
+    return ''
+  }
+  const record = value as Readonly<Record<string, unknown>>
+  if (typeof record.error === 'string') {
+    return record.error
+  }
+  if (record.error && typeof record.error === 'object') {
+    const error = record.error as Readonly<Record<string, unknown>>
+    if (typeof error.message === 'string') {
+      return error.message
     }
-    return value.error?.message || value.message || response.statusText
+  }
+  return typeof record.message === 'string' ? record.message : ''
+}
+
+const getErrorMessage = async (
+  response: Response,
+  fallback = response.statusText,
+): Promise<string> => {
+  try {
+    return parseErrorMessage(await response.json()) || fallback
   } catch {
-    return response.statusText
+    return fallback
   }
 }
 
@@ -195,8 +214,16 @@ export const createResponsesBackend = ({
         headers: getHeaders(accessToken),
       })
       if (!response.ok) {
+        const fallback =
+          response.status === 401
+            ? 'Log in to access the chat.'
+            : response.statusText
+        const message = await getErrorMessage(response, fallback)
+        if (response.status === 401) {
+          throw new Error(message)
+        }
         throw new Error(
-          `Could not load models (${response.status}): ${await getErrorMessage(response)}`,
+          `Could not load models (${response.status}): ${message}`,
         )
       }
       const models = parseModels(await response.json())
