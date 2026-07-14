@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, regex/hoist-regex, sonarjs/no-nested-conditional, sonarjs/super-linear-regex, unicorn/no-break-in-nested-loop, unicorn/prefer-iterator-to-array */
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, regex/hoist-regex, sonarjs/no-nested-conditional, sonarjs/super-linear-regex, unicorn/prefer-iterator-to-array */
 import type {
   AgentBackend,
   AgentInput,
@@ -11,12 +11,14 @@ import type { ChatModel } from '../ChatApi/ChatApi.ts'
 export interface ResponsesBackendOptions {
   readonly accessToken?: string
   readonly baseUrl: string
+  readonly createWebSocket?: ResponsesWebSocketFactory
   readonly fetch?: typeof fetch
   readonly supportsStreaming?: boolean
 }
 
 interface ResponseEvent {
   readonly delta?: string
+  readonly error?: unknown
   readonly item?: {
     readonly arguments?: string
     readonly call_id?: string
@@ -31,6 +33,34 @@ interface ResponseEvent {
   }
   readonly type?: string
 }
+
+interface ResponsesWebSocket {
+  close(): void
+  onclose: ((event: CloseEvent) => void) | null
+  onerror: ((event: Event) => void) | null
+  onmessage: ((event: MessageEvent<unknown>) => void) | null
+  onopen: ((event: Event) => void) | null
+  readonly readyState: number
+  send(data: string): void
+}
+
+type ResponsesWebSocketFactory = (
+  url: string,
+  protocols: readonly string[],
+) => ResponsesWebSocket
+
+const webSocketConnecting = 0
+const webSocketOpen = 1
+
+class WebSocketUpgradeError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'WebSocketUpgradeError'
+  }
+}
+
+const defaultCreateWebSocket: ResponsesWebSocketFactory = (url, protocols) =>
+  new WebSocket(url, [...protocols])
 
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '')
 
@@ -52,6 +82,24 @@ const mapInput = (input: AgentInput): Readonly<Record<string, unknown>> => {
     role: input.role,
   }
 }
+
+const createResponseRequest = (
+  options: AgentStepOptions,
+): Readonly<Record<string, unknown>> => ({
+  input: options.input.map(mapInput),
+  instructions:
+    'You are the Lvce coding agent. Inspect relevant files before editing. Keep changes scoped, use tools to modify the workspace, run available verification, and end with a concise result.',
+  model: options.modelId,
+  ...(options.previousResponseId && {
+    previous_response_id: options.previousResponseId,
+  }),
+  tools: options.tools.map((tool) => ({
+    description: tool.description,
+    name: tool.name,
+    parameters: tool.inputSchema,
+    type: 'function',
+  })),
+})
 
 const parseModels = (value: unknown): readonly ChatModel[] => {
   if (!value || typeof value !== 'object') {
@@ -123,83 +171,222 @@ const getErrorMessage = async (
   }
 }
 
-const readEvents = async (
-  response: Response,
-  options: AgentStepOptions,
-): Promise<AgentStepResult> => {
-  if (!response.body) {
-    throw new Error('The response stream was empty')
+const getWebSocketUrl = (root: string, path: string): string => {
+  const url = new URL(`${root}${path}`)
+  if (url.protocol === 'https:') {
+    url.protocol = 'wss:'
+  } else if (url.protocol === 'http:') {
+    url.protocol = 'ws:'
+  } else {
+    throw new Error(`Unsupported backend URL protocol: ${url.protocol}`)
   }
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  const toolCalls = new Map<string, AgentToolCall>()
-  let buffer = ''
-  let responseId = ''
-  let text = ''
+  return url.href
+}
 
-  const handleEvent = async (event: ResponseEvent): Promise<void> => {
-    if (event.type === 'response.output_text.delta' && event.delta) {
-      text += event.delta
-      await options.onTextDelta(event.delta)
-      return
+const runWebSocketRequest = (
+  root: string,
+  accessToken: string | undefined,
+  createWebSocket: ResponsesWebSocketFactory,
+  options: AgentStepOptions,
+  path: string,
+): Promise<AgentStepResult> =>
+  new Promise((resolve, reject) => {
+    options.signal?.throwIfAborted()
+    const protocol = 'lvce.responses.v1'
+    const protocols = accessToken ? [protocol, accessToken] : [protocol]
+    const socket = createWebSocket(getWebSocketUrl(root, path), protocols)
+    const toolCalls = new Map<string, AgentToolCall>()
+    let opened = false
+    let processing = Promise.resolve()
+    let responseId = ''
+    let settled = false
+    let text = ''
+
+    const cleanup = (): void => {
+      socket.onclose = null
+      socket.onerror = null
+      socket.onmessage = null
+      socket.onopen = null
+      options.signal?.removeEventListener('abort', handleAbort)
     }
-    const { item } = event
-    if (
-      event.type === 'response.output_item.done' &&
-      item?.type === 'function_call' &&
-      item.name
-    ) {
-      const callId = item.call_id || item.id || `call-${toolCalls.size + 1}`
-      toolCalls.set(callId, {
-        arguments: item.arguments || '{}',
-        callId,
-        name: item.name,
-      })
-      return
+
+    const closeSocket = (): void => {
+      if (
+        socket.readyState === webSocketConnecting ||
+        socket.readyState === webSocketOpen
+      ) {
+        socket.close()
+      }
     }
-    if (event.type === 'response.completed') {
-      responseId = event.response?.id || responseId
-      return
+
+    const fail = (error: unknown): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      closeSocket()
+      reject(error instanceof Error ? error : new Error(String(error)))
     }
-    if (event.type === 'response.failed' || event.type === 'error') {
-      throw new Error(
-        event.response?.error?.message || 'The model request failed',
+
+    const complete = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      closeSocket()
+      resolve({ responseId, text, toolCalls: [...toolCalls.values()] })
+    }
+
+    const handleAbort = (): void => {
+      try {
+        options.signal?.throwIfAborted()
+      } catch (error) {
+        fail(error)
+      }
+    }
+
+    const handleEvent = async (event: ResponseEvent): Promise<void> => {
+      if (event.type === 'response.output_text.delta' && event.delta) {
+        text += event.delta
+        await options.onTextDelta(event.delta)
+        return
+      }
+      const { item } = event
+      if (
+        event.type === 'response.output_item.done' &&
+        item?.type === 'function_call' &&
+        item.name
+      ) {
+        const callId = item.call_id || item.id || `call-${toolCalls.size + 1}`
+        toolCalls.set(callId, {
+          arguments: item.arguments || '{}',
+          callId,
+          name: item.name,
+        })
+        return
+      }
+      if (event.type === 'response.completed') {
+        responseId = event.response?.id || responseId
+        if (event.response && !text) {
+          text = getResponseText(event.response)
+        }
+        if (event.response && toolCalls.size === 0) {
+          for (const toolCall of getResponseToolCalls(event.response)) {
+            toolCalls.set(toolCall.callId, toolCall)
+          }
+        }
+        complete()
+        return
+      }
+      if (event.type === 'response.failed' || event.type === 'error') {
+        throw new Error(
+          parseErrorMessage(event.error) ||
+            event.response?.error?.message ||
+            'The model request failed',
+        )
+      }
+    }
+
+    const processMessage = async (
+      message: MessageEvent<unknown>,
+    ): Promise<void> => {
+      try {
+        await processing
+        if (settled) {
+          return
+        }
+        if (typeof message.data !== 'string') {
+          throw new TypeError(
+            'The backend returned a non-text WebSocket response',
+          )
+        }
+        let event: ResponseEvent
+        try {
+          event = JSON.parse(message.data) as ResponseEvent
+        } catch {
+          throw new Error('The backend returned invalid WebSocket JSON')
+        }
+        await handleEvent(event)
+      } catch (error) {
+        fail(error)
+      }
+    }
+
+    const handleClose = async (event: CloseEvent): Promise<void> => {
+      await processing
+      if (settled) {
+        return
+      }
+      const detail = event.reason ? `: ${event.reason}` : ''
+      fail(
+        opened
+          ? new Error(`Model response stream closed before completion${detail}`)
+          : new WebSocketUpgradeError(
+              `Could not open the model response stream${detail}`,
+            ),
       )
     }
-  }
 
-  while (true) {
-    options.signal?.throwIfAborted()
-    const result = await reader.read()
-    buffer += decoder.decode(result.value, { stream: !result.done })
-    const blocks = buffer.split(/\r?\n\r?\n/)
-    buffer = blocks.pop() || ''
-    for (const block of blocks) {
-      const data = block
-        .split(/\r?\n/)
-        .filter((line) => line.startsWith('data:'))
-        .map((line) => line.slice(5).trimStart())
-        .join('\n')
-      if (!data || data === '[DONE]') {
-        continue
+    socket.onopen = () => {
+      try {
+        opened = true
+        options.signal?.throwIfAborted()
+        socket.send(
+          JSON.stringify({
+            ...createResponseRequest(options),
+            type: 'response.create',
+          }),
+        )
+      } catch (error) {
+        fail(error)
       }
-      await handleEvent(JSON.parse(data) as ResponseEvent)
     }
-    if (result.done) {
-      break
+    socket.onmessage = (message) => {
+      processing = processMessage(message)
     }
+    socket.onerror = () => {
+      fail(
+        opened
+          ? new Error('The model response stream failed')
+          : new WebSocketUpgradeError(
+              'Could not connect to the model response stream',
+            ),
+      )
+    }
+    socket.onclose = (event) => {
+      void handleClose(event)
+    }
+    options.signal?.addEventListener('abort', handleAbort, { once: true })
+  })
+
+const runWebSocketStep = async (
+  root: string,
+  accessToken: string | undefined,
+  createWebSocket: ResponsesWebSocketFactory,
+  options: AgentStepOptions,
+): Promise<AgentStepResult> => {
+  try {
+    return await runWebSocketRequest(
+      root,
+      accessToken,
+      createWebSocket,
+      options,
+      '/v1/responses',
+    )
+  } catch (error) {
+    if (!(error instanceof WebSocketUpgradeError)) {
+      throw error
+    }
+    return runWebSocketRequest(
+      root,
+      accessToken,
+      createWebSocket,
+      options,
+      '/v1/realtime',
+    )
   }
-  if (buffer.trim()) {
-    const data = buffer
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith('data:'))
-      .map((line) => line.slice(5).trimStart())
-      .join('\n')
-    if (data && data !== '[DONE]') {
-      await handleEvent(JSON.parse(data) as ResponseEvent)
-    }
-  }
-  return { responseId, text, toolCalls: [...toolCalls.values()] }
 }
 
 const getRecord = (
@@ -279,6 +466,7 @@ const readResponse = async (response: Response): Promise<AgentStepResult> => {
 export const createResponsesBackend = ({
   accessToken,
   baseUrl,
+  createWebSocket = defaultCreateWebSocket,
   fetch: fetchImplementation = globalThis.fetch,
   supportsStreaming = false,
 }: ResponsesBackendOptions): AgentBackend => {
@@ -309,22 +497,13 @@ export const createResponsesBackend = ({
       return models
     },
     async runStep(options) {
+      if (supportsStreaming) {
+        return runWebSocketStep(root, accessToken, createWebSocket, options)
+      }
       const response = await fetchImplementation(`${root}/v1/responses`, {
         body: JSON.stringify({
-          input: options.input.map(mapInput),
-          instructions:
-            'You are the Lvce coding agent. Inspect relevant files before editing. Keep changes scoped, use tools to modify the workspace, run available verification, and end with a concise result.',
-          model: options.modelId,
-          ...(options.previousResponseId && {
-            previous_response_id: options.previousResponseId,
-          }),
-          stream: supportsStreaming,
-          tools: options.tools.map((tool) => ({
-            description: tool.description,
-            name: tool.name,
-            parameters: tool.inputSchema,
-            type: 'function',
-          })),
+          ...createResponseRequest(options),
+          stream: false,
         }),
         credentials: 'include',
         headers: getHeaders(accessToken),
@@ -336,9 +515,7 @@ export const createResponsesBackend = ({
           `Model request failed (${response.status}): ${await getErrorMessage(response)}`,
         )
       }
-      return supportsStreaming
-        ? readEvents(response, options)
-        : readResponse(response)
+      return readResponse(response)
     },
   }
 }

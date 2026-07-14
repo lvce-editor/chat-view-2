@@ -30,7 +30,7 @@
     "chat2.supportsStreaming": {
       "type": "boolean",
       "default": false,
-      "description": "Whether the configured chat backend supports streaming responses."
+      "description": "Use the Responses WebSocket streaming protocol for a custom chat backend. The editor backend enables it automatically."
     }
   },
   "activation": [

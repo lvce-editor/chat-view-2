@@ -78,22 +78,31 @@ const normalizeBackendUrl = (value: string): string => {
 export const resolveBackendConfiguration = async (
   host: BackendConfigurationHost = defaultHost,
 ): Promise<BackendConfiguration> => {
-  const [configuredBaseUrl, editorBaseUrl, supportsStreaming, useMockBackend] =
-    await Promise.all([
-      getPreferenceString(host, 'chat2.backendUrl'),
-      executeStringCommand(host, 'Layout.getBackendUrl'),
-      getPreferenceBoolean(host, 'chat2.supportsStreaming'),
-      getPreferenceBoolean(host, 'chat2.useMockBackend'),
-    ])
+  const [
+    configuredBaseUrl,
+    editorBaseUrl,
+    configuredSupportsStreaming,
+    useMockBackend,
+  ] = await Promise.all([
+    getPreferenceString(host, 'chat2.backendUrl'),
+    executeStringCommand(host, 'Layout.getBackendUrl'),
+    getPreferenceBoolean(host, 'chat2.supportsStreaming'),
+    getPreferenceBoolean(host, 'chat2.useMockBackend'),
+  ])
   if (useMockBackend) {
-    return { accessToken: '', baseUrl: '', supportsStreaming }
+    return {
+      accessToken: '',
+      baseUrl: '',
+      supportsStreaming: configuredSupportsStreaming,
+    }
   }
   const baseUrl = configuredBaseUrl || editorBaseUrl
-  const accessToken =
+  const usesEditorBackend = Boolean(
     baseUrl &&
     editorBaseUrl &&
-    normalizeBackendUrl(baseUrl) === normalizeBackendUrl(editorBaseUrl)
-      ? await resolveAccessToken(host)
-      : ''
+    normalizeBackendUrl(baseUrl) === normalizeBackendUrl(editorBaseUrl),
+  )
+  const accessToken = usesEditorBackend ? await resolveAccessToken(host) : ''
+  const supportsStreaming = usesEditorBackend || configuredSupportsStreaming
   return { accessToken, baseUrl, supportsStreaming }
 }

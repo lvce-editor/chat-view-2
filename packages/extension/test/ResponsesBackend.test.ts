@@ -1,18 +1,35 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types */
+/* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import { expect, jest, test } from '@jest/globals'
 import { createResponsesBackend } from '../src/parts/ResponsesBackend/ResponsesBackend.ts'
 
-const createEventStream = (events: readonly unknown[]): ReadableStream => {
-  const encoder = new TextEncoder()
-  return new ReadableStream({
-    start(controller) {
-      for (const event of events) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`))
-      }
-      controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-      controller.close()
-    },
-  })
+class MockResponsesWebSocket {
+  onclose: ((event: CloseEvent) => void) | null = null
+  onerror: ((event: Event) => void) | null = null
+  onmessage: ((event: MessageEvent<unknown>) => void) | null = null
+  onopen: ((event: Event) => void) | null = null
+  readyState = 0
+  readonly sent: string[] = []
+
+  close(): void {
+    this.readyState = 3
+  }
+
+  failConnection(): void {
+    this.onerror?.(new Event('error'))
+  }
+
+  open(): void {
+    this.readyState = 1
+    this.onopen?.(new Event('open'))
+  }
+
+  receive(value: unknown): void {
+    this.onmessage?.({ data: JSON.stringify(value) } as MessageEvent<string>)
+  }
+
+  send(data: string): void {
+    this.sent.push(data)
+  }
 }
 
 test('loads only OpenAI models from the authenticated catalog', async () => {
@@ -83,34 +100,22 @@ test('asks the user to log in when an unauthorized response has no message', asy
   )
 })
 
-test('parses streamed text and function calls from the Responses API', async () => {
-  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
-    new Response(
-      createEventStream([
-        { delta: 'Inspecting ', type: 'response.output_text.delta' },
-        { delta: 'now.', type: 'response.output_text.delta' },
-        {
-          item: {
-            arguments: '{"path":"package.json"}',
-            call_id: 'call-1',
-            name: 'read_file',
-            type: 'function_call',
-          },
-          type: 'response.output_item.done',
-        },
-        { response: { id: 'response-1' }, type: 'response.completed' },
-      ]),
-      { status: 200 },
-    ),
+test('uses the Responses WebSocket for streamed text and function calls', async () => {
+  const fetchMock = jest.fn<typeof fetch>()
+  const socket = new MockResponsesWebSocket()
+  const createWebSocket = jest.fn(
+    (_url: string, _protocols: readonly string[]) => socket,
   )
   const deltas: string[] = []
   const backend = createResponsesBackend({
+    accessToken: 'access-token-123',
     baseUrl: 'https://backend.example.com',
+    createWebSocket,
     fetch: fetchMock,
     supportsStreaming: true,
   })
 
-  const result = await backend.runStep({
+  const resultPromise = backend.runStep({
     input: [{ content: 'Inspect this repo', role: 'user' }],
     modelId: 'gpt-test',
     onTextDelta(delta) {
@@ -118,6 +123,20 @@ test('parses streamed text and function calls from the Responses API', async () 
     },
     tools: [],
   })
+  socket.open()
+  socket.receive({ delta: 'Inspecting ', type: 'response.output_text.delta' })
+  socket.receive({ delta: 'now.', type: 'response.output_text.delta' })
+  socket.receive({
+    item: {
+      arguments: '{"path":"package.json"}',
+      call_id: 'call-1',
+      name: 'read_file',
+      type: 'function_call',
+    },
+    type: 'response.output_item.done',
+  })
+  socket.receive({ response: { id: 'response-1' }, type: 'response.completed' })
+  const result = await resultPromise
 
   expect(deltas).toEqual(['Inspecting ', 'now.'])
   expect(result).toEqual({
@@ -131,11 +150,90 @@ test('parses streamed text and function calls from the Responses API', async () 
       },
     ],
   })
-  const body = fetchMock.mock.calls[0][1]?.body
-  if (typeof body !== 'string') {
-    throw new TypeError('Expected a JSON request body')
-  }
-  expect(JSON.parse(body)).toEqual(expect.objectContaining({ stream: true }))
+  expect(fetchMock).not.toHaveBeenCalled()
+  expect(createWebSocket).toHaveBeenCalledWith(
+    'wss://backend.example.com/v1/responses',
+    ['lvce.responses.v1', 'access-token-123'],
+  )
+  expect(JSON.parse(socket.sent[0])).toEqual(
+    expect.objectContaining({
+      input: [
+        {
+          content: [{ text: 'Inspect this repo', type: 'input_text' }],
+          role: 'user',
+        },
+      ],
+      model: 'gpt-test',
+      type: 'response.create',
+    }),
+  )
+  expect(JSON.parse(socket.sent[0])).not.toHaveProperty('stream')
+})
+
+test('falls back to the realtime route when the responses upgrade fails', async () => {
+  const modernSocket = new MockResponsesWebSocket()
+  const fallbackSocket = new MockResponsesWebSocket()
+  const sockets = [modernSocket, fallbackSocket]
+  const createWebSocket = jest.fn(
+    (_url: string, _protocols: readonly string[]) => {
+      const socket = sockets.shift()
+      if (!socket) {
+        throw new Error('Unexpected WebSocket connection')
+      }
+      return socket
+    },
+  )
+  const backend = createResponsesBackend({
+    accessToken: 'access-token-123',
+    baseUrl: 'https://backend.example.com',
+    createWebSocket,
+    supportsStreaming: true,
+  })
+
+  const result = backend.runStep({
+    input: [{ content: 'Inspect this repo', role: 'user' }],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+  modernSocket.failConnection()
+  await new Promise<void>((resolve) => queueMicrotask(resolve))
+  fallbackSocket.open()
+  fallbackSocket.receive({
+    response: {
+      id: 'response-legacy',
+      output: [
+        {
+          content: [{ text: 'Legacy response.', type: 'output_text' }],
+          type: 'message',
+        },
+      ],
+    },
+    type: 'response.completed',
+  })
+
+  await expect(result).resolves.toEqual({
+    responseId: 'response-legacy',
+    text: 'Legacy response.',
+    toolCalls: [],
+  })
+  expect(createWebSocket).toHaveBeenNthCalledWith(
+    1,
+    'wss://backend.example.com/v1/responses',
+    ['lvce.responses.v1', 'access-token-123'],
+  )
+  expect(createWebSocket).toHaveBeenNthCalledWith(
+    2,
+    'wss://backend.example.com/v1/realtime',
+    ['lvce.responses.v1', 'access-token-123'],
+  )
+  expect(JSON.parse(fallbackSocket.sent[0])).toEqual(
+    expect.objectContaining({
+      model: 'gpt-test',
+      type: 'response.create',
+    }),
+  )
+  expect(JSON.parse(fallbackSocket.sent[0])).not.toHaveProperty('stream')
 })
 
 test('uses non-streaming responses unless streaming is explicitly supported', async () => {
@@ -216,40 +314,28 @@ test('surfaces backend errors without retrying unsafe work', async () => {
   ).rejects.toThrow('Plan limit reached')
 })
 
-test('reconstructs an SSE event split across arbitrary stream chunks', async () => {
-  const encoder = new TextEncoder()
-  const stream = new ReadableStream({
-    start(controller) {
-      controller.enqueue(
-        encoder.encode('data: {"delta":"fragmented","type":"response.output_'),
-      )
-      controller.enqueue(encoder.encode('text.delta"}\n\n'))
-      controller.enqueue(
-        encoder.encode(
-          'data: {"response":{"id":"response-2"},"type":"response.completed"}',
-        ),
-      )
-      controller.close()
-    },
-  })
+test('surfaces backend WebSocket error messages', async () => {
+  const socket = new MockResponsesWebSocket()
+  const createWebSocket = jest.fn(() => socket)
   const backend = createResponsesBackend({
     baseUrl: 'https://backend.example.com',
-    fetch: jest
-      .fn<typeof fetch>()
-      .mockResolvedValue(new Response(stream, { status: 200 })),
+    createWebSocket,
     supportsStreaming: true,
   })
 
-  await expect(
-    backend.runStep({
-      input: [{ content: 'Work', role: 'user' }],
-      modelId: 'gpt-test',
-      onTextDelta() {},
-      tools: [],
-    }),
-  ).resolves.toEqual({
-    responseId: 'response-2',
-    text: 'fragmented',
-    toolCalls: [],
+  const result = backend.runStep({
+    input: [{ content: 'Work', role: 'user' }],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
   })
+  socket.open()
+  socket.receive({
+    error: { message: 'Monthly allowance exceeded' },
+    status: 402,
+    type: 'error',
+  })
+
+  await expect(result).rejects.toThrow('Monthly allowance exceeded')
+  expect(createWebSocket).toHaveBeenCalledTimes(1)
 })
