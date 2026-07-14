@@ -3,6 +3,7 @@ import {
   createAgentToolHost,
   getLineChanges,
   validateWorkspaceRelativePath,
+  workspaceContextLabel,
 } from '../src/parts/AgentToolHost/AgentToolHost.ts'
 
 test.each([
@@ -29,6 +30,13 @@ test('normalizes a workspace-relative path', () => {
   expect(validateWorkspaceRelativePath('packages\\extension/src/a.ts')).toBe(
     'packages/extension/src/a.ts',
   )
+})
+
+test('uses a stable workspace label for portable evaluation requests', () => {
+  expect(workspaceContextLabel).toBe(
+    'Workspace root: .\nAll tool paths must be relative to this root.',
+  )
+  expect(workspaceContextLabel).not.toContain('file://')
 })
 
 test.each([

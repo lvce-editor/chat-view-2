@@ -5,6 +5,7 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'node:test'
+import type { EvaluationBrowser } from '../src/Browser.ts'
 import { runEvaluations } from '../src/Runner.ts'
 
 const temporaryDirectories: string[] = []
@@ -48,31 +49,13 @@ void test('runs scenarios, records misses, and replays matching requests', async
   )
   await writeFile(join(scenarioDirectory, 'fixture', '.gitkeep'), '')
 
-  const responseBodies = [
-    toEventStream([
-      {
-        item: {
-          arguments: JSON.stringify({
-            newText: '<h1>Hello World</h1>\n',
-            oldText: '',
-            path: 'index.html',
-          }),
-          call_id: 'call-1',
-          name: 'apply_patch',
-          type: 'function_call',
-        },
-        type: 'response.output_item.done',
-      },
-      { response: { id: 'response-1' }, type: 'response.completed' },
-    ]),
-    toEventStream([
-      { response: { id: 'response-2' }, type: 'response.completed' },
-    ]),
-  ]
+  const responseBody = toEventStream([
+    { response: { id: 'response-1' }, type: 'response.completed' },
+  ])
   let upstreamRequests = 0
   const upstream = createServer((_request, response) => {
     response.setHeader('Content-Type', 'text/event-stream')
-    response.end(responseBodies[upstreamRequests] || responseBodies[1])
+    response.end(responseBody)
     upstreamRequests++
   })
   await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve))
@@ -87,21 +70,45 @@ void test('runs scenarios, records misses, and replays matching requests', async
     workspacesDirectory: join(root, 'workspaces'),
   }
   const upstreamBaseUrl = `http://127.0.0.1:${address.port}/v1`
+  let prepareCalls = 0
+  const browser: EvaluationBrowser = {
+    async prepare() {
+      prepareCalls++
+    },
+    async run(options) {
+      strictEqual(options.model, 'test-model')
+      strictEqual(options.prompt, 'Create a hello world page.')
+      const models = await fetch(`${options.backendOrigin}/v1/models`)
+      strictEqual(models.status, 200)
+      const response = await fetch(`${options.backendOrigin}/v1/responses`, {
+        body: JSON.stringify({ input: [], model: options.model, stream: true }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      })
+      strictEqual(await response.text(), responseBody)
+      await writeFile(
+        join(options.workspace, 'index.html'),
+        '<h1>Hello World</h1>\n',
+      )
+    },
+  }
   const recorded = await runEvaluations({
     ...paths,
     apiKey: 'test-key',
+    browser,
     upstreamBaseUrl,
   })
   deepStrictEqual(recorded, [
-    { cacheHits: 0, recordedResponses: 2, scenarioId: 'hello' },
+    { cacheHits: 0, recordedResponses: 1, scenarioId: 'hello' },
   ])
-  strictEqual(upstreamRequests, 2)
+  strictEqual(upstreamRequests, 1)
 
-  const replayed = await runEvaluations({ ...paths, upstreamBaseUrl })
+  const replayed = await runEvaluations({ ...paths, browser, upstreamBaseUrl })
   deepStrictEqual(replayed, [
-    { cacheHits: 2, recordedResponses: 0, scenarioId: 'hello' },
+    { cacheHits: 1, recordedResponses: 0, scenarioId: 'hello' },
   ])
-  strictEqual(upstreamRequests, 2)
+  strictEqual(upstreamRequests, 1)
+  strictEqual(prepareCalls, 2)
   strictEqual(
     await readFile(
       join(paths.workspacesDirectory, 'hello', 'index.html'),

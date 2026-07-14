@@ -114,6 +114,9 @@ const ignoredDirectories = new Set([
   'node_modules',
 ])
 
+export const workspaceContextLabel =
+  'Workspace root: .\nAll tool paths must be relative to this root.'
+
 const definitions: readonly AgentToolDefinition[] = [
   {
     description:
@@ -527,7 +530,7 @@ export const createAgentToolHost = ({
         const editorContext = editorContextProvider
           ? await editorContextProvider.getContext()
           : undefined
-        const contextParts = [`Workspace: ${workspace}`]
+        const contextParts = [workspaceContextLabel]
         if (editorContext?.activeFile) {
           contextParts.push(`Active file: ${editorContext.activeFile}`)
         }

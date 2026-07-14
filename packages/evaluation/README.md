@@ -1,8 +1,8 @@
 # Chat 2 evaluations
 
-This package is the deterministic foundation for running real coding tasks
-through Chat 2. A scenario contains its own workspace fixture, prompt, pinned
-model, timeout, objective checks, and an optional temperature.
+This package runs real coding tasks through the complete Chat 2 browser stack.
+A scenario contains its own workspace fixture, prompt, pinned model, timeout,
+objective checks, and an optional temperature.
 
 ## Layout
 
@@ -28,10 +28,15 @@ From the repository root, run:
 npm run evaluation
 ```
 
-This creates a clean workspace for every scenario, runs the Chat 2 agent loop,
-and executes the scenario's objective checks. Exact request matches replay the
-committed response cache. Cache misses are sent to OpenAI and saved for future
-runs.
+This builds the extension once, creates a clean workspace for every scenario,
+and launches Lvce Editor in a headless browser. The browser invokes
+`chat2.createSession` and `chat2.sendMessage` directly, avoiding visual typing
+and rendering while still exercising the extension command API, real Chat 2
+agent loop, Responses client, tool calls, editor file-system APIs, and Lvce
+test server. The runner then executes the scenario's objective checks.
+
+Exact request matches replay the committed response cache. Cache misses are
+sent to OpenAI and saved for future runs.
 
 Copy `.env.example` to the repository-root `.env` and set `OPENAI_API_KEY` when
 recording cache misses. A completely cached run needs no key. When a new
@@ -44,7 +49,8 @@ fixtures should be recorded.
 
 ## Run one scenario manually
 
-The lower-level commands remain available when inspecting an individual run.
+The lower-level commands remain available when inspecting an individual run
+visually.
 Prepare a clean workspace:
 
 ```sh
