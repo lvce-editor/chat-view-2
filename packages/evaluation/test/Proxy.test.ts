@@ -148,6 +148,46 @@ void test('reports cache misses without making a paid request', async () => {
   const body = (await response.json()) as {
     readonly error: { readonly message: string }
   }
-  strictEqual(body.error.message.includes('set OPENAI_API_KEY'), true)
+  strictEqual(body.error.message.includes('OPENAI_API_KEY is missing'), true)
+  strictEqual(body.error.message.includes('.env'), true)
   await proxy.close()
+})
+
+void test('reports an invalid OpenAI key with .env guidance', async () => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'chat-evaluation-'))
+  temporaryDirectories.push(temporaryDirectory)
+  const upstream = createServer((_request, response) => {
+    response.statusCode = 401
+    response.setHeader('Content-Type', 'application/json')
+    response.end('{"error":{"message":"Incorrect API key"}}\n')
+  })
+  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve))
+  const address = upstream.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('Test upstream did not bind')
+  }
+  const proxy = await startEvaluationProxy({
+    apiKey: 'invalid-key',
+    cacheDirectory: join(temporaryDirectory, 'cache'),
+    model: 'test-model',
+    scenarioId: 'test-scenario',
+    temperature: 0,
+    transcriptPath: join(temporaryDirectory, 'result.json'),
+    upstreamBaseUrl: `http://127.0.0.1:${address.port}/v1`,
+  })
+  const response = await fetch(`${proxy.origin}/v1/responses`, {
+    body: JSON.stringify({ input: [], stream: true }),
+    headers: { 'Content-Type': 'application/json' },
+    method: 'POST',
+  })
+  strictEqual(response.status, 401)
+  const body = (await response.json()) as {
+    readonly error: { readonly message: string }
+  }
+  strictEqual(body.error.message.includes('rejected OPENAI_API_KEY'), true)
+  strictEqual(body.error.message.includes('.env'), true)
+  await proxy.close()
+  await new Promise<void>((resolve, reject) =>
+    upstream.close((error) => (error ? reject(error) : resolve())),
+  )
 })

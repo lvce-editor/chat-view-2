@@ -46,8 +46,9 @@ a 300 KB budget. `npm run check:budgets` enforces both after a production build.
 
 The scenario fixtures and deterministic recording proxy live in
 `packages/evaluation`. Cached model responses can be replayed in CI without an
-API key or another paid request. See `packages/evaluation/README.md` for the
-scenario format and the current manual evaluation flow.
+API key or another paid request. Run every scenario and its objective checks
+with `npm run evaluation`. See `packages/evaluation/README.md` for the scenario
+format and cache-recording details.
 
 ## Development
 

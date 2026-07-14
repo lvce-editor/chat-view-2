@@ -19,12 +19,31 @@ proxy pins its model snapshot and temperature. This includes tool outputs and
 previous response IDs, so a cached multi-step run is replayed only when the
 conversation is identical. The proxy never forwards editor authentication.
 
-## Record or replay a scenario
+## Run all scenarios
 
-Copy `.env.example` to the repository-root `.env` and set `OPENAI_API_KEY` only
-when recording a cache miss. Replaying a completely cached scenario needs no
-key; an uncached request fails instead of silently spending money.
+From the repository root, run:
 
+```sh
+npm run evaluation
+```
+
+This creates a clean workspace for every scenario, runs the Chat 2 agent loop,
+and executes the scenario's objective checks. Exact request matches replay the
+committed response cache. Cache misses are sent to OpenAI and saved for future
+runs.
+
+Copy `.env.example` to the repository-root `.env` and set `OPENAI_API_KEY` when
+recording cache misses. A completely cached run needs no key. When a new
+request needs a missing, empty, or invalid key, the command explains how to fix
+the repository-root `.env` file instead of silently skipping the scenario.
+
+Inspect new cache files before committing them. They contain complete model
+inputs, outputs, and workspace tool results. Only controlled evaluation
+fixtures should be recorded.
+
+## Run one scenario manually
+
+The lower-level commands remain available when inspecting an individual run.
 Prepare a clean workspace:
 
 ```sh
@@ -43,17 +62,9 @@ forces the scenario's model and temperature, serves the model picker locally,
 and writes every AI request/response plus extracted tool calls/results to
 `results/<id>.json`.
 
-Inspect cache files before committing them. They contain complete model inputs,
-outputs, and workspace tool results. Only controlled evaluation fixtures should
-be recorded.
-
 ## Starter scenarios
 
 - `hello-world-html` starts from an empty fixture and asks the agent to create
   an HTML page.
 - `fix-node-test` contains an intentionally obvious arithmetic bug and a failing
   Node.js test.
-
-The next layer can automate the manual editor steps and execute each scenario's
-checks. Because the fixtures, request cache, and transcript schema already have
-stable boundaries, that runner can use the same data locally and in PR CI.

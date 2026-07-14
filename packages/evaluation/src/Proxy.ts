@@ -195,7 +195,7 @@ export const startEvaluationProxy = async (
       if (!options.apiKey) {
         sendJson(response, 502, {
           error: {
-            message: `Evaluation cache miss ${cacheKey}; set OPENAI_API_KEY to record it`,
+            message: `Evaluation cache miss ${cacheKey}. OPENAI_API_KEY is missing or empty; copy .env.example to the repository-root .env file and add a valid key to record new responses.`,
           },
         })
         return
@@ -211,6 +211,29 @@ export const startEvaluationProxy = async (
           method: 'POST',
         },
       )
+      if (upstream.status === 401 || upstream.status === 403) {
+        await upstream.body?.cancel()
+        recorded = {
+          body: `${JSON.stringify({
+            error: {
+              message:
+                'OpenAI rejected OPENAI_API_KEY. Update the key in the repository-root .env file and try again.',
+            },
+          })}\n`,
+          headers: { 'content-type': 'application/json' },
+          status: upstream.status,
+        }
+        await transcript.append({
+          cacheKey,
+          request: cacheRequest,
+          response: recorded,
+          source,
+          toolCalls: [],
+          toolResults: getToolResults(requestBody),
+        })
+        replayResponse(response, recorded)
+        return
+      }
       const headers = getResponseHeaders(upstream.headers)
       response.statusCode = upstream.status
       for (const [name, value] of Object.entries(headers)) {

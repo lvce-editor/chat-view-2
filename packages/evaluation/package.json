@@ -4,6 +4,7 @@
   "description": "Deterministic coding-agent evaluation fixtures and recording proxy",
   "type": "module",
   "scripts": {
+    "evaluation": "node src/cli.ts run",
     "prepare-scenario": "node src/cli.ts prepare",
     "proxy": "node src/cli.ts proxy",
     "test": "node --test test/*.test.ts",
