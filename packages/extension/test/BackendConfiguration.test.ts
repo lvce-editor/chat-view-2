@@ -44,7 +44,7 @@ test('uses the editor backend and authentication by default', async () => {
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
     baseUrl: 'https://lvce-editor.dev',
-    supportsStreaming: false,
+    supportsStreaming: true,
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.backendUrl')
   expect(host.executeCommand).toHaveBeenCalledWith('Layout.getBackendUrl')
@@ -60,7 +60,7 @@ test('uses editor authentication for an equivalent configured backend URL', asyn
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
     baseUrl: 'https://lvce-editor.dev',
-    supportsStreaming: false,
+    supportsStreaming: true,
   })
 })
 
@@ -108,12 +108,15 @@ test('falls back to the mock backend when editor configuration is unavailable', 
   })
 })
 
-test('enables streaming only when explicitly configured', async () => {
-  const host = createHost({ supportsStreaming: true })
+test('enables streaming for a custom backend only when explicitly configured', async () => {
+  const host = createHost({
+    configuredBackendUrl: 'https://backend.example.com',
+    supportsStreaming: true,
+  })
 
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
-    accessToken: 'editor-token',
-    baseUrl: 'https://lvce-editor.dev',
+    accessToken: '',
+    baseUrl: 'https://backend.example.com',
     supportsStreaming: true,
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.supportsStreaming')
