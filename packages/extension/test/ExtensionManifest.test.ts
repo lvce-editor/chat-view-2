@@ -17,7 +17,11 @@ test('contributes the headless chat commands for browser evaluations', async () 
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
 
-  for (const id of ['chat2.createSession', 'chat2.sendMessage']) {
+  for (const id of [
+    'chat2.createSession',
+    'chat2.runPrompt',
+    'chat2.sendMessage',
+  ]) {
     expect(manifest.commands).toContainEqual(expect.objectContaining({ id }))
     expect(manifest.activation).toContain(`onCommand:${id}`)
   }

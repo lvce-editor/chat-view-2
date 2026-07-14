@@ -30,6 +30,14 @@ export const activate = async (): Promise<void> => {
     id: 'chat2.createSession',
   })
   registerCommand({
+    async execute(message: unknown, modelId?: unknown) {
+      const { headlessChatCommands } =
+        await import('../HeadlessChat/HeadlessChat.ts')
+      return headlessChatCommands.runPrompt(message, modelId)
+    },
+    id: 'chat2.runPrompt',
+  })
+  registerCommand({
     async execute(message: unknown) {
       const { headlessChatCommands } =
         await import('../HeadlessChat/HeadlessChat.ts')

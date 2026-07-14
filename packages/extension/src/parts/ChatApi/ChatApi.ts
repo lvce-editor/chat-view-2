@@ -66,6 +66,55 @@ export type ChatTaskEvent =
   | ChatStatusEvent
   | ChatUserMessageEvent
 
+export interface ChatTraceTextContent {
+  readonly text: string
+  readonly type: 'text'
+}
+
+export interface ChatTraceToolCallContent {
+  readonly arguments: unknown
+  readonly id: string
+  readonly name: string
+  readonly type: 'toolCall'
+}
+
+export interface ChatTraceUserMessage {
+  readonly content: string
+  readonly role: 'user'
+  readonly timestamp: number
+}
+
+export interface ChatTraceAssistantMessage {
+  readonly content: readonly (ChatTraceTextContent | ChatTraceToolCallContent)[]
+  readonly model: string
+  readonly responseId: string
+  readonly role: 'assistant'
+  readonly timestamp: number
+}
+
+export interface ChatTraceToolResultMessage {
+  readonly content: readonly ChatTraceTextContent[]
+  readonly isError: boolean
+  readonly role: 'toolResult'
+  readonly timestamp: number
+  readonly toolCallId: string
+  readonly toolName: string
+}
+
+export interface ChatTraceCustomMessage {
+  readonly content: string
+  readonly customType: string
+  readonly isError?: boolean
+  readonly role: 'custom'
+  readonly timestamp: number
+}
+
+export type ChatTraceMessage =
+  | ChatTraceAssistantMessage
+  | ChatTraceCustomMessage
+  | ChatTraceToolResultMessage
+  | ChatTraceUserMessage
+
 export interface ChatTask {
   readonly archived?: boolean
   readonly createdAt: string
@@ -80,6 +129,7 @@ export interface ChatTask {
 }
 
 export interface ChatRunOptions {
+  readonly onTrace?: (message: ChatTraceMessage) => void | Promise<void>
   readonly onUpdate?: (task: ChatTask) => void | Promise<void>
   readonly signal?: AbortSignal
 }

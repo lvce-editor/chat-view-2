@@ -7,6 +7,7 @@ import { summarizeTask } from '../src/parts/ChatTask/ChatTask.ts'
 import { createMemoryTaskStore } from '../src/parts/TaskStore/TaskStore.ts'
 
 test('runs a multi-step tool loop and records a compact event history', async () => {
+  const trace: unknown[] = []
   const runStep = jest
     .fn<AgentBackend['runStep']>()
     .mockResolvedValueOnce({
@@ -71,7 +72,11 @@ test('runs a multi-step tool loop and records a compact event history', async ()
     toolHost,
   })
 
-  const task = await api.createTask('Inspect this repo', 'gpt-test')
+  const task = await api.createTask('Inspect this repo', 'gpt-test', {
+    onTrace(message) {
+      trace.push(message)
+    },
+  })
 
   expect(task.status).toBe('completed')
   expect(execute).toHaveBeenCalledWith(
@@ -101,6 +106,38 @@ test('runs a multi-step tool loop and records a compact event history', async ()
       ]),
     }),
   )
+  expect(trace).toEqual([
+    expect.objectContaining({
+      content: 'Inspect this repo',
+      role: 'user',
+    }),
+    expect.objectContaining({
+      content: [
+        {
+          arguments: { path: 'package.json' },
+          id: 'call-1',
+          name: 'read_file',
+          type: 'toolCall',
+        },
+      ],
+      model: 'gpt-test',
+      responseId: 'response-1',
+      role: 'assistant',
+    }),
+    expect.objectContaining({
+      content: [{ text: '{"name":"repo"}', type: 'text' }],
+      isError: false,
+      role: 'toolResult',
+      toolCallId: 'call-1',
+      toolName: 'read_file',
+    }),
+    expect.objectContaining({
+      content: [{ text: 'The repository is ready.', type: 'text' }],
+      model: 'gpt-test',
+      responseId: 'response-2',
+      role: 'assistant',
+    }),
+  ])
 })
 
 test('records a failed task when the backend rejects the request', async () => {
