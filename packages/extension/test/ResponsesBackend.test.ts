@@ -50,6 +50,39 @@ test('loads only OpenAI models from the authenticated catalog', async () => {
   )
 })
 
+test('uses the backend message when loading models is unauthorized', async () => {
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(
+      Response.json(
+        { error: { message: 'Your session expired. Please log in again.' } },
+        { status: 401 },
+      ),
+    )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await expect(backend.listModels()).rejects.toThrow(
+    'Your session expired. Please log in again.',
+  )
+})
+
+test('asks the user to log in when an unauthorized response has no message', async () => {
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response(undefined, { status: 401 }))
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await expect(backend.listModels()).rejects.toThrow(
+    'Log in to access the chat.',
+  )
+})
+
 test('parses streamed text and function calls from the Responses API', async () => {
   const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
     new Response(
