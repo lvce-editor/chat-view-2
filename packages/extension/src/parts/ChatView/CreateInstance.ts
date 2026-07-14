@@ -86,8 +86,8 @@ export const createInstance = async (
   }
   const saved = getSavedState(context?.state)
   let errorMessage = ''
-  const models = await api.listModels().catch((error: unknown) => {
-    errorMessage = error instanceof Error ? error.message : String(error)
+  const models = await api.listModels().catch(() => {
+    errorMessage = 'Chat Models could not be loaded from server'
     return []
   })
   const tasks = await api.listTasks(20).catch((error: unknown) => {
