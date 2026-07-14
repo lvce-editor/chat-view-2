@@ -23,6 +23,7 @@ void test('generates a command-driven browser evaluation', () => {
   )
   strictEqual(source.includes("'chat2.createSession'"), true)
   strictEqual(source.includes("'chat2.sendMessage'"), true)
+  strictEqual(source.includes("'chat2.supportsStreaming': true"), true)
   strictEqual(
     source.includes('Create \\"index.html\\".\\nThen verify it.'),
     true,

@@ -3,6 +3,7 @@ import { executeCommand, getAccessToken, getPreference } from '@lvce-editor/api'
 export interface BackendConfiguration {
   readonly accessToken: string
   readonly baseUrl: string
+  readonly supportsStreaming: boolean
 }
 
 interface BackendConfigurationHost {
@@ -77,13 +78,15 @@ const normalizeBackendUrl = (value: string): string => {
 export const resolveBackendConfiguration = async (
   host: BackendConfigurationHost = defaultHost,
 ): Promise<BackendConfiguration> => {
-  const [configuredBaseUrl, editorBaseUrl, useMockBackend] = await Promise.all([
-    getPreferenceString(host, 'chat2.backendUrl'),
-    executeStringCommand(host, 'Layout.getBackendUrl'),
-    getPreferenceBoolean(host, 'chat2.useMockBackend'),
-  ])
+  const [configuredBaseUrl, editorBaseUrl, supportsStreaming, useMockBackend] =
+    await Promise.all([
+      getPreferenceString(host, 'chat2.backendUrl'),
+      executeStringCommand(host, 'Layout.getBackendUrl'),
+      getPreferenceBoolean(host, 'chat2.supportsStreaming'),
+      getPreferenceBoolean(host, 'chat2.useMockBackend'),
+    ])
   if (useMockBackend) {
-    return { accessToken: '', baseUrl: '' }
+    return { accessToken: '', baseUrl: '', supportsStreaming }
   }
   const baseUrl = configuredBaseUrl || editorBaseUrl
   const accessToken =
@@ -92,5 +95,5 @@ export const resolveBackendConfiguration = async (
     normalizeBackendUrl(baseUrl) === normalizeBackendUrl(editorBaseUrl)
       ? await resolveAccessToken(host)
       : ''
-  return { accessToken, baseUrl }
+  return { accessToken, baseUrl, supportsStreaming }
 }

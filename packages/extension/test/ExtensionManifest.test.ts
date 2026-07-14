@@ -40,6 +40,18 @@ test('keeps experimental focus mode disabled by default', async () => {
   expect(manifest.activation).toContain('onCommand:chat2.toggleFocusMode')
 })
 
+test('keeps backend streaming disabled by default', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.configuration['chat2.supportsStreaming']).toEqual(
+    expect.objectContaining({
+      default: false,
+      type: 'boolean',
+    }),
+  )
+})
+
 test('uses the full sidebar without the default header', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))

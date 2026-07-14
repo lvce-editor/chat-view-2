@@ -16,7 +16,8 @@ export interface DefaultChatApiOptions {
 export const createDefaultChatApi = async ({
   fileSystemAccess,
 }: DefaultChatApiOptions = {}): Promise<ChatApi> => {
-  const { accessToken, baseUrl } = await resolveBackendConfiguration()
+  const { accessToken, baseUrl, supportsStreaming } =
+    await resolveBackendConfiguration()
   if (!baseUrl) {
     return createMockChatApi(120)
   }
@@ -24,6 +25,7 @@ export const createDefaultChatApi = async ({
     backend: createResponsesBackend({
       accessToken,
       baseUrl,
+      supportsStreaming,
     }),
     store: createIndexedDbTaskStore(),
     toolHost: createAgentToolHost({

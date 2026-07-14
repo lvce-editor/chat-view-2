@@ -107,6 +107,7 @@ test('parses streamed text and function calls from the Responses API', async () 
   const backend = createResponsesBackend({
     baseUrl: 'https://backend.example.com',
     fetch: fetchMock,
+    supportsStreaming: true,
   })
 
   const result = await backend.runStep({
@@ -130,6 +131,65 @@ test('parses streamed text and function calls from the Responses API', async () 
       },
     ],
   })
+  const body = fetchMock.mock.calls[0][1]?.body
+  if (typeof body !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  expect(JSON.parse(body)).toEqual(expect.objectContaining({ stream: true }))
+})
+
+test('uses non-streaming responses unless streaming is explicitly supported', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      id: 'response-2',
+      output: [
+        {
+          content: [
+            { text: 'Finished without streaming.', type: 'output_text' },
+          ],
+          type: 'message',
+        },
+        {
+          arguments: '{"path":"package.json"}',
+          call_id: 'call-2',
+          name: 'read_file',
+          type: 'function_call',
+        },
+      ],
+    }),
+  )
+  const deltas: string[] = []
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  const result = await backend.runStep({
+    input: [{ content: 'Inspect this repo', role: 'user' }],
+    modelId: 'gpt-test',
+    onTextDelta(delta) {
+      deltas.push(delta)
+    },
+    tools: [],
+  })
+
+  expect(deltas).toEqual([])
+  expect(result).toEqual({
+    responseId: 'response-2',
+    text: 'Finished without streaming.',
+    toolCalls: [
+      {
+        arguments: '{"path":"package.json"}',
+        callId: 'call-2',
+        name: 'read_file',
+      },
+    ],
+  })
+  const body = fetchMock.mock.calls[0][1]?.body
+  if (typeof body !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  expect(JSON.parse(body)).toEqual(expect.objectContaining({ stream: false }))
 })
 
 test('surfaces backend errors without retrying unsafe work', async () => {
@@ -177,6 +237,7 @@ test('reconstructs an SSE event split across arbitrary stream chunks', async () 
     fetch: jest
       .fn<typeof fetch>()
       .mockResolvedValue(new Response(stream, { status: 200 })),
+    supportsStreaming: true,
   })
 
   await expect(

@@ -26,6 +26,11 @@
       "type": "string",
       "default": "13px",
       "description": "Font size for chat task list items, for example 20px."
+    },
+    "chat2.supportsStreaming": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the configured chat backend supports streaming responses."
     }
   },
   "activation": [
