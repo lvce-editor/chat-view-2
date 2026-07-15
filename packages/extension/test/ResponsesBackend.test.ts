@@ -99,9 +99,10 @@ test('asks the user to log in when the access token is empty', async () => {
     fetch: fetchMock,
   })
 
-  await expect(backend.listModels()).rejects.toThrow(
-    'You must log in to continue.',
-  )
+  await expect(backend.listModels()).rejects.toMatchObject({
+    code: 'E_NO_ACCESS_TOKEN_PROVIDED',
+    message: 'You must log in to continue.',
+  })
 })
 
 test('uses the Responses WebSocket for streamed text and function calls', async () => {

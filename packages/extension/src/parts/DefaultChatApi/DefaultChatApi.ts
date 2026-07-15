@@ -12,14 +12,16 @@ import { createResponsesBackend } from '../ResponsesBackend/ResponsesBackend.ts'
 import { createIndexedDbTaskStore } from '../TaskStore/TaskStore.ts'
 
 export interface DefaultChatApiOptions {
+  readonly accessToken?: string
   readonly fileSystemAccess?: AgentFileSystemAccess
 }
 
 export const createDefaultChatApi = async ({
+  accessToken: providedAccessToken,
   fileSystemAccess,
 }: DefaultChatApiOptions = {}): Promise<ChatApi> => {
   const { accessToken, baseUrl, supportsStreaming } =
-    await resolveBackendConfiguration()
+    await resolveBackendConfiguration(undefined, providedAccessToken)
   if (!baseUrl) {
     return createMockChatApi(120)
   }

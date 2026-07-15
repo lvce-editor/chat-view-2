@@ -77,6 +77,7 @@ const normalizeBackendUrl = (value: string): string => {
 
 export const resolveBackendConfiguration = async (
   host: BackendConfigurationHost = defaultHost,
+  providedAccessToken = '',
 ): Promise<BackendConfiguration> => {
   const [
     configuredBaseUrl,
@@ -102,7 +103,9 @@ export const resolveBackendConfiguration = async (
     editorBaseUrl &&
     normalizeBackendUrl(baseUrl) === normalizeBackendUrl(editorBaseUrl),
   )
-  const accessToken = usesEditorBackend ? await resolveAccessToken(host) : ''
+  const accessToken = usesEditorBackend
+    ? providedAccessToken || (await resolveAccessToken(host))
+    : ''
   const supportsStreaming = usesEditorBackend || configuredSupportsStreaming
   return { accessToken, baseUrl, supportsStreaming }
 }

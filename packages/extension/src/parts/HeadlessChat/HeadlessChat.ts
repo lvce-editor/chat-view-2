@@ -18,6 +18,7 @@ type MutableHeadlessChatSession = {
 
 export interface HeadlessChatRunResult {
   readonly error?: string
+  readonly errorCode?: string
   readonly sessionId: string
   readonly status: 'completed' | 'failed'
   readonly task?: ChatTask
@@ -28,11 +29,13 @@ export interface HeadlessChatCommands {
   readonly createSession: (
     requestedModelId?: unknown,
     fileSystemAccess?: unknown,
+    accessToken?: unknown,
   ) => Promise<string>
   readonly runPrompt: (
     message: unknown,
     requestedModelId?: unknown,
     fileSystemAccess?: unknown,
+    accessToken?: unknown,
   ) => Promise<HeadlessChatRunResult>
   readonly sendMessage: (
     sessionIdOrMessage: unknown,
@@ -47,6 +50,24 @@ const getString = (value: unknown, name: string): string => {
     throw new TypeError(`${name} must be a non-empty string`)
   }
   return value.trim()
+}
+
+const getOptionalString = (
+  value: unknown,
+  name: string,
+): string | undefined => {
+  if (value === undefined || value === '') {
+    return undefined
+  }
+  return getString(value, name)
+}
+
+const getErrorCode = (error: unknown): string => {
+  if (!error || typeof error !== 'object') {
+    return 'E_UNKNOWN'
+  }
+  const { code } = error as Readonly<Record<string, unknown>>
+  return typeof code === 'string' && code ? code : 'E_UNKNOWN'
 }
 
 const getFileSystemAccess = (
@@ -85,9 +106,12 @@ export const createHeadlessChatCommands = (
   const createSession = async (
     requestedModelId?: unknown,
     fileSystemAccessValue?: unknown,
+    accessTokenValue?: unknown,
   ): Promise<string> => {
     const fileSystemAccess = getFileSystemAccess(fileSystemAccessValue)
+    const accessToken = getOptionalString(accessTokenValue, 'accessToken')
     const api = await createChatApi({
+      ...(accessToken && { accessToken }),
       ...(fileSystemAccess && { fileSystemAccess }),
     })
     const models = await api.listModels()
@@ -149,11 +173,16 @@ export const createHeadlessChatCommands = (
     messageValue: unknown,
     requestedModelId?: unknown,
     fileSystemAccess?: unknown,
+    accessToken?: unknown,
   ): Promise<HeadlessChatRunResult> => {
     let sessionId = ''
     try {
       const message = getString(messageValue, 'message')
-      sessionId = await createSession(requestedModelId, fileSystemAccess)
+      sessionId = await createSession(
+        requestedModelId,
+        fileSystemAccess,
+        accessToken,
+      )
       const task = await sendMessage(sessionId, message)
       const session = sessions.get(sessionId)
       return {
@@ -166,6 +195,7 @@ export const createHeadlessChatCommands = (
       const session = sessions.get(sessionId)
       return {
         error: error instanceof Error ? error.message : String(error),
+        errorCode: getErrorCode(error),
         sessionId,
         status: 'failed',
         ...(session?.task && { task: session.task }),

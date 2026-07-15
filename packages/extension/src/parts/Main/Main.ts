@@ -36,8 +36,14 @@ export const activate = async (extension?: unknown): Promise<void> => {
       message: unknown,
       modelId?: unknown,
       fileSystemAccess?: unknown,
+      accessToken?: unknown,
     ) {
-      return headlessChatCommands.runPrompt(message, modelId, fileSystemAccess)
+      return headlessChatCommands.runPrompt(
+        message,
+        modelId,
+        fileSystemAccess,
+        accessToken,
+      )
     },
     id: 'chat2.runPrompt',
   })
