@@ -140,7 +140,7 @@ test('returns a complete prompt result with collected trace messages', async () 
   })
 })
 
-test('forwards a normalized file system sandbox to the chat API', async () => {
+test('forwards prompt authentication and a normalized file system sandbox to the chat API', async () => {
   const task = completedTask('task-1')
   const api = {
     createTask: jest.fn(async () => task),
@@ -156,14 +156,20 @@ test('forwards a normalized file system sandbox to the chat API', async () => {
   const createChatApi = jest.fn(async (_options?: unknown) => api)
   const commands = createHeadlessChatCommands(createChatApi)
 
-  const result = await commands.runPrompt('Inspect the tests', undefined, {
-    allowRead: false,
-    allowWrite: true,
-    root: '.',
-  })
+  const result = await commands.runPrompt(
+    'Inspect the tests',
+    undefined,
+    {
+      allowRead: false,
+      allowWrite: true,
+      root: '.',
+    },
+    'startup-access-token',
+  )
 
   expect(result.status).toBe('completed')
   expect(createChatApi).toHaveBeenCalledWith({
+    accessToken: 'startup-access-token',
     fileSystemAccess: {
       allowRead: true,
       allowWrite: true,
@@ -184,6 +190,7 @@ test('fails closed for an unsupported file system sandbox root', async () => {
   expect(result).toEqual({
     error:
       'fileSystemAccess must specify root "." and boolean allowRead/allowWrite values',
+    errorCode: 'E_UNKNOWN',
     sessionId: '',
     status: 'failed',
     trace: [],
@@ -224,9 +231,32 @@ test('returns failed prompt details instead of losing the task', async () => {
 
   expect(result).toEqual({
     error: 'Model request failed',
+    errorCode: 'E_UNKNOWN',
     sessionId: expect.stringMatching(sessionIdRegex),
     status: 'failed',
     task,
+    trace: [],
+  })
+})
+
+test('returns machine-readable backend error codes', async () => {
+  const error = Object.assign(new Error('You must log in to continue.'), {
+    code: 'E_NO_ACCESS_TOKEN_PROVIDED',
+  })
+  const api = {
+    async listModels() {
+      throw error
+    },
+  } as unknown as ChatApi
+  const commands = createHeadlessChatCommands(async () => api)
+
+  const result = await commands.runPrompt('Fix the tests')
+
+  expect(result).toEqual({
+    error: 'You must log in to continue.',
+    errorCode: 'E_NO_ACCESS_TOKEN_PROVIDED',
+    sessionId: '',
+    status: 'failed',
     trace: [],
   })
 })

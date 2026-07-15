@@ -56,6 +56,17 @@ type ResponsesWebSocketFactory = (
 const webSocketConnecting = 0
 const webSocketOpen = 1
 const loginRequiredMessage = 'You must log in to continue.'
+const noAccessTokenProvidedCode = 'E_NO_ACCESS_TOKEN_PROVIDED'
+
+class ResponsesBackendError extends Error {
+  readonly code: string
+
+  constructor(message: string, code: string) {
+    super(message)
+    this.code = code
+    this.name = 'ResponsesBackendError'
+  }
+}
 
 class WebSocketUpgradeError extends Error {
   constructor(message: string) {
@@ -491,6 +502,9 @@ export const createResponsesBackend = ({
             ? loginRequiredMessage
             : await getErrorMessage(response, fallback)
         if (response.status === 401) {
+          if (!accessToken) {
+            throw new ResponsesBackendError(message, noAccessTokenProvidedCode)
+          }
           throw new Error(message)
         }
         throw new Error(

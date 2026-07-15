@@ -64,12 +64,27 @@ test('uses editor authentication for an equivalent configured backend URL', asyn
   })
 })
 
+test('prefers prompt authentication for the editor backend', async () => {
+  const host = createHost()
+
+  await expect(
+    resolveBackendConfiguration(host, 'prompt-access-token'),
+  ).resolves.toEqual({
+    accessToken: 'prompt-access-token',
+    baseUrl: 'https://lvce-editor.dev',
+    supportsStreaming: true,
+  })
+  expect(host.getAccessToken).not.toHaveBeenCalled()
+})
+
 test('does not expose editor authentication to a custom backend', async () => {
   const host = createHost({
     configuredBackendUrl: 'https://backend.example.com',
   })
 
-  await expect(resolveBackendConfiguration(host)).resolves.toEqual({
+  await expect(
+    resolveBackendConfiguration(host, 'editor-access-token'),
+  ).resolves.toEqual({
     accessToken: '',
     baseUrl: 'https://backend.example.com',
     supportsStreaming: false,
