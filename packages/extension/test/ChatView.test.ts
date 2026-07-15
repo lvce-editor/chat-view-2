@@ -95,6 +95,12 @@ test('renders a focused task list, model control, and composer', async () => {
   expect(modelIndex).toBeLessThan(submitIndex)
 })
 
+test('requests scrolling the messages to the bottom after every render', async () => {
+  const instance = await createTestInstance()
+
+  expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+})
+
 test('shows a clear error when chat models cannot be loaded', async () => {
   const api = {
     ...createMockChatApi(),
