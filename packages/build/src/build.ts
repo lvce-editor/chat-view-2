@@ -10,6 +10,7 @@ import { root } from './root.ts'
 const extension = path.join(root, 'packages', 'extension')
 const require = createRequire(import.meta.url)
 const commonjs = require('@rollup/plugin-commonjs') as () => Plugin
+const json = require('@rollup/plugin-json') as () => Plugin
 
 fs.rmSync(join(root, 'dist'), { recursive: true, force: true })
 
@@ -27,6 +28,7 @@ const bundle = await rollup({
   input: join(extension, 'src', 'chatMain.ts'),
   external: ['electron', 'node:*'],
   plugins: [
+    json(),
     nodeResolve({
       browser: true,
     }),

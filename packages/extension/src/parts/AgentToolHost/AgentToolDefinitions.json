@@ -1,0 +1,65 @@
+[
+  {
+    "description": "Search UTF-8 workspace files for text. Returns bounded path, line, and preview matches.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "maxResults": { "maximum": 100, "minimum": 1, "type": "integer" },
+        "query": { "minLength": 1, "type": "string" }
+      },
+      "required": ["query"],
+      "type": "object"
+    },
+    "name": "search_workspace"
+  },
+  {
+    "description": "Read a bounded line range from a UTF-8 file inside the workspace.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "endLine": { "minimum": 1, "type": "integer" },
+        "path": { "minLength": 1, "type": "string" },
+        "startLine": { "minimum": 1, "type": "integer" }
+      },
+      "required": ["path"],
+      "type": "object"
+    },
+    "name": "read_file"
+  },
+  {
+    "description": "Atomically replace exactly one text occurrence in a workspace file. Pass an empty oldText only when creating a new file.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "expectedHash": { "type": "string" },
+        "newText": { "type": "string" },
+        "oldText": { "type": "string" },
+        "path": { "minLength": 1, "type": "string" }
+      },
+      "required": ["path", "oldText", "newText"],
+      "type": "object"
+    },
+    "name": "apply_patch"
+  },
+  {
+    "description": "Report editor diagnostics. This portable build returns an unavailable result until Lvce exposes a diagnostics consumer API.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_diagnostics"
+  },
+  {
+    "description": "Run a command in an enforced workspace sandbox. This tool fails closed when no portable sandbox is available.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "command": { "minLength": 1, "type": "string" }
+      },
+      "required": ["command"],
+      "type": "object"
+    },
+    "name": "run_command"
+  }
+]
