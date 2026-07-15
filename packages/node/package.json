@@ -1,0 +1,14 @@
+{
+  "name": "builtin.chat-view-2-node",
+  "version": "0.0.0-dev",
+  "description": "Node-specific helpers for the Chat 2 extension",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/computerUseClient.js",
+  "devDependencies": {
+    "@types/node": "^26.1.1"
+  },
+  "optionalDependencies": {
+    "@agent-sh/computer-use-linux": "0.4.1"
+  }
+}

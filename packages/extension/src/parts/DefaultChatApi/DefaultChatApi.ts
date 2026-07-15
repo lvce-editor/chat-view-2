@@ -5,6 +5,7 @@ import {
   type AgentFileSystemAccess,
 } from '../AgentToolHost/AgentToolHost.ts'
 import { resolveBackendConfiguration } from '../BackendConfiguration/BackendConfiguration.ts'
+import { getDefaultComputerUseToolHost } from '../ComputerUseToolHost/ComputerUseToolHost.ts'
 import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
 import { createNodeCommandExecutor } from '../NodeCommandExecutor/NodeCommandExecutor.ts'
 import { createResponsesBackend } from '../ResponsesBackend/ResponsesBackend.ts'
@@ -23,6 +24,7 @@ export const createDefaultChatApi = async ({
     return createMockChatApi(120)
   }
   const commandExecutor = createNodeCommandExecutor()
+  const externalToolHost = await getDefaultComputerUseToolHost()
   return createAgentChatApi({
     backend: createResponsesBackend({
       accessToken,
@@ -32,6 +34,7 @@ export const createDefaultChatApi = async ({
     store: createIndexedDbTaskStore(),
     toolHost: createAgentToolHost({
       ...(commandExecutor && { commandExecutor }),
+      ...(externalToolHost && { externalToolHost }),
       ...(fileSystemAccess && { fileSystemAccess }),
     }),
   })
