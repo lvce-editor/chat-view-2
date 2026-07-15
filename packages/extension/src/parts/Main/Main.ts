@@ -10,13 +10,15 @@ import {
   submitActiveChatViewInstance,
   toggleActiveChatViewFocusMode,
 } from '../ChatView/CreateInstance.ts'
+import { setExtensionRuntime } from '../ExtensionRuntime/ExtensionRuntime.ts'
 import { headlessChatCommands } from '../HeadlessChat/HeadlessChat.ts'
 
 const state = {
   activated: false,
 }
 
-export const activate = async (): Promise<void> => {
+export const activate = async (extension?: unknown): Promise<void> => {
+  setExtensionRuntime(extension)
   if (state.activated) {
     return
   }

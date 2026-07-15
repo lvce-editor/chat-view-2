@@ -27,6 +27,15 @@ export interface AgentToolResult {
   readonly isError: boolean
 }
 
+export interface AgentExternalToolHost {
+  readonly execute: (
+    call: AgentToolCall,
+    signal?: AbortSignal,
+  ) => Promise<AgentToolResult>
+  readonly getDefinitions: () => readonly AgentToolDefinition[]
+  readonly getInstructions: () => string
+}
+
 export interface AgentCommandOptions {
   readonly onOutput: (chunk: string) => void
   readonly outputLimit: number
@@ -71,6 +80,7 @@ export interface AgentFileSystemAccess {
 export interface AgentToolHostOptions {
   readonly commandExecutor?: AgentCommandExecutor
   readonly editorContextProvider?: AgentEditorContextProvider
+  readonly externalToolHost?: AgentExternalToolHost
   readonly fileSystemAccess?: AgentFileSystemAccess
   readonly workspaceUriProvider?: () => Promise<string>
 }
@@ -284,6 +294,7 @@ const failure = (error: unknown): AgentToolResult => ({
 export const createAgentToolHost = ({
   commandExecutor,
   editorContextProvider,
+  externalToolHost,
   fileSystemAccess,
   workspaceUriProvider = getWorkspaceUri,
 }: AgentToolHostOptions = {}): AgentToolHost => {
@@ -315,6 +326,7 @@ export const createAgentToolHost = ({
     }
     return true
   })
+  const externalDefinitions = externalToolHost?.getDefinitions() || []
 
   const searchWorkspace = async (
     query: string,
@@ -536,6 +548,9 @@ export const createAgentToolHost = ({
                 ),
               )
         }
+        if (externalToolHost) {
+          return externalToolHost.execute(call, signal)
+        }
         return failure(new Error(`Unknown tool: ${call.name}`))
       } catch (error) {
         return failure(error)
@@ -545,7 +560,7 @@ export const createAgentToolHost = ({
       return [...changedFiles.values()]
     },
     getDefinitions() {
-      return availableDefinitions
+      return [...availableDefinitions, ...externalDefinitions]
     },
     async getWorkspaceContext() {
       try {
@@ -555,6 +570,9 @@ export const createAgentToolHost = ({
           ? await editorContextProvider.getContext()
           : undefined
         const contextParts = [workspaceContextLabel]
+        if (externalToolHost) {
+          contextParts.push(externalToolHost.getInstructions())
+        }
         if (fileSystemAccess) {
           contextParts.push(
             allowWrite

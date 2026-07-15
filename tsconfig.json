@@ -5,6 +5,7 @@
     { "path": "./packages/e2e" },
     { "path": "./packages/evaluation" },
     { "path": "./packages/extension" },
+    { "path": "./packages/node" },
     { "path": "./packages/build" }
   ]
 }
