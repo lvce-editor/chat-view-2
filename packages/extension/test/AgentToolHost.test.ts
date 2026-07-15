@@ -3,8 +3,8 @@ import { expect, jest, test } from '@jest/globals'
 import {
   createAgentToolHost,
   getLineChanges,
+  getWorkspaceContextLabel,
   getWorkspaceRelativePath,
-  workspaceContextLabel,
 } from '../src/parts/AgentToolHost/AgentToolHost.ts'
 
 test.each([
@@ -47,12 +47,14 @@ test.each([
   )
 })
 
-test('uses a stable workspace label for portable evaluation requests', () => {
-  expect(workspaceContextLabel).toBe(
-    'Workspace file tools use absolute URIs. Call get_workspace_uri before read_file or apply_patch, and only use URIs inside that workspace.',
-  )
-  expect(workspaceContextLabel).not.toContain('file://')
-})
+test.each(['file:///workspace/', 'memfs:///workspace/'])(
+  'includes the current workspace uri %s in the context',
+  (uri) => {
+    expect(getWorkspaceContextLabel(uri)).toBe(
+      `Current workspace URI: ${uri}\nWorkspace file tools use absolute URIs, and only URIs inside this workspace are valid.`,
+    )
+  },
+)
 
 test('uses uri arguments for file tools', () => {
   const definitions = createAgentToolHost().getDefinitions()

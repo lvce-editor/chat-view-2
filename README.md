@@ -29,8 +29,8 @@ not store API keys in its task database.
 - Independent read tools run in parallel; mutations remain serialized.
 - Workspace searches and reads are bounded. Atomic edits use exact text and an
   optional content hash to reject stale changes.
-- Agent context identifies the workspace as `.` so tool paths and evaluation
-  cache keys remain portable across machines.
+- Agent context identifies the workspace by its valid absolute URI, preserving
+  non-file schemes such as `memfs`.
 - Each active turn snapshots files before the first edit and can revert them.
 - A host contract accepts bounded editor context, diagnostics, and a cancellable
   command executor. When present, it runs up to two focused repository checks
