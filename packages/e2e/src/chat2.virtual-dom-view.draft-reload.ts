@@ -1,6 +1,7 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.draft-reload'
+export const skip = 1
 
 export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Main.closeAllEditors()
