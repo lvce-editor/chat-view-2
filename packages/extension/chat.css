@@ -359,14 +359,16 @@
 }
 
 .ChatModelPicker {
+  box-sizing: border-box;
   position: absolute;
-  right: 8px;
-  bottom: calc(100% - 2px);
-  left: 8px;
+  right: 16px;
+  bottom: calc(100% - 10px);
+  left: auto;
   z-index: 1;
   contain: none;
   display: flex;
   flex-direction: column;
+  width: min(300px, calc(100% - 32px));
   max-height: 240px;
   padding: 6px;
   overflow: auto;
