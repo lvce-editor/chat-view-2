@@ -77,6 +77,7 @@ test('uses the backend message when loading models is unauthorized', async () =>
       ),
     )
   const backend = createResponsesBackend({
+    accessToken: 'expired-token',
     baseUrl: 'https://backend.example.com',
     fetch: fetchMock,
   })
@@ -86,17 +87,20 @@ test('uses the backend message when loading models is unauthorized', async () =>
   )
 })
 
-test('asks the user to log in when an unauthorized response has no message', async () => {
+test('asks the user to log in when the access token is empty', async () => {
   const fetchMock = jest
     .fn<typeof fetch>()
-    .mockResolvedValue(new Response(undefined, { status: 401 }))
+    .mockResolvedValue(
+      Response.json({ error: 'No token provided' }, { status: 401 }),
+    )
   const backend = createResponsesBackend({
+    accessToken: '',
     baseUrl: 'https://backend.example.com',
     fetch: fetchMock,
   })
 
   await expect(backend.listModels()).rejects.toThrow(
-    'Log in to access the chat.',
+    'You must log in to continue.',
   )
 })
 
