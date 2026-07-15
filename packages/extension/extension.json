@@ -36,6 +36,7 @@
   "activation": [
     "onView:chat2.views.chat",
     "onCommand:chat2.createSession",
+    "onCommand:chat2.newChat",
     "onCommand:chat2.runPrompt",
     "onCommand:chat2.sendMessage",
     "onCommand:chat2.show",
@@ -46,6 +47,10 @@
     {
       "id": "chat2.createSession",
       "label": "Chat 2: Create Headless Session"
+    },
+    {
+      "id": "chat2.newChat",
+      "label": "Chat 2: New Chat"
     },
     {
       "id": "chat2.runPrompt",
@@ -80,6 +85,11 @@
     }
   ],
   "keybindings": [
+    {
+      "key": "Ctrl+N",
+      "command": "chat2.newChat",
+      "when": "chat2.composerFocus"
+    },
     {
       "key": "Enter",
       "command": "chat2.submit",
