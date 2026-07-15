@@ -37,6 +37,10 @@ interface SavedState {
   readonly selectedTaskId?: string
 }
 
+type MutableChatViewState = {
+  -readonly [Key in keyof ChatViewState]: ChatViewState[Key]
+}
+
 type ExecuteCommand = (
   id: string,
   ...args: readonly unknown[]
@@ -113,7 +117,7 @@ export const createInstance = async (
     ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
     : undefined
   const focusModeEnabled = await getFocusModeEnabled()
-  const state: ChatViewState = {
+  const state: MutableChatViewState = {
     activityExpanded: false,
     changesExpanded: false,
     composerFocused: false,

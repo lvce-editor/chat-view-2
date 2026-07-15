@@ -8,8 +8,12 @@ import {
 interface HeadlessChatSession {
   readonly api: ChatApi
   readonly modelId: string
-  task?: ChatTask
+  readonly task?: ChatTask
   readonly trace: ChatTraceMessage[]
+}
+
+type MutableHeadlessChatSession = {
+  -readonly [Key in keyof HeadlessChatSession]: HeadlessChatSession[Key]
 }
 
 export interface HeadlessChatRunResult {
@@ -74,7 +78,7 @@ const getFileSystemAccess = (
 export const createHeadlessChatCommands = (
   createChatApi: CreateChatApi = createDefaultChatApi,
 ): HeadlessChatCommands => {
-  const sessions = new Map<string, HeadlessChatSession>()
+  const sessions = new Map<string, MutableHeadlessChatSession>()
   let activeSessionId = ''
   let nextSessionId = 1
 

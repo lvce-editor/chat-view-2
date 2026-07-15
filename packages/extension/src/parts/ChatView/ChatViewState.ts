@@ -1,19 +1,19 @@
 import type { ChatModel, ChatTask } from '../ChatApi/ChatApi.ts'
 
 export interface ChatViewState {
-  activityExpanded: boolean
-  changesExpanded: boolean
-  composerFocused: boolean
-  copiedMessageId: string
-  draft: string
-  errorMessage: string
-  focusMode: boolean
-  focusModeEnabled: boolean
-  fontFamily: string
-  fontSize: string
-  modelPickerOpen: boolean
-  models: readonly ChatModel[]
-  selectedModelId: string
-  selectedTask: ChatTask | undefined
-  tasks: readonly ChatTask[]
+  readonly activityExpanded: boolean
+  readonly changesExpanded: boolean
+  readonly composerFocused: boolean
+  readonly copiedMessageId: string
+  readonly draft: string
+  readonly errorMessage: string
+  readonly focusMode: boolean
+  readonly focusModeEnabled: boolean
+  readonly fontFamily: string
+  readonly fontSize: string
+  readonly modelPickerOpen: boolean
+  readonly models: readonly ChatModel[]
+  readonly selectedModelId: string
+  readonly selectedTask: ChatTask | undefined
+  readonly tasks: readonly ChatTask[]
 }

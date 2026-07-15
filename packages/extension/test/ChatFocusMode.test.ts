@@ -22,10 +22,10 @@ const createState = (): ChatViewState => ({
 
 test('enters and leaves side bar focus mode', async () => {
   const execute = jest.fn<() => Promise<unknown>>().mockResolvedValue(undefined)
-  const state = createState()
+  let state = createState()
 
-  state.focusMode = await toggleFocusMode(state, execute)
-  state.focusMode = await toggleFocusMode(state, execute)
+  state = { ...state, focusMode: await toggleFocusMode(state, execute) }
+  state = { ...state, focusMode: await toggleFocusMode(state, execute) }
 
   expect(execute.mock.calls).toEqual([
     ['Layout.enterSideBarFocusMode'],

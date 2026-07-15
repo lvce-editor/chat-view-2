@@ -36,18 +36,22 @@ interface ResponseEvent {
 
 interface ResponsesWebSocket {
   close(): void
-  onclose: ((event: CloseEvent) => void) | null
-  onerror: ((event: Event) => void) | null
-  onmessage: ((event: MessageEvent<unknown>) => void) | null
-  onopen: ((event: Event) => void) | null
+  readonly onclose: ((event: CloseEvent) => void) | null
+  readonly onerror: ((event: Event) => void) | null
+  readonly onmessage: ((event: MessageEvent<unknown>) => void) | null
+  readonly onopen: ((event: Event) => void) | null
   readonly readyState: number
   send(data: string): void
+}
+
+type MutableResponsesWebSocket = {
+  -readonly [Key in keyof ResponsesWebSocket]: ResponsesWebSocket[Key]
 }
 
 type ResponsesWebSocketFactory = (
   url: string,
   protocols: readonly string[],
-) => ResponsesWebSocket
+) => MutableResponsesWebSocket
 
 const webSocketConnecting = 0
 const webSocketOpen = 1
