@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, regex/hoist-regex, sonarjs/cognitive-complexity, unicorn/consistent-function-scoping, unicorn/max-nested-calls, unicorn/no-break-in-nested-loop, unicorn/no-declarations-before-early-exit, unicorn/prefer-code-point, unicorn/prefer-iterator-to-array */
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, sonarjs/cognitive-complexity, unicorn/max-nested-calls, unicorn/no-break-in-nested-loop, unicorn/no-declarations-before-early-exit, unicorn/prefer-code-point, unicorn/prefer-iterator-to-array */
 import {
   exists,
-  getWorkspaceFolder,
+  getWorkspaceUri,
   readDirWithFileTypes,
   readFile,
   remove,
@@ -72,6 +72,7 @@ export interface AgentToolHostOptions {
   readonly commandSandbox?: AgentCommandSandbox
   readonly editorContextProvider?: AgentEditorContextProvider
   readonly fileSystemAccess?: AgentFileSystemAccess
+  readonly workspaceUriProvider?: () => Promise<string>
 }
 
 export interface AgentToolHost {
@@ -103,9 +104,9 @@ interface ToolArguments {
   readonly maxResults?: number
   readonly newText?: string
   readonly oldText?: string
-  readonly path?: string
   readonly query?: string
   readonly startLine?: number
+  readonly uri?: string
 }
 
 const directoryType = 3
@@ -121,11 +122,15 @@ const ignoredDirectories = new Set([
   'dist',
   'node_modules',
 ])
-const readToolNames = new Set(['read_file', 'search_workspace'])
+const readToolNames = new Set([
+  'get_workspace_uri',
+  'read_file',
+  'search_workspace',
+])
 const writeToolNames = new Set(['apply_patch'])
 
 export const workspaceContextLabel =
-  'Workspace root: .\nAll tool paths must be relative to this root.'
+  'Workspace file tools use absolute URIs. Call get_workspace_uri before read_file or apply_patch, and only use URIs inside that workspace.'
 
 const parseArguments = (value: string): ToolArguments => {
   const parsed: unknown = JSON.parse(value || '{}')
@@ -135,28 +140,64 @@ const parseArguments = (value: string): ToolArguments => {
   return parsed
 }
 
-const getWorkspaceBase = async (): Promise<string> => {
-  const workspace = await getWorkspaceFolder()
+const getWorkspaceBase = async (
+  workspaceUriProvider: () => Promise<string>,
+): Promise<string> => {
+  const workspace = await workspaceUriProvider()
   if (!workspace) {
     throw new Error('Open a workspace before running a coding task')
   }
-  return workspace.endsWith('/') ? workspace : `${workspace}/`
+  let url: URL
+  try {
+    url = new URL(workspace)
+  } catch {
+    throw new Error(`Workspace URI is invalid: ${workspace}`)
+  }
+  if (url.search || url.hash) {
+    throw new Error(`Workspace URI is invalid: ${workspace}`)
+  }
+  if (!url.pathname.endsWith('/')) {
+    url.pathname += '/'
+  }
+  return url.href
 }
 
-export const validateWorkspaceRelativePath = (path: string): string => {
-  const normalized = path.replaceAll('\\', '/')
-  const segments = normalized.split('/').filter(Boolean)
+export const getWorkspaceRelativePath = (
+  workspaceUri: string,
+  uri: string,
+): string => {
+  const base = new URL(workspaceUri)
+  const target = new URL(uri)
   if (
-    !normalized ||
-    normalized.startsWith('/') ||
-    /^[a-zA-Z]:/.test(normalized) ||
-    normalized.includes('://') ||
-    segments.includes('..') ||
-    segments.includes('.git')
+    target.search ||
+    target.hash ||
+    target.protocol !== base.protocol ||
+    target.host !== base.host ||
+    !target.href.startsWith(base.href)
   ) {
-    throw new Error(`Path must stay inside the workspace: ${path}`)
+    throw new Error(`URI must stay inside the workspace: ${uri}`)
   }
-  return segments.join('/')
+  const encodedPath = target.href.slice(base.href.length)
+  const segments = encodedPath.split('/').filter(Boolean)
+  const decodedSegments = segments.map((segment) => decodeURIComponent(segment))
+  if (
+    !encodedPath ||
+    decodedSegments.includes('.git') ||
+    decodedSegments.some(
+      (segment) => segment.includes('/') || segment.includes('\\'),
+    )
+  ) {
+    throw new Error(`URI must stay inside the workspace: ${uri}`)
+  }
+  return decodedSegments.join('/')
+}
+
+const toWorkspaceUri = (workspaceUri: string, relativePath: string): string => {
+  const encodedPath = relativePath
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/')
+  return new URL(encodedPath, workspaceUri).href
 }
 
 const getLines = (text: string): readonly string[] => {
@@ -199,9 +240,12 @@ export const getLineChanges = (
   }
 }
 
-const resolveWorkspacePath = async (path: string): Promise<string> => {
-  const base = await getWorkspaceBase()
-  const relativePath = validateWorkspaceRelativePath(path)
+const resolveWorkspaceUri = async (
+  uri: string,
+  workspaceUriProvider: () => Promise<string>,
+): Promise<Readonly<{ relativePath: string; uri: string }>> => {
+  const base = await getWorkspaceBase(workspaceUriProvider)
+  const relativePath = getWorkspaceRelativePath(base, uri)
   const segments = relativePath.split('/')
   let parent = base
   for (const segment of segments) {
@@ -211,11 +255,11 @@ const resolveWorkspacePath = async (path: string): Promise<string> => {
       break
     }
     if (symlinkTypes.has(entry.type)) {
-      throw new Error(`Symbolic links are not allowed in agent paths: ${path}`)
+      throw new Error(`Symbolic links are not allowed in agent URIs: ${uri}`)
     }
-    parent += `${segment}/`
+    parent = toWorkspaceUri(parent, `${segment}/`)
   }
-  return `${base}${relativePath}`
+  return { relativePath, uri: new URL(uri).href }
 }
 
 const hashText = (value: string): string => {
@@ -241,6 +285,7 @@ export const createAgentToolHost = ({
   commandSandbox,
   editorContextProvider,
   fileSystemAccess,
+  workspaceUriProvider = getWorkspaceUri,
 }: AgentToolHostOptions = {}): AgentToolHost => {
   if (fileSystemAccess && fileSystemAccess.root !== '.') {
     throw new Error(
@@ -276,7 +321,7 @@ export const createAgentToolHost = ({
     maxResults: number,
     signal?: AbortSignal,
   ): Promise<string> => {
-    const workspace = await getWorkspaceBase()
+    const workspace = await getWorkspaceBase(workspaceUriProvider)
     const directories = ['']
     const matches: string[] = []
     let visitedFiles = 0
@@ -287,7 +332,9 @@ export const createAgentToolHost = ({
     ) {
       signal?.throwIfAborted()
       const directory = directories.shift() || ''
-      const entries = await readDirWithFileTypes(`${workspace}${directory}`)
+      const entries = await readDirWithFileTypes(
+        toWorkspaceUri(workspace, directory),
+      )
       for (const entry of entries) {
         const relativePath = directory
           ? `${directory}/${entry.name}`
@@ -304,7 +351,8 @@ export const createAgentToolHost = ({
         }
         visitedFiles++
         try {
-          const content = await readFile(`${workspace}${relativePath}`)
+          const uri = toWorkspaceUri(workspace, relativePath)
+          const content = await readFile(uri)
           if (content.length > maximumFileCharacters) {
             continue
           }
@@ -315,7 +363,7 @@ export const createAgentToolHost = ({
             }
 
             matches.push(
-              `${relativePath}:${index + 1}: ${lines[index]?.trim().slice(0, 240)}`,
+              `${uri}:${index + 1}: ${lines[index]?.trim().slice(0, 240)}`,
             )
             if (matches.length >= maxResults) {
               break
@@ -332,11 +380,12 @@ export const createAgentToolHost = ({
   }
 
   const readWorkspaceFile = async (
-    path: string,
+    uri: string,
     startLine = 1,
     endLine = startLine + 399,
   ): Promise<string> => {
-    const content = await readFile(await resolveWorkspacePath(path))
+    const target = await resolveWorkspaceUri(uri, workspaceUriProvider)
+    const content = await readFile(target.uri)
     const lines = content.split('\n')
     const start = Math.max(1, startLine)
     const end = Math.min(lines.length, Math.max(start, endLine), start + 399)
@@ -348,23 +397,22 @@ export const createAgentToolHost = ({
   }
 
   const applyPatch = async (
-    path: string,
+    uri: string,
     oldText: string,
     newText: string,
     expectedHash?: string,
   ): Promise<string> => {
-    const normalizedPath = validateWorkspaceRelativePath(path)
-    const uri = await resolveWorkspacePath(normalizedPath)
-    const existed = await exists(uri)
-    const content = existed ? await readFile(uri) : ''
+    const target = await resolveWorkspaceUri(uri, workspaceUriProvider)
+    const existed = await exists(target.uri)
+    const content = existed ? await readFile(target.uri) : ''
     if (expectedHash && hashText(content) !== expectedHash) {
-      throw new Error(`File changed since it was read: ${normalizedPath}`)
+      throw new Error(`File changed since it was read: ${target.relativePath}`)
     }
-    const originalSnapshot = snapshots.get(normalizedPath) || {
+    const originalSnapshot = snapshots.get(target.relativePath) || {
       appliedContent: content,
       content,
       existed,
-      uri,
+      uri: target.uri,
     }
     let updated: string
     if (!existed && oldText === '') {
@@ -373,27 +421,31 @@ export const createAgentToolHost = ({
       const firstIndex = content.indexOf(oldText)
       const lastIndex = content.lastIndexOf(oldText)
       if (firstIndex === -1) {
-        throw new Error(`Text to replace was not found in ${normalizedPath}`)
+        throw new Error(
+          `Text to replace was not found in ${target.relativePath}`,
+        )
       }
       if (firstIndex !== lastIndex) {
-        throw new Error(`Text to replace is not unique in ${normalizedPath}`)
+        throw new Error(
+          `Text to replace is not unique in ${target.relativePath}`,
+        )
       }
       updated = `${content.slice(0, firstIndex)}${newText}${content.slice(firstIndex + oldText.length)}`
     }
-    await writeFile(uri, updated)
-    snapshots.set(normalizedPath, {
+    await writeFile(target.uri, updated)
+    snapshots.set(target.relativePath, {
       ...originalSnapshot,
       appliedContent: updated,
     })
-    const previousChange = changedFiles.get(normalizedPath)
+    const previousChange = changedFiles.get(target.relativePath)
     const lineChanges = getLineChanges(oldText, newText)
-    changedFiles.set(normalizedPath, {
+    changedFiles.set(target.relativePath, {
       additions: (previousChange?.additions || 0) + lineChanges.additions,
       deletions: (previousChange?.deletions || 0) + lineChanges.deletions,
-      path: normalizedPath,
+      path: target.relativePath,
       status: originalSnapshot.existed ? 'modified' : 'added',
     })
-    return `Updated ${normalizedPath} [hash ${hashText(updated)}]`
+    return `Updated ${target.relativePath} [hash ${hashText(updated)}]`
   }
 
   return {
@@ -415,6 +467,9 @@ export const createAgentToolHost = ({
           )
         }
         const args = parseArguments(call.arguments)
+        if (call.name === 'get_workspace_uri') {
+          return success(await getWorkspaceBase(workspaceUriProvider))
+        }
         if (call.name === 'search_workspace') {
           if (typeof args.query !== 'string' || !args.query) {
             throw new TypeError('search_workspace requires query')
@@ -428,26 +483,26 @@ export const createAgentToolHost = ({
           )
         }
         if (call.name === 'read_file') {
-          if (typeof args.path !== 'string') {
-            throw new TypeError('read_file requires path')
+          if (typeof args.uri !== 'string') {
+            throw new TypeError('read_file requires uri')
           }
           return success(
-            await readWorkspaceFile(args.path, args.startLine, args.endLine),
+            await readWorkspaceFile(args.uri, args.startLine, args.endLine),
           )
         }
         if (call.name === 'apply_patch') {
           if (
-            typeof args.path !== 'string' ||
+            typeof args.uri !== 'string' ||
             typeof args.oldText !== 'string' ||
             typeof args.newText !== 'string'
           ) {
             throw new TypeError(
-              'apply_patch requires path, oldText, and newText',
+              'apply_patch requires uri, oldText, and newText',
             )
           }
           return success(
             await applyPatch(
-              args.path,
+              args.uri,
               args.oldText,
               args.newText,
               args.expectedHash,
@@ -494,8 +549,8 @@ export const createAgentToolHost = ({
     },
     async getWorkspaceContext() {
       try {
-        const workspace = await getWorkspaceBase()
-        const agentsUri = `${workspace}AGENTS.md`
+        const workspace = await getWorkspaceBase(workspaceUriProvider)
+        const agentsUri = toWorkspaceUri(workspace, 'AGENTS.md')
         const editorContext = editorContextProvider
           ? await editorContextProvider.getContext()
           : undefined
@@ -560,8 +615,8 @@ export const createAgentToolHost = ({
     },
     ...(commandSandbox && {
       async verifyChanges(signal?: AbortSignal) {
-        const workspace = await getWorkspaceBase()
-        const packageUri = `${workspace}package.json`
+        const workspace = await getWorkspaceBase(workspaceUriProvider)
+        const packageUri = toWorkspaceUri(workspace, 'package.json')
         if (!(await exists(packageUri)) || changedFiles.size === 0) {
           return { checksPassed: 0, failed: false, output: '' }
         }

@@ -15,7 +15,7 @@ test('runs a multi-step tool loop and records a compact event history', async ()
       text: '',
       toolCalls: [
         {
-          arguments: '{"path":"package.json"}',
+          arguments: '{"uri":"file:///workspace/package.json"}',
           callId: 'call-1',
           name: 'read_file',
         },
@@ -114,7 +114,7 @@ test('runs a multi-step tool loop and records a compact event history', async ()
     expect.objectContaining({
       content: [
         {
-          arguments: { path: 'package.json' },
+          arguments: { uri: 'file:///workspace/package.json' },
           id: 'call-1',
           name: 'read_file',
           type: 'toolCall',
@@ -187,7 +187,8 @@ test('returns automatic verification failures to the model for repair', async ()
       text: '',
       toolCalls: [
         {
-          arguments: '{"path":"src/a.ts","oldText":"a","newText":"b"}',
+          arguments:
+            '{"uri":"file:///workspace/src/a.ts","oldText":"a","newText":"b"}',
           callId: 'call-1',
           name: 'apply_patch',
         },

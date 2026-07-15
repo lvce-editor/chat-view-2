@@ -1,6 +1,15 @@
 [
   {
-    "description": "Search UTF-8 workspace files for text. Returns bounded path, line, and preview matches.",
+    "description": "Return the currently open workspace root URI. Call this before using file tools that require a URI.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_workspace_uri"
+  },
+  {
+    "description": "Search UTF-8 workspace files for text. Returns bounded URI, line, and preview matches.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
@@ -13,30 +22,38 @@
     "name": "search_workspace"
   },
   {
-    "description": "Read a bounded line range from a UTF-8 file inside the workspace.",
+    "description": "Read a bounded line range from a UTF-8 file inside the workspace. Pass an absolute URI returned by get_workspace_uri or search_workspace.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "endLine": { "minimum": 1, "type": "integer" },
-        "path": { "minLength": 1, "type": "string" },
+        "uri": {
+          "description": "Absolute URI of a file inside the current workspace.",
+          "minLength": 1,
+          "type": "string"
+        },
         "startLine": { "minimum": 1, "type": "integer" }
       },
-      "required": ["path"],
+      "required": ["uri"],
       "type": "object"
     },
     "name": "read_file"
   },
   {
-    "description": "Atomically replace exactly one text occurrence in a workspace file. Pass an empty oldText only when creating a new file.",
+    "description": "Atomically replace exactly one text occurrence in a workspace file. Pass an absolute URI inside the current workspace. Pass an empty oldText only when creating a new file.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
         "expectedHash": { "type": "string" },
         "newText": { "type": "string" },
         "oldText": { "type": "string" },
-        "path": { "minLength": 1, "type": "string" }
+        "uri": {
+          "description": "Absolute URI of a file inside the current workspace.",
+          "minLength": 1,
+          "type": "string"
+        }
       },
-      "required": ["path", "oldText", "newText"],
+      "required": ["uri", "oldText", "newText"],
       "type": "object"
     },
     "name": "apply_patch"

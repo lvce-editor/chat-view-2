@@ -24,6 +24,7 @@ export interface AgentChatApiOptions {
 
 const readOnlyTools = new Set([
   'get_diagnostics',
+  'get_workspace_uri',
   'read_file',
   'search_workspace',
 ])
@@ -79,6 +80,8 @@ const getActivityLabel = (call: AgentToolCall): string => {
       return 'Editing workspace'
     case 'get_diagnostics':
       return 'Checking diagnostics'
+    case 'get_workspace_uri':
+      return 'Getting workspace URI'
     case 'read_file':
       return 'Reading files'
     case 'run_command':
