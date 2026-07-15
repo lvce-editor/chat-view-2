@@ -295,9 +295,8 @@ const renderActivity = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   if (activities.length === 0 && !isRunning(task)) {
     return Dom.div('ChatActivityHidden', [])
   }
-  const current = activities.at(-1)
   const label = isRunning(task)
-    ? current?.label || 'Working'
+    ? `Working for ${state.workingSeconds} ${state.workingSeconds === 1 ? 'second' : 'seconds'}`
     : `${activities.length} ${activities.length === 1 ? 'step' : 'steps'} completed`
   return Dom.div('ChatActivity', [
     Dom.button('toggle-activity', label, 'ChatActivityToggle', {

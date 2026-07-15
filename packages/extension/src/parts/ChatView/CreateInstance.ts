@@ -55,6 +55,31 @@ type ExecuteCommand = (
 const copyFeedbackDuration = 2000
 const messagesSelector = '.ChatMessages'
 const maxScrollTop = 9_999_999
+const workingTimerInterval = 1000
+
+const isWorking = (task: ChatTask | undefined): boolean => {
+  return task?.status === 'running' || task?.status === 'stopping'
+}
+
+const getWorkingStartedAt = (task: ChatTask): number => {
+  const runningEvent = task.events.findLast(
+    (event) => event.type === 'status' && event.status === 'running',
+  )
+  const userMessage = task.events.findLast(
+    (event) => event.type === 'user-message',
+  )
+  const timestamp =
+    runningEvent?.timestamp || userMessage?.timestamp || task.createdAt
+  const startedAt = Date.parse(timestamp)
+  return Number.isNaN(startedAt) ? Date.now() : startedAt
+}
+
+const getWorkingSeconds = (task: ChatTask): number => {
+  return Math.max(
+    0,
+    Math.floor((Date.now() - getWorkingStartedAt(task)) / 1000),
+  )
+}
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
   return typeof event.value === 'string' ? event.value : ''
@@ -145,10 +170,44 @@ export const createInstance = async (
     selectedModelId,
     selectedTask,
     tasks,
+    workingSeconds:
+      selectedTask && isWorking(selectedTask)
+        ? getWorkingSeconds(selectedTask)
+        : 0,
   }
   let activeController: AbortController | undefined
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
+  let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
+
+  const stopWorkingTimer = (): void => {
+    if (workingTimer === undefined) {
+      return
+    }
+    clearInterval(workingTimer)
+    workingTimer = undefined
+  }
+
+  const syncWorkingTimer = (task: ChatTask | undefined): void => {
+    if (!task || !isWorking(task)) {
+      stopWorkingTimer()
+      state.workingSeconds = 0
+      return
+    }
+    state.workingSeconds = getWorkingSeconds(task)
+    if (workingTimer !== undefined) {
+      return
+    }
+    workingTimer = setInterval(() => {
+      const { selectedTask } = state
+      if (!selectedTask || !isWorking(selectedTask)) {
+        stopWorkingTimer()
+        return
+      }
+      state.workingSeconds = getWorkingSeconds(selectedTask)
+      void context?.requestRerender()
+    }, workingTimerInterval)
+  }
 
   const resetCopyFeedback = (): void => {
     if (copyFeedbackTimeout) {
@@ -174,6 +233,7 @@ export const createInstance = async (
     state.draft = ''
     state.activityExpanded = false
     state.changesExpanded = false
+    syncWorkingTimer(undefined)
     if (requestRerender) {
       await context?.requestRerender()
     }
@@ -185,6 +245,7 @@ export const createInstance = async (
       return
     }
     state.selectedTask = task
+    syncWorkingTimer(task)
     state.tasks = [
       task,
       ...state.tasks.filter((item) => item.id !== task.id),
@@ -237,6 +298,7 @@ export const createInstance = async (
     dispose(): void {
       activeController?.abort()
       resetCopyFeedback()
+      stopWorkingTimer()
       activeInstances.delete(instance)
     },
     getContext(): Readonly<Record<string, boolean>> {
@@ -353,6 +415,7 @@ export const createInstance = async (
       if (event.name?.startsWith('task:')) {
         resetCopyFeedback()
         state.selectedTask = await api.getTask(event.name.slice(5))
+        syncWorkingTimer(state.selectedTask)
         if (state.selectedTask) {
           state.selectedModelId = state.selectedTask.modelId
         }
@@ -383,6 +446,7 @@ export const createInstance = async (
     submit,
     toggleFocusMode: handleToggleFocusMode,
   }
+  syncWorkingTimer(selectedTask)
   activeInstances.add(instance)
   return instance
 }
