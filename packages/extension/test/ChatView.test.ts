@@ -58,6 +58,19 @@ test('renders a focused task list, model control, and composer', async () => {
       rows: 1,
     }),
   )
+  const inputContainerIndex = dom.findIndex(
+    (node) => node.className === 'ChatComposerInputContainer',
+  )
+  expect(dom[inputContainerIndex]).toEqual(
+    expect.objectContaining({
+      childCount: 1,
+      className: 'ChatComposerInputContainer',
+      type: VirtualDomElements.Div,
+    }),
+  )
+  expect(dom[inputContainerIndex + 1]).toEqual(
+    expect.objectContaining({ className: 'ChatComposerInput' }),
+  )
   expect(dom).toContainEqual(
     expect.objectContaining({
       className: 'ChatModelButton',
