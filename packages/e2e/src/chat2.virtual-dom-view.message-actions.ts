@@ -33,7 +33,9 @@ export const test: Test = async ({
     await expect(assistantCopyButton).toHaveCount(0)
     // eslint-disable-next-line e2e/no-direct-click
     await copyButton.click()
-    await new Promise((resolve) => setTimeout(resolve, 200))
+    const { promise, resolve } = Promise.withResolvers<void>()
+    setTimeout(resolve, 200)
+    await promise
     await expect(copyButton).toHaveClass('ChatMessageCopyButtonCopied')
     await expect(copyButton).toHaveAttribute('aria-label', 'Copied')
     await ClipBoard.shouldHaveText('Copy this message')

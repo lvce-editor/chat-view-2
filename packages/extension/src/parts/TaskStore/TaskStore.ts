@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-promise-reject-errors, @typescript-eslint/prefer-readonly-parameter-types, unicorn/prefer-iterator-to-array */
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, unicorn/prefer-iterator-to-array */
 import type { ChatTask } from '../ChatApi/ChatApi.ts'
 
 export interface TaskStore {
@@ -39,24 +39,24 @@ const databaseName = 'lvce-chat-2'
 const storeName = 'tasks'
 
 const openDatabase = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(databaseName, 1)
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(request.result)
-    request.onupgradeneeded = () => {
-      const database = request.result
-      if (!database.objectStoreNames.contains(storeName)) {
-        database.createObjectStore(storeName, { keyPath: 'id' })
-      }
+  const { promise, reject, resolve } = Promise.withResolvers<IDBDatabase>()
+  const request = indexedDB.open(databaseName, 1)
+  request.onerror = () => reject(request.error)
+  request.onsuccess = () => resolve(request.result)
+  request.onupgradeneeded = () => {
+    const database = request.result
+    if (!database.objectStoreNames.contains(storeName)) {
+      database.createObjectStore(storeName, { keyPath: 'id' })
     }
-  })
+  }
+  return promise
 }
 
 const requestToPromise = <T>(request: IDBRequest<T>): Promise<T> => {
-  return new Promise((resolve, reject) => {
-    request.onerror = () => reject(request.error)
-    request.onsuccess = () => resolve(request.result)
-  })
+  const { promise, reject, resolve } = Promise.withResolvers<T>()
+  request.onerror = () => reject(request.error)
+  request.onsuccess = () => resolve(request.result)
+  return promise
 }
 
 export const createIndexedDbTaskStore = (): TaskStore => {

@@ -392,7 +392,9 @@ test('stops an active task', async () => {
     value: 'Long task',
   })
   const running = instance.submit()
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  const { promise, resolve } = Promise.withResolvers<void>()
+  setTimeout(resolve, 0)
+  await promise
   await dispatch(instance, { name: 'stop', type: 'click' })
   await running
 

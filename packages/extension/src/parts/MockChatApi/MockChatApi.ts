@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-promise-reject-errors, @typescript-eslint/prefer-readonly-parameter-types */
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types */
 import type {
   ChatApi,
   ChatModel,
@@ -78,17 +78,17 @@ const wait = async (delayMs: number, signal?: AbortSignal): Promise<void> => {
     signal?.throwIfAborted()
     return
   }
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(resolve, delayMs)
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timeout)
-        reject(signal.reason)
-      },
-      { once: true },
-    )
-  })
+  const { promise, reject, resolve } = Promise.withResolvers<void>()
+  const timeout = setTimeout(resolve, delayMs)
+  signal?.addEventListener(
+    'abort',
+    () => {
+      clearTimeout(timeout)
+      reject(signal.reason)
+    },
+    { once: true },
+  )
+  await promise
 }
 
 const emit = async (
