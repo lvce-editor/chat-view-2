@@ -51,6 +51,7 @@ type ResponsesWebSocketFactory = (
 
 const webSocketConnecting = 0
 const webSocketOpen = 1
+const loginRequiredMessage = 'You must log in to continue.'
 
 class WebSocketUpgradeError extends Error {
   constructor(message: string) {
@@ -479,10 +480,11 @@ export const createResponsesBackend = ({
       })
       if (!response.ok) {
         const fallback =
-          response.status === 401
-            ? 'Log in to access the chat.'
-            : response.statusText
-        const message = await getErrorMessage(response, fallback)
+          response.status === 401 ? loginRequiredMessage : response.statusText
+        const message =
+          response.status === 401 && !accessToken
+            ? loginRequiredMessage
+            : await getErrorMessage(response, fallback)
         if (response.status === 401) {
           throw new Error(message)
         }
