@@ -6,6 +6,7 @@ import {
 } from '../AgentToolHost/AgentToolHost.ts'
 import { resolveBackendConfiguration } from '../BackendConfiguration/BackendConfiguration.ts'
 import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
+import { createNodeCommandExecutor } from '../NodeCommandExecutor/NodeCommandExecutor.ts'
 import { createResponsesBackend } from '../ResponsesBackend/ResponsesBackend.ts'
 import { createIndexedDbTaskStore } from '../TaskStore/TaskStore.ts'
 
@@ -21,6 +22,7 @@ export const createDefaultChatApi = async ({
   if (!baseUrl) {
     return createMockChatApi(120)
   }
+  const commandExecutor = createNodeCommandExecutor()
   return createAgentChatApi({
     backend: createResponsesBackend({
       accessToken,
@@ -29,6 +31,7 @@ export const createDefaultChatApi = async ({
     }),
     store: createIndexedDbTaskStore(),
     toolHost: createAgentToolHost({
+      ...(commandExecutor && { commandExecutor }),
       ...(fileSystemAccess && { fileSystemAccess }),
     }),
   })

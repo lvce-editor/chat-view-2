@@ -39,7 +39,7 @@ export interface AgentCommandResult {
   readonly output: string
 }
 
-export interface AgentCommandSandbox {
+export interface AgentCommandExecutor {
   readonly execute: (
     command: string,
     options: AgentCommandOptions,
@@ -69,7 +69,7 @@ export interface AgentFileSystemAccess {
 }
 
 export interface AgentToolHostOptions {
-  readonly commandSandbox?: AgentCommandSandbox
+  readonly commandExecutor?: AgentCommandExecutor
   readonly editorContextProvider?: AgentEditorContextProvider
   readonly fileSystemAccess?: AgentFileSystemAccess
 }
@@ -238,7 +238,7 @@ const failure = (error: unknown): AgentToolResult => ({
 })
 
 export const createAgentToolHost = ({
-  commandSandbox,
+  commandExecutor,
   editorContextProvider,
   fileSystemAccess,
 }: AgentToolHostOptions = {}): AgentToolHost => {
@@ -263,7 +263,7 @@ export const createAgentToolHost = ({
       return allowWrite
     }
     if (definition.name === 'run_command') {
-      return Boolean(commandSandbox)
+      return Boolean(commandExecutor)
     }
     if (definition.name === 'get_diagnostics') {
       return Boolean(editorContextProvider)
@@ -464,10 +464,10 @@ export const createAgentToolHost = ({
           )
         }
         if (call.name === 'run_command') {
-          if (!commandSandbox || typeof args.command !== 'string') {
-            return failure(new Error('Sandboxed command execution is disabled'))
+          if (!commandExecutor || typeof args.command !== 'string') {
+            return failure(new Error('Bash command execution is disabled'))
           }
-          const result = await commandSandbox.execute(args.command, {
+          const result = await commandExecutor.execute(args.command, {
             onOutput() {},
             outputLimit: 128_000,
             ...(signal && { signal }),
@@ -558,7 +558,7 @@ export const createAgentToolHost = ({
       snapshots = new Map()
       return reverted
     },
-    ...(commandSandbox && {
+    ...(commandExecutor && {
       async verifyChanges(signal?: AbortSignal) {
         const workspace = await getWorkspaceBase()
         const packageUri = `${workspace}package.json`
@@ -576,7 +576,7 @@ export const createAgentToolHost = ({
         const outputs: string[] = []
         for (const check of checks) {
           signal?.throwIfAborted()
-          const result = await commandSandbox.execute(`npm run ${check}`, {
+          const result = await commandExecutor.execute(`npm run ${check}`, {
             onOutput() {},
             outputLimit: 128_000,
             ...(signal && { signal }),

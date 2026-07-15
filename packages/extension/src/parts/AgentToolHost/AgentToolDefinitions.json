@@ -51,7 +51,7 @@
     "name": "get_diagnostics"
   },
   {
-    "description": "Run a command in an enforced workspace sandbox. This tool fails closed when no portable sandbox is available.",
+    "description": "Run a Bash command in the workspace. This tool is available only in the Node host and is disabled on the web platform.",
     "inputSchema": {
       "additionalProperties": false,
       "properties": {
