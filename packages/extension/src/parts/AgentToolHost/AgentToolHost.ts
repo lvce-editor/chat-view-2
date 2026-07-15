@@ -139,8 +139,8 @@ const readToolNames = new Set([
 ])
 const writeToolNames = new Set(['apply_patch'])
 
-export const workspaceContextLabel =
-  'Workspace file tools use absolute URIs. Call get_workspace_uri before read_file or apply_patch, and only use URIs inside that workspace.'
+export const getWorkspaceContextLabel = (workspaceUri: string): string =>
+  `Current workspace URI: ${workspaceUri}\nWorkspace file tools use absolute URIs, and only URIs inside this workspace are valid.`
 
 const parseArguments = (value: string): ToolArguments => {
   const parsed: unknown = JSON.parse(value || '{}')
@@ -569,7 +569,7 @@ export const createAgentToolHost = ({
         const editorContext = editorContextProvider
           ? await editorContextProvider.getContext()
           : undefined
-        const contextParts = [workspaceContextLabel]
+        const contextParts = [getWorkspaceContextLabel(workspace)]
         if (externalToolHost) {
           contextParts.push(externalToolHost.getInstructions())
         }
