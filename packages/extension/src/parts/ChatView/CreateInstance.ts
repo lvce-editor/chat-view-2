@@ -28,6 +28,10 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly newChat: (requestRerender?: boolean) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
+  readonly renderScrollPosition: () => readonly [
+    selector: string,
+    scrollTop: number,
+  ]
   readonly renderTitle: () => string
   readonly submit: (requestRerender?: boolean) => Promise<void>
   readonly toggleFocusMode: (requestRerender?: boolean) => Promise<void>
@@ -48,6 +52,8 @@ type ExecuteCommand = (
 ) => Promise<unknown>
 
 const copyFeedbackDuration = 2000
+const messagesSelector = '.ChatMessages'
+const maxScrollTop = 9_999_999
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
   return typeof event.value === 'string' ? event.value : ''
@@ -357,6 +363,9 @@ export const createInstance = async (
     newChat,
     render(): readonly VirtualDomNode[] {
       return render(state)
+    },
+    renderScrollPosition(): readonly [selector: string, scrollTop: number] {
+      return [messagesSelector, maxScrollTop]
     },
     renderTitle(): string {
       return state.selectedTask
