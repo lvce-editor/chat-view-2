@@ -175,6 +175,51 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
   expect(JSON.parse(socket.sent[0])).not.toHaveProperty('stream')
 })
 
+test('explicitly describes registered computer-use access to the agent', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      id: 'response-computer-use',
+      output: [],
+    }),
+  )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await backend.runStep({
+    input: [{ content: 'Can you use the computer?', role: 'user' }],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [
+      {
+        description: 'Inspect desktop readiness.',
+        inputSchema: { properties: {}, type: 'object' },
+        name: 'computer_use_doctor',
+      },
+    ],
+  })
+
+  const body = fetchMock.mock.calls[0][1]?.body
+  if (typeof body !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  const request = JSON.parse(body) as Readonly<Record<string, unknown>>
+  expect(request.instructions).toEqual(
+    expect.stringContaining(
+      'You have direct access to observe and control the local Linux desktop',
+    ),
+  )
+  expect(request.instructions).toEqual(
+    expect.stringContaining('start with computer_use_doctor'),
+  )
+  expect(request.instructions).toEqual(
+    expect.stringContaining(
+      'Do not say that computer use or GUI control is unavailable',
+    ),
+  )
+})
+
 test('falls back to the realtime route when the responses upgrade fails', async () => {
   const modernSocket = new MockResponsesWebSocket()
   const fallbackSocket = new MockResponsesWebSocket()

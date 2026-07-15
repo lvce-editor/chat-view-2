@@ -57,6 +57,11 @@ const webSocketConnecting = 0
 const webSocketOpen = 1
 const loginRequiredMessage = 'You must log in to continue.'
 const noAccessTokenProvidedCode = 'E_NO_ACCESS_TOKEN_PROVIDED'
+const computerUseToolPrefix = 'computer_use_'
+const defaultAgentInstructions =
+  'You are the Lvce coding agent. Inspect relevant files before editing. Keep changes scoped, use tools to modify the workspace, run available verification, and end with a concise result. Treat every tool registered with the request as an available capability.'
+const computerUseInstructions =
+  'You have direct access to observe and control the local Linux desktop through the registered computer_use_* tools. You can inspect accessibility state and windows, take screenshots, focus apps, click, scroll, type text, and press keys. Do not say that computer use or GUI control is unavailable when these tools are registered. Invoke them like any other tool: start with computer_use_doctor when readiness is unknown, inspect windows or app state, prefer semantic accessibility selectors over pixel coordinates, perform the requested action, and inspect state again to verify the result. Ask before consequential actions that submit, send, purchase, delete, overwrite, or publish.'
 
 class ResponsesBackendError extends Error {
   readonly code: string
@@ -99,12 +104,16 @@ const mapInput = (input: AgentInput): Readonly<Record<string, unknown>> => {
   }
 }
 
+const getAgentInstructions = (options: AgentStepOptions): string =>
+  options.tools.some((tool) => tool.name.startsWith(computerUseToolPrefix))
+    ? `${defaultAgentInstructions}\n\n${computerUseInstructions}`
+    : defaultAgentInstructions
+
 const createResponseRequest = (
   options: AgentStepOptions,
 ): Readonly<Record<string, unknown>> => ({
   input: options.input.map(mapInput),
-  instructions:
-    'You are the Lvce coding agent. Inspect relevant files before editing. Keep changes scoped, use tools to modify the workspace, run available verification, and end with a concise result.',
+  instructions: getAgentInstructions(options),
   model: options.modelId,
   ...(options.previousResponseId && {
     previous_response_id: options.previousResponseId,
