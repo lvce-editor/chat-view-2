@@ -201,7 +201,9 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   return Dom.div('ChatComposerArea', [
     renderModelPicker(state),
     Dom.form('composer', 'ChatComposer', [
-      Dom.textArea(state.draft, placeholder),
+      Dom.div('ChatComposerInputContainer', [
+        Dom.textArea(state.draft, placeholder),
+      ]),
       Dom.div('ChatComposerControls', [
         Dom.div('ChatComposerSpacer', []),
         Dom.button(
