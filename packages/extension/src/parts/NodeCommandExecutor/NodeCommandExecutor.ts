@@ -7,6 +7,8 @@ import type {
   AgentCommandResult,
 } from '../AgentToolHost/AgentToolHost.ts'
 
+// cspell:ignore taskkill
+
 export interface NodeCommandExecutorOptions {
   readonly getWorkspaceFolder?: () => Promise<string>
   readonly runtime?: unknown
@@ -14,6 +16,8 @@ export interface NodeCommandExecutorOptions {
 
 interface NodeRuntime {
   readonly getBuiltinModule?: (id: string) => unknown
+  readonly kill?: (pid: number) => boolean
+  readonly platform?: string
   readonly versions?: {
     readonly node?: string
   }
@@ -84,6 +88,7 @@ export const createNodeCommandExecutor = ({
 
       const child = spawn('bash', ['-c', command], {
         cwd,
+        detached: runtime.platform !== 'win32',
         stdio: 'pipe',
       })
       child.stdout.setEncoding('utf8')
@@ -126,12 +131,34 @@ export const createNodeCommandExecutor = ({
           appendOutput(chunk)
         }
 
+        const killChild = (): void => {
+          if (runtime.platform === 'win32' && child.pid) {
+            const killer = spawn(
+              'taskkill',
+              ['/pid', String(child.pid), '/T', '/F'],
+              { stdio: 'ignore' },
+            )
+            killer.once('error', child.kill.bind(child))
+            return
+          }
+          if (child.pid && typeof runtime.kill === 'function') {
+            try {
+              runtime.kill(-child.pid)
+              return
+            } catch {
+              child.kill()
+              return
+            }
+          }
+          child.kill()
+        }
+
         const stop = (reason: 'aborted' | 'timeout'): void => {
           if (stopReason) {
             return
           }
           stopReason = reason
-          child.kill()
+          killChild()
         }
 
         const handleAbort = (): void => {

@@ -1,7 +1,7 @@
 import { expect, test } from '@jest/globals'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { createAgentToolHost } from '../src/parts/AgentToolHost/AgentToolHost.ts'
 import {
@@ -46,13 +46,13 @@ test('runs Bash commands from a file URI workspace', async () => {
   const workspace = await mkdtemp(join(tmpdir(), 'chat-view-2-command-'))
   try {
     const executor = createExecutor(async () => pathToFileURL(workspace).href)
-    const result = await executor.execute(`printf '%s' "$PWD"`, {
+    const result = await executor.execute(`printf '%s' "$(basename "$PWD")"`, {
       onOutput() {},
       outputLimit: 1024,
       timeoutMs: 1000,
     })
 
-    expect(result).toEqual({ exitCode: 0, output: workspace })
+    expect(result).toEqual({ exitCode: 0, output: basename(workspace) })
     const definitions = createAgentToolHost({ commandExecutor: executor })
       .getDefinitions()
       .map((definition) => definition.name)
