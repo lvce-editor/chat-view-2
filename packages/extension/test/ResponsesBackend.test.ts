@@ -132,7 +132,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
   socket.receive({ delta: 'now.', type: 'response.output_text.delta' })
   socket.receive({
     item: {
-      arguments: '{"path":"package.json"}',
+      arguments: '{"uri":"file:///workspace/package.json"}',
       call_id: 'call-1',
       name: 'read_file',
       type: 'function_call',
@@ -148,7 +148,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
     text: 'Inspecting now.',
     toolCalls: [
       {
-        arguments: '{"path":"package.json"}',
+        arguments: '{"uri":"file:///workspace/package.json"}',
         callId: 'call-1',
         name: 'read_file',
       },
@@ -254,7 +254,7 @@ test('uses non-streaming responses unless streaming is explicitly supported', as
           type: 'message',
         },
         {
-          arguments: '{"path":"package.json"}',
+          arguments: '{"uri":"file:///workspace/package.json"}',
           call_id: 'call-2',
           name: 'read_file',
           type: 'function_call',
@@ -283,7 +283,7 @@ test('uses non-streaming responses unless streaming is explicitly supported', as
     text: 'Finished without streaming.',
     toolCalls: [
       {
-        arguments: '{"path":"package.json"}',
+        arguments: '{"uri":"file:///workspace/package.json"}',
         callId: 'call-2',
         name: 'read_file',
       },
