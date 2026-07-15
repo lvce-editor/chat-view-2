@@ -26,6 +26,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getState: () => Readonly<ChatViewState>
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
+  readonly newChat: (requestRerender?: boolean) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderTitle: () => string
   readonly submit: (requestRerender?: boolean) => Promise<void>
@@ -73,6 +74,10 @@ const getActiveInstance = (): ActiveChatViewInstance | undefined => {
 
 export const submitActiveChatViewInstance = async (): Promise<void> => {
   await getActiveInstance()?.submit(true)
+}
+
+export const newChatInActiveChatViewInstance = async (): Promise<void> => {
+  await getActiveInstance()?.newChat(true)
 }
 
 export const toggleActiveChatViewFocusMode = async (): Promise<void> => {
@@ -154,6 +159,17 @@ export const createInstance = async (
       state.copiedMessageId = ''
       void context?.requestRerender()
     }, copyFeedbackDuration)
+  }
+
+  const newChat = async (requestRerender = false): Promise<void> => {
+    resetCopyFeedback()
+    state.selectedTask = undefined
+    state.draft = ''
+    state.activityExpanded = false
+    state.changesExpanded = false
+    if (requestRerender) {
+      await context?.requestRerender()
+    }
   }
 
   const updateTask = async (task: ChatTask): Promise<void> => {
@@ -259,11 +275,7 @@ export const createInstance = async (
         return
       }
       if (event.name === 'back' || event.name === 'new-task') {
-        resetCopyFeedback()
-        state.selectedTask = undefined
-        state.draft = ''
-        state.activityExpanded = false
-        state.changesExpanded = false
+        await newChat()
         return
       }
       if (event.name === 'model-picker') {
@@ -342,6 +354,7 @@ export const createInstance = async (
         state.changesExpanded = false
       }
     },
+    newChat,
     render(): readonly VirtualDomNode[] {
       return render(state)
     },

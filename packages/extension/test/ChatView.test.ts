@@ -424,3 +424,27 @@ test('opens a task, expands activity, and returns to the task list', async () =>
   await dispatch(instance, { name: 'back', type: 'click' })
   expect(instance.getState().selectedTask).toBeUndefined()
 })
+
+test('opens a new chat from the active task', async () => {
+  const instance = await createTestInstance()
+  await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
+  await dispatch(instance, { name: 'toggle-activity', type: 'click' })
+  await dispatch(instance, { name: 'toggle-changes', type: 'click' })
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Discard this draft',
+  })
+
+  await instance.newChat()
+
+  expect(instance.getState()).toEqual(
+    expect.objectContaining({
+      activityExpanded: false,
+      changesExpanded: false,
+      draft: '',
+      selectedTask: undefined,
+    }),
+  )
+  expect(instance.renderTitle()).toBe('Chat 2')
+})
