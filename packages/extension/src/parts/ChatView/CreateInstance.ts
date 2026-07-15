@@ -38,6 +38,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
 }
 
 interface SavedState {
+  readonly draft?: string
   readonly selectedModelId?: string
   readonly selectedTaskId?: string
 }
@@ -133,7 +134,7 @@ export const createInstance = async (
     changesExpanded: false,
     composerFocused: false,
     copiedMessageId: '',
-    draft: '',
+    draft: typeof saved.draft === 'string' ? saved.draft : '',
     errorMessage,
     focusMode: focusModeEnabled && (await getFocusMode()),
     focusModeEnabled,
@@ -374,6 +375,7 @@ export const createInstance = async (
     },
     saveState(): unknown {
       return {
+        draft: state.draft,
         selectedModelId: state.selectedModelId,
         selectedTaskId: state.selectedTask?.id,
       }

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
-import type { ViewEvent } from '@lvce-editor/api'
+import type { ViewContext, ViewEvent } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { VirtualDomElements } from '@lvce-editor/virtual-dom-worker'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
@@ -35,6 +35,14 @@ const createTestInstance = async (
 ) => {
   return createInstance(undefined, createMockChatApi(delayMs), readPreference)
 }
+
+const createViewContext = (state: unknown): ViewContext => ({
+  async requestRerender() {},
+  async showContextMenu() {},
+  state,
+  uid: 1,
+  viewId: 'chat2.views.chat',
+})
 
 test('renders a focused task list, model control, and composer', async () => {
   const instance = await createTestInstance()
@@ -99,6 +107,30 @@ test('requests scrolling the messages to the bottom after every render', async (
   const instance = await createTestInstance()
 
   expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+})
+
+test('saves and restores the composer draft through view state', async () => {
+  const instance = await createTestInstance()
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Keep this draft across reloads',
+  })
+
+  const restoredInstance = await createInstance(
+    createViewContext(instance.saveState?.()),
+    createMockChatApi(),
+  )
+
+  expect(restoredInstance.getState().draft).toBe(
+    'Keep this draft across reloads',
+  )
+  expect(restoredInstance.render()).toContainEqual(
+    expect.objectContaining({
+      className: 'ChatComposerInput',
+      value: 'Keep this draft across reloads',
+    }),
+  )
 })
 
 test('shows a clear error when chat models cannot be loaded', async () => {
