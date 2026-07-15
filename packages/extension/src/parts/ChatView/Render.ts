@@ -10,16 +10,22 @@ import type { ChatViewState } from './ChatViewState.ts'
 import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 
-const messageDateFormatter = new Intl.DateTimeFormat(undefined, {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-})
+const getMessageDateFormatter = (() => {
+  let messageDateFormatter: Intl.DateTimeFormat | undefined
+  return (): Intl.DateTimeFormat => {
+    messageDateFormatter ??= new Intl.DateTimeFormat(undefined, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    })
+    return messageDateFormatter
+  }
+})()
 
 const formatMessageDate = (timestamp: string): string => {
   const date = new Date(timestamp)
   return Number.isNaN(date.getTime())
     ? timestamp
-    : messageDateFormatter.format(date)
+    : getMessageDateFormatter().format(date)
 }
 
 const isRunning = (task: ChatTask | undefined): boolean => {
