@@ -201,7 +201,9 @@ test('falls back to the realtime route when the responses upgrade fails', async 
     tools: [],
   })
   modernSocket.failConnection()
-  await new Promise<void>((resolve) => queueMicrotask(resolve))
+  const { promise, resolve } = Promise.withResolvers<void>()
+  queueMicrotask(resolve)
+  await promise
   fallbackSocket.open()
   fallbackSocket.receive({
     response: {

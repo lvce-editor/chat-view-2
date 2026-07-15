@@ -48,7 +48,9 @@ void test('records and replays response and tool data', async () => {
   const upstream = createServer((request, response) => {
     void handleUpstreamRequest(request, response)
   })
-  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve))
+  const listening = Promise.withResolvers<void>()
+  upstream.listen(0, '127.0.0.1', listening.resolve)
+  await listening.promise
   const address = upstream.address()
   if (!address || typeof address === 'string') {
     throw new Error('Test upstream did not bind')
@@ -121,9 +123,9 @@ void test('records and replays response and tool data', async () => {
   ])
 
   await proxy.close()
-  await new Promise<void>((resolve, reject) =>
-    upstream.close((error) => (error ? reject(error) : resolve())),
-  )
+  const closed = Promise.withResolvers<void>()
+  upstream.close((error) => (error ? closed.reject(error) : closed.resolve()))
+  await closed.promise
 })
 
 void test('reports cache misses without making a paid request', async () => {
@@ -159,7 +161,9 @@ void test('reports an invalid OpenAI key with .env guidance', async () => {
     response.setHeader('Content-Type', 'application/json')
     response.end('{"error":{"message":"Incorrect API key"}}\n')
   })
-  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve))
+  const listening = Promise.withResolvers<void>()
+  upstream.listen(0, '127.0.0.1', listening.resolve)
+  await listening.promise
   const address = upstream.address()
   if (!address || typeof address === 'string') {
     throw new Error('Test upstream did not bind')
@@ -185,7 +189,7 @@ void test('reports an invalid OpenAI key with .env guidance', async () => {
   strictEqual(body.error.message.includes('rejected OPENAI_API_KEY'), true)
   strictEqual(body.error.message.includes('.env'), true)
   await proxy.close()
-  await new Promise<void>((resolve, reject) =>
-    upstream.close((error) => (error ? reject(error) : resolve())),
-  )
+  const closed = Promise.withResolvers<void>()
+  upstream.close((error) => (error ? closed.reject(error) : closed.resolve()))
+  await closed.promise
 })

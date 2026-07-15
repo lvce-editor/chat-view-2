@@ -64,10 +64,10 @@ const runProcess = async ({
   }, timeoutMs)
   let exitCode: number
   try {
-    exitCode = await new Promise<number>((resolve, reject) => {
-      child.once('error', reject)
-      child.once('close', (code) => resolve(code ?? 1))
-    })
+    const { promise, reject, resolve } = Promise.withResolvers<number>()
+    child.once('error', reject)
+    child.once('close', (code) => resolve(code ?? 1))
+    exitCode = await promise
   } finally {
     clearTimeout(timeout)
   }
@@ -100,7 +100,9 @@ export const name = \`chat2.evaluation.\${configuration.scenarioId}\`
 
 export const test = async ({ Command, Workspace }) => {
   // Let Playwright's network-idle navigation finish before starting a long request.
-  await new Promise((resolve) => setTimeout(resolve, 1000))
+  const { promise, resolve } = Promise.withResolvers<void>()
+  setTimeout(resolve, 1000)
+  await promise
   await Workspace.setPath(configuration.workspace)
   await Command.execute('Preferences.update', {
     'chat2.backendUrl': configuration.backendOrigin,

@@ -190,177 +190,178 @@ const runWebSocketRequest = (
   createWebSocket: ResponsesWebSocketFactory,
   options: AgentStepOptions,
   path: string,
-): Promise<AgentStepResult> =>
-  new Promise((resolve, reject) => {
-    options.signal?.throwIfAborted()
-    const protocol = 'lvce.responses.v1'
-    const protocols = accessToken ? [protocol, accessToken] : [protocol]
-    const socket = createWebSocket(getWebSocketUrl(root, path), protocols)
-    const toolCalls = new Map<string, AgentToolCall>()
-    let opened = false
-    let processing = Promise.resolve()
-    let responseId = ''
-    let settled = false
-    let text = ''
+): Promise<AgentStepResult> => {
+  const { promise, reject, resolve } = Promise.withResolvers<AgentStepResult>()
+  options.signal?.throwIfAborted()
+  const protocol = 'lvce.responses.v1'
+  const protocols = accessToken ? [protocol, accessToken] : [protocol]
+  const socket = createWebSocket(getWebSocketUrl(root, path), protocols)
+  const toolCalls = new Map<string, AgentToolCall>()
+  let opened = false
+  let processing = Promise.resolve()
+  let responseId = ''
+  let settled = false
+  let text = ''
 
-    const cleanup = (): void => {
-      socket.onclose = null
-      socket.onerror = null
-      socket.onmessage = null
-      socket.onopen = null
-      options.signal?.removeEventListener('abort', handleAbort)
+  const cleanup = (): void => {
+    socket.onclose = null
+    socket.onerror = null
+    socket.onmessage = null
+    socket.onopen = null
+    options.signal?.removeEventListener('abort', handleAbort)
+  }
+
+  const closeSocket = (): void => {
+    if (
+      socket.readyState === webSocketConnecting ||
+      socket.readyState === webSocketOpen
+    ) {
+      socket.close()
     }
+  }
 
-    const closeSocket = (): void => {
-      if (
-        socket.readyState === webSocketConnecting ||
-        socket.readyState === webSocketOpen
-      ) {
-        socket.close()
-      }
+  const fail = (error: unknown): void => {
+    if (settled) {
+      return
     }
+    settled = true
+    cleanup()
+    closeSocket()
+    reject(error instanceof Error ? error : new Error(String(error)))
+  }
 
-    const fail = (error: unknown): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      closeSocket()
-      reject(error instanceof Error ? error : new Error(String(error)))
+  const complete = (): void => {
+    if (settled) {
+      return
     }
+    settled = true
+    cleanup()
+    closeSocket()
+    resolve({ responseId, text, toolCalls: [...toolCalls.values()] })
+  }
 
-    const complete = (): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      closeSocket()
-      resolve({ responseId, text, toolCalls: [...toolCalls.values()] })
+  const handleAbort = (): void => {
+    try {
+      options.signal?.throwIfAborted()
+    } catch (error) {
+      fail(error)
     }
+  }
 
-    const handleAbort = (): void => {
-      try {
-        options.signal?.throwIfAborted()
-      } catch (error) {
-        fail(error)
-      }
+  const handleEvent = async (event: ResponseEvent): Promise<void> => {
+    if (event.type === 'response.output_text.delta' && event.delta) {
+      text += event.delta
+      await options.onTextDelta(event.delta)
+      return
     }
-
-    const handleEvent = async (event: ResponseEvent): Promise<void> => {
-      if (event.type === 'response.output_text.delta' && event.delta) {
-        text += event.delta
-        await options.onTextDelta(event.delta)
-        return
+    const { item } = event
+    if (
+      event.type === 'response.output_item.done' &&
+      item?.type === 'function_call' &&
+      item.name
+    ) {
+      const callId = item.call_id || item.id || `call-${toolCalls.size + 1}`
+      toolCalls.set(callId, {
+        arguments: item.arguments || '{}',
+        callId,
+        name: item.name,
+      })
+      return
+    }
+    if (event.type === 'response.completed') {
+      responseId = event.response?.id || responseId
+      if (event.response && !text) {
+        text = getResponseText(event.response)
       }
-      const { item } = event
-      if (
-        event.type === 'response.output_item.done' &&
-        item?.type === 'function_call' &&
-        item.name
-      ) {
-        const callId = item.call_id || item.id || `call-${toolCalls.size + 1}`
-        toolCalls.set(callId, {
-          arguments: item.arguments || '{}',
-          callId,
-          name: item.name,
-        })
-        return
-      }
-      if (event.type === 'response.completed') {
-        responseId = event.response?.id || responseId
-        if (event.response && !text) {
-          text = getResponseText(event.response)
+      if (event.response && toolCalls.size === 0) {
+        for (const toolCall of getResponseToolCalls(event.response)) {
+          toolCalls.set(toolCall.callId, toolCall)
         }
-        if (event.response && toolCalls.size === 0) {
-          for (const toolCall of getResponseToolCalls(event.response)) {
-            toolCalls.set(toolCall.callId, toolCall)
-          }
-        }
-        complete()
-        return
       }
-      if (event.type === 'response.failed' || event.type === 'error') {
-        throw new Error(
-          parseErrorMessage(event.error) ||
-            event.response?.error?.message ||
-            'The model request failed',
-        )
-      }
+      complete()
+      return
     }
-
-    const processMessage = async (
-      message: MessageEvent<unknown>,
-    ): Promise<void> => {
-      try {
-        await processing
-        if (settled) {
-          return
-        }
-        if (typeof message.data !== 'string') {
-          throw new TypeError(
-            'The backend returned a non-text WebSocket response',
-          )
-        }
-        let event: ResponseEvent
-        try {
-          event = JSON.parse(message.data) as ResponseEvent
-        } catch {
-          throw new Error('The backend returned invalid WebSocket JSON')
-        }
-        await handleEvent(event)
-      } catch (error) {
-        fail(error)
-      }
+    if (event.type === 'response.failed' || event.type === 'error') {
+      throw new Error(
+        parseErrorMessage(event.error) ||
+          event.response?.error?.message ||
+          'The model request failed',
+      )
     }
+  }
 
-    const handleClose = async (event: CloseEvent): Promise<void> => {
+  const processMessage = async (
+    message: MessageEvent<unknown>,
+  ): Promise<void> => {
+    try {
       await processing
       if (settled) {
         return
       }
-      const detail = event.reason ? `: ${event.reason}` : ''
-      fail(
-        opened
-          ? new Error(`Model response stream closed before completion${detail}`)
-          : new WebSocketUpgradeError(
-              `Could not open the model response stream${detail}`,
-            ),
-      )
-    }
-
-    socket.onopen = () => {
-      try {
-        opened = true
-        options.signal?.throwIfAborted()
-        socket.send(
-          JSON.stringify({
-            ...createResponseRequest(options),
-            type: 'response.create',
-          }),
+      if (typeof message.data !== 'string') {
+        throw new TypeError(
+          'The backend returned a non-text WebSocket response',
         )
-      } catch (error) {
-        fail(error)
       }
+      let event: ResponseEvent
+      try {
+        event = JSON.parse(message.data) as ResponseEvent
+      } catch {
+        throw new Error('The backend returned invalid WebSocket JSON')
+      }
+      await handleEvent(event)
+    } catch (error) {
+      fail(error)
     }
-    socket.onmessage = (message) => {
-      processing = processMessage(message)
+  }
+
+  const handleClose = async (event: CloseEvent): Promise<void> => {
+    await processing
+    if (settled) {
+      return
     }
-    socket.onerror = () => {
-      fail(
-        opened
-          ? new Error('The model response stream failed')
-          : new WebSocketUpgradeError(
-              'Could not connect to the model response stream',
-            ),
+    const detail = event.reason ? `: ${event.reason}` : ''
+    fail(
+      opened
+        ? new Error(`Model response stream closed before completion${detail}`)
+        : new WebSocketUpgradeError(
+            `Could not open the model response stream${detail}`,
+          ),
+    )
+  }
+
+  socket.onopen = () => {
+    try {
+      opened = true
+      options.signal?.throwIfAborted()
+      socket.send(
+        JSON.stringify({
+          ...createResponseRequest(options),
+          type: 'response.create',
+        }),
       )
+    } catch (error) {
+      fail(error)
     }
-    socket.onclose = (event) => {
-      void handleClose(event)
-    }
-    options.signal?.addEventListener('abort', handleAbort, { once: true })
-  })
+  }
+  socket.onmessage = (message) => {
+    processing = processMessage(message)
+  }
+  socket.onerror = () => {
+    fail(
+      opened
+        ? new Error('The model response stream failed')
+        : new WebSocketUpgradeError(
+            'Could not connect to the model response stream',
+          ),
+    )
+  }
+  socket.onclose = (event) => {
+    void handleClose(event)
+  }
+  options.signal?.addEventListener('abort', handleAbort, { once: true })
+  return promise
+}
 
 const runWebSocketStep = async (
   root: string,

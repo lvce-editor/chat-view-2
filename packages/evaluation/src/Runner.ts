@@ -83,10 +83,10 @@ const runCommand = async (
   }, timeoutMs)
   let exitCode: number
   try {
-    exitCode = await new Promise<number>((resolve, reject) => {
-      child.once('error', reject)
-      child.once('close', (code) => resolve(code ?? 1))
-    })
+    const { promise, reject, resolve } = Promise.withResolvers<number>()
+    child.once('error', reject)
+    child.once('close', (code) => resolve(code ?? 1))
+    exitCode = await promise
   } finally {
     clearTimeout(timeout)
   }

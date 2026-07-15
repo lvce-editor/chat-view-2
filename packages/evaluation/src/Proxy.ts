@@ -289,22 +289,23 @@ export const startEvaluationProxy = async (
     void handleRequest(request, response)
   })
 
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(options.port ?? 0, options.host ?? '127.0.0.1', () => {
-      server.off('error', reject)
-      resolve()
-    })
+  const started = Promise.withResolvers<void>()
+  server.once('error', started.reject)
+  server.listen(options.port ?? 0, options.host ?? '127.0.0.1', () => {
+    server.off('error', started.reject)
+    started.resolve()
   })
+  await started.promise
   const address = server.address()
   if (!address || typeof address === 'string') {
     throw new Error('Evaluation proxy did not bind to a TCP port')
   }
   return {
-    close: () =>
-      new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()))
-      }),
+    close: async (): Promise<void> => {
+      const closed = Promise.withResolvers<void>()
+      server.close((error) => (error ? closed.reject(error) : closed.resolve()))
+      return closed.promise
+    },
     origin: `http://${options.host ?? '127.0.0.1'}:${address.port}`,
   }
 }

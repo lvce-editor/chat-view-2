@@ -58,7 +58,9 @@ void test('runs scenarios, records misses, and replays matching requests', async
     response.end(responseBody)
     upstreamRequests++
   })
-  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve))
+  const listening = Promise.withResolvers<void>()
+  upstream.listen(0, '127.0.0.1', listening.resolve)
+  await listening.promise
   const address = upstream.address()
   if (!address || typeof address === 'string') {
     throw new Error('Test upstream did not bind')
@@ -116,7 +118,7 @@ void test('runs scenarios, records misses, and replays matching requests', async
     ),
     '<h1>Hello World</h1>\n',
   )
-  await new Promise<void>((resolve, reject) =>
-    upstream.close((error) => (error ? reject(error) : resolve())),
-  )
+  const closed = Promise.withResolvers<void>()
+  upstream.close((error) => (error ? closed.reject(error) : closed.resolve()))
+  await closed.promise
 })
