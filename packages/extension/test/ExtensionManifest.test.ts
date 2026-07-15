@@ -1,6 +1,13 @@
 import { expect, test } from '@jest/globals'
 import { readFile } from 'node:fs/promises'
 
+test('runs only in an isolated extension host', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.isolated).toBe(true)
+})
+
 test('maps Enter in the composer to the submit command', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))

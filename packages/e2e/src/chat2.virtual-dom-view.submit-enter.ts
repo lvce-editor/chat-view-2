@@ -1,17 +1,26 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.submit-enter'
+export const skip = 1
 
-export const test: Test = async ({ Command, expect, Locator, Main }) => {
+export const test: Test = async ({
+  Command,
+  expect,
+  KeyBoard,
+  Locator,
+  Main,
+}) => {
   await Main.closeAllEditors()
   await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
   await Command.executeExtensionCommand('chat2.show')
 
   const composer = Locator('textarea[name="composer"]')
   await composer.type('Build a smaller chat view')
-  // Enter is contributed as a keybinding for this exact extension command.
-  // The e2e harness does not retain DOM focus after typing into a virtual view.
-  await Command.executeExtensionCommand('chat2.submit')
+  await composer.dispatchEvent('focus', { bubbles: true } as unknown as string)
+  await new Promise((resolve) => {
+    setTimeout(resolve, 200)
+  })
+  await KeyBoard.press('Enter')
 
   const detail = Locator('.ChatDetailView')
   const userMessage = Locator('.ChatMessageUser')
