@@ -2,6 +2,7 @@
 import type { ViewContext, ViewEvent } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { VirtualDomElements } from '@lvce-editor/virtual-dom-worker'
+import type { ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
 import {
   createMockChatApi,
@@ -420,6 +421,58 @@ test('opens the OpenAI model picker without adding model controls to the header'
   expect(getNodesByClass(dom, 'ChatModelPicker')).toHaveLength(1)
   expect(getText(dom)).toContain('OpenAI models')
   expect(getText(dom)).toContain('GPT-5.4')
+})
+
+test('shows how many seconds an active task has been working', async () => {
+  jest.useFakeTimers()
+  jest.setSystemTime(Date.parse('2026-07-15T12:00:00.000Z'))
+  const timestamp = new Date().toISOString()
+  const runningTask: ChatTask = {
+    createdAt: timestamp,
+    events: [
+      {
+        id: 'event-running',
+        status: 'running',
+        timestamp,
+        type: 'status',
+      },
+    ],
+    id: 'running-task',
+    modelId: 'gpt-5.4',
+    status: 'running',
+    title: 'Long task',
+    updatedAt: timestamp,
+  }
+  const requestRerender = jest.fn(async () => {})
+  const context = {
+    ...createViewContext({ selectedTaskId: runningTask.id }),
+    requestRerender,
+  }
+  const api = {
+    ...createMockChatApi(),
+    async getTask() {
+      return runningTask
+    },
+  }
+  let instance: Awaited<ReturnType<typeof createInstance>> | undefined
+
+  try {
+    instance = await createInstance(context, api)
+
+    expect(getText(instance.render() as readonly any[])).toContain(
+      'Working for 0 seconds',
+    )
+
+    await jest.advanceTimersByTimeAsync(2000)
+
+    expect(getText(instance.render() as readonly any[])).toContain(
+      'Working for 2 seconds',
+    )
+    expect(requestRerender).toHaveBeenCalledTimes(2)
+  } finally {
+    instance?.dispose?.()
+    jest.useRealTimers()
+  }
 })
 
 test('stops an active task', async () => {

@@ -18,6 +18,7 @@ const createState = (): ChatViewState => ({
   selectedModelId: '',
   selectedTask: undefined,
   tasks: [],
+  workingSeconds: 0,
 })
 
 test('enters and leaves side bar focus mode', async () => {
