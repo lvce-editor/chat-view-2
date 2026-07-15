@@ -32,12 +32,11 @@ not store API keys in its task database.
 - Agent context identifies the workspace as `.` so tool paths and evaluation
   cache keys remain portable across machines.
 - Each active turn snapshots files before the first edit and can revert them.
-- A portable host contract accepts bounded editor context, diagnostics, and a
-  cancellable command sandbox on both desktop and web. When present, it runs up
-  to two focused repository checks and returns failures to the model for repair.
-- Command execution is removed from the model's tool catalog until Lvce provides
-  that enforced workspace sandbox. Chat 2 never falls back to an unrestricted
-  host shell.
+- A host contract accepts bounded editor context, diagnostics, and a cancellable
+  command executor. When present, it runs up to two focused repository checks
+  and returns failures to the model for repair.
+- On Electron and other Node hosts, the agent can run Bash commands from the
+  open workspace. The command tool is omitted entirely on the web platform.
 - The backend, tools, persistence, and mock agent are dynamically loaded only
   after the view opens.
 
