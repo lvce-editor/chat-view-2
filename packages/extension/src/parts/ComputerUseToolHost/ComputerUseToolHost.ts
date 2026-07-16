@@ -47,6 +47,7 @@ interface CreateNodeRpcOptions {
 type CreateNodeRpc = (options: CreateNodeRpcOptions) => Promise<NodeRpc>
 
 const computerUseRpcId = 'builtin.chat-view-2.computer-use'
+const defaultCreateNodeRpcOptions = { id: computerUseRpcId }
 const toolPrefix = 'computer_use_'
 const maximumResultCharacters = 128_000
 
@@ -113,7 +114,7 @@ const parseArguments = (value: string): Readonly<Record<string, unknown>> => {
 }
 
 export const createComputerUseToolHost = async (
-  options: CreateNodeRpcOptions = { id: computerUseRpcId },
+  options: CreateNodeRpcOptions = defaultCreateNodeRpcOptions,
   createRpc: CreateNodeRpc = createNodeRpc,
 ): Promise<AgentExternalToolHost> => {
   const rpc = await createRpc(options)
