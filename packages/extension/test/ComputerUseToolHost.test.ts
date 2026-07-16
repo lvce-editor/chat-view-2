@@ -18,11 +18,12 @@ test('loads prefixed computer-use tools and bundled skill instructions', async (
     }
     throw new Error(`Unexpected method: ${method}`)
   })
-  const host = await createComputerUseToolHost(
-    '/extensions/chat/node/src/computerUseClient.js',
-    async () => ({ invoke }),
-  )
+  const createRpc = jest.fn(async (_options: unknown) => ({ invoke }))
+  const host = await createComputerUseToolHost(undefined, createRpc)
 
+  expect(createRpc).toHaveBeenCalledWith({
+    id: 'builtin.chat-view-2.computer-use',
+  })
   expect(host.getDefinitions()).toEqual([
     expect.objectContaining({
       name: 'computer_use_doctor',
@@ -58,9 +59,12 @@ test('delegates prefixed tool calls and keeps screenshot payloads bounded', asyn
     }
     throw new Error(`Unexpected method: ${method}`)
   })
-  const host = await createComputerUseToolHost('node-entry.js', async () => ({
-    invoke,
-  }))
+  const host = await createComputerUseToolHost(
+    { path: 'node-entry.js' },
+    async () => ({
+      invoke,
+    }),
+  )
 
   await expect(
     host.execute({
