@@ -11,7 +11,9 @@ interface BackendConfigurationHost {
     id: string,
     ...args: readonly unknown[]
   ) => Promise<unknown>
-  readonly getAccessToken: () => Promise<unknown>
+  readonly getAccessToken: (options: {
+    readonly refresh: 'if-needed'
+  }) => Promise<unknown>
   readonly getPreference: (key: string) => Promise<unknown>
 }
 
@@ -61,7 +63,11 @@ const resolveAccessToken = async (
   host: BackendConfigurationHost,
 ): Promise<string> => {
   try {
-    return getString(await host.getAccessToken())
+    return getString(
+      await host.getAccessToken({
+        refresh: 'if-needed',
+      }),
+    )
   } catch {
     return ''
   }

@@ -48,7 +48,9 @@ test('uses the editor backend and authentication by default', async () => {
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.backendUrl')
   expect(host.executeCommand).toHaveBeenCalledWith('Layout.getBackendUrl')
-  expect(host.getAccessToken).toHaveBeenCalledTimes(1)
+  expect(host.getAccessToken).toHaveBeenCalledWith({
+    refresh: 'if-needed',
+  })
 })
 
 test('uses editor authentication for an equivalent configured backend URL', async () => {
