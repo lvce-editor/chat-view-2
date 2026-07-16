@@ -8,6 +8,18 @@ test('runs only in an isolated extension host', async () => {
   expect(manifest.isolated).toBe(true)
 })
 
+test('declares the computer-use node rpc', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.rpc).toContainEqual({
+    id: 'builtin.chat-view-2.computer-use',
+    name: 'Chat 2 Computer Use',
+    type: 'node',
+    url: 'node/src/computerUseClient.js',
+  })
+})
+
 test('maps Enter in the composer to the submit command', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))

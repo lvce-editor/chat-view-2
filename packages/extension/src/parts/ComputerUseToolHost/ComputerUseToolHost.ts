@@ -5,7 +5,6 @@ import type {
   AgentToolDefinition,
   AgentToolResult,
 } from '../AgentToolHost/AgentToolHost.ts'
-import { getComputerUseNodePath } from '../ExtensionRuntime/ExtensionRuntime.ts'
 
 interface NodeRpc {
   readonly invoke: (
@@ -39,11 +38,16 @@ interface McpToolResult {
   readonly isError?: boolean
 }
 
-type CreateNodeRpc = (options: {
-  readonly name: string
-  readonly path: string
-}) => Promise<NodeRpc>
+interface CreateNodeRpcOptions {
+  readonly id?: string
+  readonly name?: string
+  readonly path?: string
+}
 
+type CreateNodeRpc = (options: CreateNodeRpcOptions) => Promise<NodeRpc>
+
+const computerUseRpcId = 'builtin.chat-view-2.computer-use'
+const defaultCreateNodeRpcOptions = { id: computerUseRpcId }
 const toolPrefix = 'computer_use_'
 const maximumResultCharacters = 128_000
 
@@ -110,10 +114,10 @@ const parseArguments = (value: string): Readonly<Record<string, unknown>> => {
 }
 
 export const createComputerUseToolHost = async (
-  nodePath: string,
+  options: CreateNodeRpcOptions = defaultCreateNodeRpcOptions,
   createRpc: CreateNodeRpc = createNodeRpc,
 ): Promise<AgentExternalToolHost> => {
-  const rpc = await createRpc({ name: 'Chat 2 Computer Use', path: nodePath })
+  const rpc = await createRpc(options)
   const [toolsValue, skillValue] = await Promise.all([
     rpc.invoke('ComputerUse.listTools'),
     rpc.invoke('ComputerUse.getSkillInstructions'),
@@ -168,11 +172,11 @@ const defaultHostState: {
   hostPromise?: Promise<AgentExternalToolHost | undefined>
 } = {}
 
-const tryCreateComputerUseToolHost = async (
-  nodePath: string,
-): Promise<AgentExternalToolHost | undefined> => {
+const tryCreateComputerUseToolHost = async (): Promise<
+  AgentExternalToolHost | undefined
+> => {
   try {
-    return await createComputerUseToolHost(nodePath)
+    return await createComputerUseToolHost()
   } catch {
     return undefined
   }
@@ -181,10 +185,6 @@ const tryCreateComputerUseToolHost = async (
 export const getDefaultComputerUseToolHost = async (): Promise<
   AgentExternalToolHost | undefined
 > => {
-  const nodePath = getComputerUseNodePath()
-  if (!nodePath) {
-    return undefined
-  }
-  defaultHostState.hostPromise ||= tryCreateComputerUseToolHost(nodePath)
+  defaultHostState.hostPromise ||= tryCreateComputerUseToolHost()
   return defaultHostState.hostPromise
 }

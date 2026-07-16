@@ -43,6 +43,14 @@
     "onCommand:chat2.submit",
     "onCommand:chat2.toggleFocusMode"
   ],
+  "rpc": [
+    {
+      "id": "builtin.chat-view-2.computer-use",
+      "type": "node",
+      "name": "Chat 2 Computer Use",
+      "url": "node/src/computerUseClient.js"
+    }
+  ],
   "commands": [
     {
       "id": "chat2.createSession",
