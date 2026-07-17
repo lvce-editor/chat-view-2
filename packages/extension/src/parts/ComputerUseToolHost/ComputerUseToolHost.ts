@@ -3,6 +3,7 @@ import type {
   AgentExternalToolHost,
   AgentToolCall,
   AgentToolDefinition,
+  AgentToolImageOutput,
   AgentToolResult,
 } from '../AgentToolHost/AgentToolHost.ts'
 
@@ -50,6 +51,12 @@ const computerUseRpcId = 'builtin.chat-view-2.computer-use'
 const defaultCreateNodeRpcOptions = { id: computerUseRpcId }
 const toolPrefix = 'computer_use_'
 const maximumResultCharacters = 128_000
+const supportedImageMimeTypes = new Set([
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+])
 
 const getSafetyDescription = (annotations?: McpToolAnnotations): string => {
   if (annotations?.destructiveHint || annotations?.openWorldHint) {
@@ -83,9 +90,28 @@ const formatContentBlock = (block: McpContentBlock): string => {
     return block.text
   }
   if (block.type === 'image') {
-    return `[Computer-use returned a ${block.mimeType || 'image'} screenshot containing ${block.data?.length || 0} base64 characters. Image rendering in tool results is not yet available; prefer get_app_state accessibility data when possible.]`
+    return `[Computer-use returned a ${block.mimeType || 'image'} screenshot containing ${block.data?.length || 0} base64 characters.]`
   }
   return JSON.stringify(block)
+}
+
+const toImageOutput = (
+  block: McpContentBlock,
+): AgentToolImageOutput | undefined => {
+  if (
+    block.type !== 'image' ||
+    typeof block.data !== 'string' ||
+    !block.data ||
+    typeof block.mimeType !== 'string' ||
+    !supportedImageMimeTypes.has(block.mimeType)
+  ) {
+    return undefined
+  }
+  return {
+    detail: 'original',
+    image_url: `data:${block.mimeType};base64,${block.data}`,
+    type: 'input_image',
+  }
 }
 
 const formatToolResult = (value: unknown): AgentToolResult => {
@@ -96,12 +122,19 @@ const formatToolResult = (value: unknown): AgentToolResult => {
     }
   }
   const result = value as McpToolResult
-  const content = Array.isArray(result.content)
-    ? result.content.map(formatContentBlock).join('\n')
-    : JSON.stringify(value)
+  const contentBlocks = Array.isArray(result.content) ? result.content : []
+  const content =
+    contentBlocks.length > 0
+      ? contentBlocks.map(formatContentBlock).join('\n')
+      : JSON.stringify(value)
+  const modelOutput = contentBlocks.flatMap((block) => {
+    const image = toImageOutput(block)
+    return image ? [image] : []
+  })
   return {
     content: content.slice(0, maximumResultCharacters),
     isError: result.isError === true,
+    ...(modelOutput.length > 0 && { modelOutput }),
   }
 }
 
@@ -131,6 +164,8 @@ export const createComputerUseToolHost = async (
   })
   const instructions = [
     `Linux computer use is available through tools whose names start with ${toolPrefix}. Use computer_use_doctor first when readiness is unknown, prefer semantic accessibility selectors over pixel coordinates, and inspect state again after acting.`,
+    'When the user asks to open an application that is not already running, call computer_use_launch_app instead of trying keyboard shortcuts or typing into a launcher. When the user asks to save a screenshot to a file, call computer_use_save_screenshot; computer_use_screenshot only observes an image and does not save it.',
+    'When clicking coordinates from a window-cropped screenshot, pass the same window target and relative: true so the click uses the screenshot coordinate space.',
     'Treat the desktop as live external state. Ask the user before any action that could submit, send, purchase, delete, overwrite, publish, or otherwise commit consequential state.',
     typeof skillValue === 'string' ? skillValue.slice(0, 16_000) : '',
   ]

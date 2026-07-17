@@ -359,7 +359,7 @@ export const createAgentChatApi = ({
         }
         input = result.toolCalls.map((call, index) => ({
           callId: call.callId,
-          output: outputs[index].content,
+          output: outputs[index].modelOutput || outputs[index].content,
           type: 'function-call-output' as const,
         }))
         await store.save(task)

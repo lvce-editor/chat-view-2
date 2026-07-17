@@ -121,7 +121,20 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
   })
 
   const resultPromise = backend.runStep({
-    input: [{ content: 'Inspect this repo', role: 'user' }],
+    input: [
+      { content: 'Inspect this repo', role: 'user' },
+      {
+        callId: 'call-screenshot',
+        output: [
+          {
+            detail: 'original',
+            image_url: 'data:image/png;base64,encoded-image',
+            type: 'input_image',
+          },
+        ],
+        type: 'function-call-output',
+      },
+    ],
     modelId: 'gpt-test',
     onTextDelta(delta) {
       deltas.push(delta)
@@ -167,7 +180,19 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
           content: [{ text: 'Inspect this repo', type: 'input_text' }],
           role: 'user',
         },
+        {
+          call_id: 'call-screenshot',
+          output: [
+            {
+              detail: 'original',
+              image_url: 'data:image/png;base64,encoded-image',
+              type: 'input_image',
+            },
+          ],
+          type: 'function_call_output',
+        },
       ],
+      max_output_tokens: 2048,
       model: 'gpt-test',
       type: 'response.create',
     }),
@@ -217,6 +242,9 @@ test('explicitly describes registered computer-use access to the agent', async (
     expect.stringContaining(
       'Do not say that computer use or GUI control is unavailable',
     ),
+  )
+  expect(request.instructions).toEqual(
+    expect.stringContaining('relative: true'),
   )
 })
 
@@ -339,7 +367,12 @@ test('uses non-streaming responses unless streaming is explicitly supported', as
   if (typeof body !== 'string') {
     throw new TypeError('Expected a JSON request body')
   }
-  expect(JSON.parse(body)).toEqual(expect.objectContaining({ stream: false }))
+  expect(JSON.parse(body)).toEqual(
+    expect.objectContaining({
+      max_output_tokens: 2048,
+      stream: false,
+    }),
+  )
 })
 
 test('surfaces backend errors without retrying unsafe work', async () => {

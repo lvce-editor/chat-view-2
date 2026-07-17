@@ -58,10 +58,11 @@ const webSocketOpen = 1
 const loginRequiredMessage = 'You must log in to continue.'
 const noAccessTokenProvidedCode = 'E_NO_ACCESS_TOKEN_PROVIDED'
 const computerUseToolPrefix = 'computer_use_'
+const maximumAgentOutputTokens = 2048
 const defaultAgentInstructions =
   'You are the Lvce coding agent. Inspect relevant files before editing. Keep changes scoped, use tools to modify the workspace, run available verification, and end with a concise result. Treat every tool registered with the request as an available capability.'
 const computerUseInstructions =
-  'You have direct access to observe and control the local Linux desktop through the registered computer_use_* tools. You can inspect accessibility state and windows, take screenshots, focus apps, click, scroll, type text, and press keys. Do not say that computer use or GUI control is unavailable when these tools are registered. Invoke them like any other tool: start with computer_use_doctor when readiness is unknown, inspect windows or app state, prefer semantic accessibility selectors over pixel coordinates, perform the requested action, and inspect state again to verify the result. Ask before consequential actions that submit, send, purchase, delete, overwrite, or publish.'
+  'You have direct access to observe and control the local Linux desktop through the registered computer_use_* tools. You can launch installed desktop applications, inspect accessibility state and windows, take or save screenshots, focus apps, click, scroll, type text, and press keys. Do not say that computer use or GUI control is unavailable when these tools are registered. Invoke them like any other tool: start with computer_use_doctor when readiness is unknown. When an application must be opened, call computer_use_launch_app instead of using keyboard shortcuts or typing into an application launcher. Inspect windows or app state, prefer semantic accessibility selectors over pixel coordinates, and perform the requested action. When clicking coordinates from a window-cropped screenshot, pass the same window target and relative: true so the click uses the screenshot coordinate space. When a screenshot must be written to a path, call computer_use_save_screenshot because computer_use_screenshot does not save files. Inspect state again to verify the result. Ask before consequential actions that submit, send, purchase, delete, overwrite, or publish.'
 
 class ResponsesBackendError extends Error {
   readonly code: string
@@ -114,6 +115,7 @@ const createResponseRequest = (
 ): Readonly<Record<string, unknown>> => ({
   input: options.input.map(mapInput),
   instructions: getAgentInstructions(options),
+  max_output_tokens: maximumAgentOutputTokens,
   model: options.modelId,
   ...(options.previousResponseId && {
     previous_response_id: options.previousResponseId,
