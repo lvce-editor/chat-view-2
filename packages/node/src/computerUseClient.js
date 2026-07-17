@@ -25,6 +25,15 @@ const skillPath = join(
 const protocolVersion = '2024-11-05'
 const maximumErrorCharacters = 16_000
 
+/**
+ * @param {NodeJS.ProcessEnv} environment
+ * @returns {NodeJS.ProcessEnv}
+ */
+export const getComputerUseEnvironment = (environment) => ({
+  ...environment,
+  ELECTRON_RUN_AS_NODE: '1',
+})
+
 class ComputerUseMcpClient {
   buffer = ''
   /** @type {import('node:child_process').ChildProcessWithoutNullStreams | undefined} */
@@ -138,7 +147,7 @@ class ComputerUseMcpClient {
       throw new Error('Computer use is available only on Linux')
     }
     const child = spawn(process.execPath, [computerUseWrapper, 'mcp'], {
-      env: process.env,
+      env: getComputerUseEnvironment(process.env),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     this.child = child
