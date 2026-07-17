@@ -447,6 +447,7 @@ export const resolveScreenshotPath = (
     !relativePath ||
     relativePath === '..' ||
     relativePath.startsWith('../') ||
+    relativePath.startsWith('..\\') ||
     isAbsolute(relativePath)
   ) {
     throw new Error('Screenshot path must stay inside the current user home')
