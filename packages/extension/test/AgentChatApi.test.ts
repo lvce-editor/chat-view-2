@@ -42,6 +42,13 @@ test('runs a multi-step tool loop and records a compact event history', async ()
   const execute = jest.fn<AgentToolHost['execute']>().mockResolvedValue({
     content: '{"name":"repo"}',
     isError: false,
+    modelOutput: [
+      {
+        detail: 'original',
+        image_url: 'data:image/png;base64,encoded-image',
+        type: 'input_image',
+      },
+    ],
   })
   const toolHost: AgentToolHost = {
     beginTurn() {},
@@ -87,7 +94,13 @@ test('runs a multi-step tool loop and records a compact event history', async ()
   expect(runStep.mock.calls[1]?.[0].input).toEqual([
     {
       callId: 'call-1',
-      output: '{"name":"repo"}',
+      output: [
+        {
+          detail: 'original',
+          image_url: 'data:image/png;base64,encoded-image',
+          type: 'input_image',
+        },
+      ],
       type: 'function-call-output',
     },
   ])

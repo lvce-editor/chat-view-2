@@ -22,9 +22,18 @@ export interface AgentToolCall {
   readonly name: string
 }
 
+export interface AgentToolImageOutput {
+  readonly detail: 'original'
+  readonly image_url: string
+  readonly type: 'input_image'
+}
+
+export type AgentToolModelOutput = readonly AgentToolImageOutput[]
+
 export interface AgentToolResult {
   readonly content: string
   readonly isError: boolean
+  readonly modelOutput?: AgentToolModelOutput
 }
 
 export interface AgentExternalToolHost {

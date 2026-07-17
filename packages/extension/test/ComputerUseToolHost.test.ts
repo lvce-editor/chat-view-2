@@ -11,6 +11,16 @@ test('loads prefixed computer-use tools and bundled skill instructions', async (
           inputSchema: { properties: {}, type: 'object' },
           name: 'doctor',
         },
+        {
+          description: 'Launch an installed application.',
+          inputSchema: { properties: {}, type: 'object' },
+          name: 'launch_app',
+        },
+        {
+          description: 'Save a screenshot.',
+          inputSchema: { properties: {}, type: 'object' },
+          name: 'save_screenshot',
+        },
       ]
     }
     if (method === 'ComputerUse.getSkillInstructions') {
@@ -24,16 +34,27 @@ test('loads prefixed computer-use tools and bundled skill instructions', async (
   expect(createRpc).toHaveBeenCalledWith({
     id: 'builtin.chat-view-2.computer-use',
   })
-  expect(host.getDefinitions()).toEqual([
-    expect.objectContaining({
-      name: 'computer_use_doctor',
-    }),
-  ])
+  expect(host.getDefinitions()).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        name: 'computer_use_doctor',
+      }),
+      expect.objectContaining({
+        name: 'computer_use_launch_app',
+      }),
+      expect.objectContaining({
+        name: 'computer_use_save_screenshot',
+      }),
+    ]),
+  )
   expect(host.getDefinitions()[0]?.description).toContain(
     'observes the live desktop',
   )
   expect(host.getInstructions()).toContain('Computer use skill')
   expect(host.getInstructions()).toContain('Ask the user')
+  expect(host.getInstructions()).toContain('computer_use_launch_app')
+  expect(host.getInstructions()).toContain('computer_use_save_screenshot')
+  expect(host.getInstructions()).toContain('relative: true')
 })
 
 test('delegates prefixed tool calls and keeps screenshot payloads bounded', async () => {
@@ -73,8 +94,15 @@ test('delegates prefixed tool calls and keeps screenshot payloads bounded', asyn
       name: 'computer_use_screenshot',
     }),
   ).resolves.toEqual({
-    content: expect.stringContaining('Image rendering in tool results'),
+    content: expect.stringContaining('Computer-use returned a image/png'),
     isError: false,
+    modelOutput: [
+      {
+        detail: 'original',
+        image_url: 'data:image/png;base64,encoded-image',
+        type: 'input_image',
+      },
+    ],
   })
   expect(invoke).toHaveBeenCalledWith('ComputerUse.callTool', 'screenshot', {
     window: 'Editor',

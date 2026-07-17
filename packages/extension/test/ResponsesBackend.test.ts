@@ -121,7 +121,20 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
   })
 
   const resultPromise = backend.runStep({
-    input: [{ content: 'Inspect this repo', role: 'user' }],
+    input: [
+      { content: 'Inspect this repo', role: 'user' },
+      {
+        callId: 'call-screenshot',
+        output: [
+          {
+            detail: 'original',
+            image_url: 'data:image/png;base64,encoded-image',
+            type: 'input_image',
+          },
+        ],
+        type: 'function-call-output',
+      },
+    ],
     modelId: 'gpt-test',
     onTextDelta(delta) {
       deltas.push(delta)
@@ -166,6 +179,17 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
         {
           content: [{ text: 'Inspect this repo', type: 'input_text' }],
           role: 'user',
+        },
+        {
+          call_id: 'call-screenshot',
+          output: [
+            {
+              detail: 'original',
+              image_url: 'data:image/png;base64,encoded-image',
+              type: 'input_image',
+            },
+          ],
+          type: 'function_call_output',
         },
       ],
       model: 'gpt-test',
@@ -217,6 +241,9 @@ test('explicitly describes registered computer-use access to the agent', async (
     expect.stringContaining(
       'Do not say that computer use or GUI control is unavailable',
     ),
+  )
+  expect(request.instructions).toEqual(
+    expect.stringContaining('relative: true'),
   )
 })
 

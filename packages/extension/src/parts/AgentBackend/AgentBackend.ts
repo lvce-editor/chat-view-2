@@ -2,6 +2,7 @@
 import type {
   AgentToolCall,
   AgentToolDefinition,
+  AgentToolModelOutput,
 } from '../AgentToolHost/AgentToolHost.ts'
 import type { ChatModel } from '../ChatApi/ChatApi.ts'
 
@@ -12,7 +13,7 @@ export interface AgentInputMessage {
 
 export interface AgentToolOutput {
   readonly callId: string
-  readonly output: string
+  readonly output: AgentToolModelOutput | string
   readonly type: 'function-call-output'
 }
 
