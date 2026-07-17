@@ -13,6 +13,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await composer.type('Start the first chat')
   await Command.executeExtensionCommand('chat2.submit')
   await expect(detailView).toBeVisible()
+  await expect(composer).toHaveValue('')
 
   await composer.type('Discard this draft')
   await Command.executeExtensionCommand('chat2.newChat')
