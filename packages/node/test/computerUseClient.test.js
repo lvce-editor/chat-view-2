@@ -203,8 +203,10 @@ test('saves a screenshot inside the user home without overwriting', async (t) =>
 })
 
 test('rejects screenshot paths outside the user home', () => {
+  const homeDirectory = join(tmpdir(), 'chat-view-2-home')
+  const outsidePath = join(tmpdir(), 'chat-view-2-outside', 'screenshot.png')
   assert.throws(
-    () => resolveScreenshotPath('/tmp/screenshot.png', '/home/test'),
+    () => resolveScreenshotPath(outsidePath, homeDirectory),
     outsideHomeRegex,
   )
 })
