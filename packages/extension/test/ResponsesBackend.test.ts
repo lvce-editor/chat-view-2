@@ -192,7 +192,6 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
           type: 'function_call_output',
         },
       ],
-      max_output_tokens: 2048,
       model: 'gpt-test',
       type: 'response.create',
     }),
@@ -367,12 +366,7 @@ test('uses non-streaming responses unless streaming is explicitly supported', as
   if (typeof body !== 'string') {
     throw new TypeError('Expected a JSON request body')
   }
-  expect(JSON.parse(body)).toEqual(
-    expect.objectContaining({
-      max_output_tokens: 2048,
-      stream: false,
-    }),
-  )
+  expect(JSON.parse(body)).toEqual(expect.objectContaining({ stream: false }))
 })
 
 test('surfaces backend errors without retrying unsafe work', async () => {
