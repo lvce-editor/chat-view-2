@@ -5,6 +5,9 @@
   "license": "MIT",
   "type": "module",
   "main": "src/computerUseClient.js",
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
   "devDependencies": {
     "@types/node": "^26.1.1"
   },
