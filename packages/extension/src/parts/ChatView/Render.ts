@@ -181,47 +181,48 @@ const renderModel = (model: ChatModel): Dom.TreeNode => {
 }
 
 const renderModelPicker = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  if (!state.modelPickerOpen) {
+  const { modelPickerOpen, models } = state
+  if (!modelPickerOpen) {
     return Dom.div('ChatModelPickerHidden', [])
   }
   return Dom.div('ChatModelPicker', [
     Dom.div('ChatModelPickerTitle', [Dom.textNode('OpenAI models')]),
-    ...state.models.map(renderModel),
+    ...models.map(renderModel),
   ])
 }
 
 const getSelectedModelLabel = (state: Readonly<ChatViewState>): string => {
+  const { models, selectedModelId } = state
   return (
-    state.models.find((model) => model.id === state.selectedModelId)?.label ||
+    models.find((model) => model.id === selectedModelId)?.label ||
     'Choose model'
   )
 }
 
 const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const running = isRunning(state.selectedTask)
+  const { draft, modelPickerOpen, selectedModelId, selectedTask } = state
+  const running = isRunning(selectedTask)
   const placeholder = running
     ? 'Steer the current task'
-    : state.selectedTask
+    : selectedTask
       ? 'Ask for a follow-up change'
       : 'Describe a programming task'
   return Dom.div('ChatComposerArea', [
     renderModelPicker(state),
     Dom.form('composer', 'ChatComposer', [
-      Dom.div('ChatComposerInputContainer', [
-        Dom.textArea(state.draft, placeholder),
-      ]),
+      Dom.div('ChatComposerInputContainer', [Dom.textArea(draft, placeholder)]),
       Dom.div('ChatComposerControls', [
         Dom.div('ChatComposerSpacer', []),
         Dom.button(
           'model-picker',
           getSelectedModelLabel(state),
           'ChatModelButton',
-          { ariaExpanded: state.modelPickerOpen },
+          { ariaExpanded: modelPickerOpen },
         ),
         ...(running ? [Dom.button('stop', 'Stop', 'ChatStopButton')] : []),
         Dom.button('submit', '↑', 'ChatSubmitButton', {
           ariaLabel: running ? 'Steer task' : 'Send message',
-          disabled: !state.draft.trim() || !state.selectedModelId,
+          disabled: !draft.trim() || !selectedModelId,
           title: running ? 'Steer task' : 'Send message',
         }),
       ]),
@@ -232,18 +233,17 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 const renderFocusModeButton = (
   state: Readonly<ChatViewState>,
 ): readonly Dom.TreeNode[] => {
-  if (!state.focusModeEnabled) {
+  const { focusMode, focusModeEnabled } = state
+  if (!focusModeEnabled) {
     return []
   }
   return [
     Dom.button(
       'toggle-focus-mode',
-      state.focusMode ? 'IDE' : 'Focus',
+      focusMode ? 'IDE' : 'Focus',
       'ChatFocusModeButton',
       {
-        title: state.focusMode
-          ? 'Return to IDE layout'
-          : 'Focus entirely on chat',
+        title: focusMode ? 'Return to IDE layout' : 'Focus entirely on chat',
       },
     ),
   ]
@@ -253,10 +253,12 @@ const getRootClassName = (
   state: Readonly<ChatViewState>,
   viewClassName: string,
 ): string => {
-  return `ChatView ${viewClassName}${state.focusMode ? ' ChatFocusMode' : ''}`
+  const { focusMode } = state
+  return `ChatView ${viewClassName}${focusMode ? ' ChatFocusMode' : ''}`
 }
 
 const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
+  const { errorMessage, fontFamily, fontSize, tasks } = state
   return Dom.div(getRootClassName(state, 'ChatListView'), [
     Dom.div('ChatTaskListHeader', [
       Dom.heading(1, 'ChatTitle', 'Tasks'),
@@ -264,14 +266,14 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       ...renderFocusModeButton(state),
       Dom.div('ChatTaskCount', [
         Dom.textNode(
-          `${state.tasks.length} ${state.tasks.length === 1 ? 'task' : 'tasks'}`,
+          `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`,
         ),
       ]),
     ]),
-    ...(state.errorMessage
-      ? [Dom.div('ChatErrorBanner', [Dom.textNode(state.errorMessage)])]
+    ...(errorMessage
+      ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
       : []),
-    renderTaskList(state.tasks, state.fontFamily, state.fontSize),
+    renderTaskList(tasks, fontFamily, fontSize),
     renderComposer(state),
   ])
 }
@@ -287,7 +289,7 @@ const getLatestActivities = (
 }
 
 const renderActivity = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const task = state.selectedTask
+  const { activityExpanded, selectedTask: task, workingSeconds } = state
   if (!task) {
     return Dom.div('ChatActivityHidden', [])
   }
@@ -296,13 +298,13 @@ const renderActivity = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     return Dom.div('ChatActivityHidden', [])
   }
   const label = isRunning(task)
-    ? `Working for ${state.workingSeconds} ${state.workingSeconds === 1 ? 'second' : 'seconds'}`
+    ? `Working for ${workingSeconds} ${workingSeconds === 1 ? 'second' : 'seconds'}`
     : `${activities.length} ${activities.length === 1 ? 'step' : 'steps'} completed`
   return Dom.div('ChatActivity', [
     Dom.button('toggle-activity', label, 'ChatActivityToggle', {
-      ariaExpanded: state.activityExpanded,
+      ariaExpanded: activityExpanded,
     }),
-    ...(state.activityExpanded
+    ...(activityExpanded
       ? activities.map((activity) =>
           Dom.div(`ChatActivityItem ChatActivity-${activity.status}`, [
             Dom.div('ChatActivityLabel', [Dom.textNode(activity.label)]),
@@ -332,7 +334,7 @@ const renderChangedFile = (file: ChatChangedFile): Dom.TreeNode => {
 }
 
 const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const task = state.selectedTask
+  const { changesExpanded, selectedTask: task } = state
   if (!task) {
     return Dom.div('ChatChangesHidden', [])
   }
@@ -350,7 +352,7 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     0,
     changedFiles.length - visibleChangedFileCount,
   )
-  const files = state.changesExpanded
+  const files = changesExpanded
     ? changedFiles
     : changedFiles.slice(0, visibleChangedFileCount)
   return Dom.div('ChatChanges', [
@@ -377,12 +379,12 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       Dom.div('ChatChangesActions', [
         Dom.button('revert', 'Undo ↩', 'ChatRevertButton'),
         Dom.button('toggle-changes', 'Review', 'ChatReviewButton', {
-          ariaExpanded: state.changesExpanded,
+          ariaExpanded: changesExpanded,
         }),
       ]),
     ]),
     Dom.div('ChatChangedFiles', files.map(renderChangedFile)),
-    ...(!state.changesExpanded && hiddenFileCount > 0
+    ...(!changesExpanded && hiddenFileCount > 0
       ? [
           Dom.button(
             'toggle-changes',
@@ -395,7 +397,7 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 }
 
 const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const task = state.selectedTask
+  const { copiedMessageId, errorMessage, selectedTask: task } = state
   if (!task) {
     return renderListView(state)
   }
@@ -409,7 +411,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     ]),
     Dom.div('ChatMessages', [
       ...summary.messages.map((message) =>
-        renderMessage(message, state.copiedMessageId),
+        renderMessage(message, copiedMessageId),
       ),
       ...(task.streamingText
         ? [renderStreamingMessage(task.streamingText)]
@@ -418,8 +420,8 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       ...(summary.errorMessage
         ? [Dom.div('ChatErrorBanner', [Dom.textNode(summary.errorMessage)])]
         : []),
-      ...(state.errorMessage
-        ? [Dom.div('ChatErrorBanner', [Dom.textNode(state.errorMessage)])]
+      ...(errorMessage
+        ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
         : []),
     ]),
     renderChanges(state),
@@ -430,7 +432,8 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 export const render = (
   state: Readonly<ChatViewState>,
 ): readonly VirtualDomNode[] => {
+  const { selectedTask } = state
   return Dom.flatten(
-    state.selectedTask ? renderDetailView(state) : renderListView(state),
+    selectedTask ? renderDetailView(state) : renderListView(state),
   )
 }
