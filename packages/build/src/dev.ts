@@ -26,8 +26,6 @@ const server = spawn(
   [
     path.join(
       root,
-      'packages',
-      'server',
       'node_modules',
       '@lvce-editor',
       'server',
