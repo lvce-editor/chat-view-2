@@ -5,6 +5,7 @@
   "description": "A focused, low-overhead coding agent for Lvce Editor",
   "repository": "https://github.com/lvce-editor/chat-view-2",
   "browser": "dist/chatMain.js",
+  "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"],
   "isolated": true,
   "categories": ["Other"],
   "configuration": {
