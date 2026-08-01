@@ -40,9 +40,7 @@ interface McpToolResult {
 }
 
 interface CreateNodeRpcOptions {
-  readonly id?: string
-  readonly name?: string
-  readonly path?: string
+  readonly id: string
 }
 
 type CreateNodeRpc = (options: CreateNodeRpcOptions) => Promise<NodeRpc>

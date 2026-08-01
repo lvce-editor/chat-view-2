@@ -81,7 +81,7 @@ test('delegates prefixed tool calls and keeps screenshot payloads bounded', asyn
     throw new Error(`Unexpected method: ${method}`)
   })
   const host = await createComputerUseToolHost(
-    { path: 'node-entry.js' },
+    { id: 'builtin.chat-view-2.computer-use' },
     async () => ({
       invoke,
     }),
