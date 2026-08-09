@@ -28,8 +28,8 @@
   "author": "Lvce Editor",
   "license": "MIT",
   "devDependencies": {
-    "@lvce-editor/eslint-config": "^18.0.0",
-    "eslint": "^10.8.0",
+    "@lvce-editor/eslint-config": "^18.2.0",
+    "eslint": "^10.8.1",
     "prettier": "^4.0.0-alpha.10",
     "typescript": "^6.0.3"
   },
