@@ -11,35 +11,31 @@ export const test: Test = async ({
 }) => {
   await Main.closeAllEditors()
   await ClipBoard.enableMemoryClipBoard()
-  try {
-    await Command.execute('Preferences.update', {
-      'chat2.useMockBackend': true,
-    })
-    await Command.executeExtensionCommand('chat2.show')
-    await Locator('textarea[name="composer"]').type('Copy this message')
-    await Command.executeExtensionCommand('chat2.submit')
+  await Command.execute('Preferences.update', {
+    'chat2.useMockBackend': true,
+  })
+  await Command.executeExtensionCommand('chat2.show')
+  await Locator('textarea[name="composer"]').type('Copy this message')
+  await Command.executeExtensionCommand('chat2.submit')
 
-    const metadata = Locator('.ChatMessageUser .ChatMessageMetadata')
-    const copyButton = Locator('.ChatMessageUser .ChatMessageCopyButton')
-    const assistantMetadata = Locator(
-      '.ChatMessageAssistant .ChatMessageMetadata',
-    )
-    const assistantCopyButton = Locator(
-      '.ChatMessageAssistant .ChatMessageCopyButton',
-    )
-    await expect(metadata).toHaveCSS('opacity', '0')
-    await expect(copyButton).toHaveAttribute('aria-label', 'Copy message')
-    await expect(assistantMetadata).toHaveCount(0)
-    await expect(assistantCopyButton).toHaveCount(0)
-    // eslint-disable-next-line e2e/no-direct-click
-    await copyButton.click()
-    const { promise, resolve } = Promise.withResolvers<void>()
-    setTimeout(resolve, 200)
-    await promise
-    await expect(copyButton).toHaveClass('ChatMessageCopyButtonCopied')
-    await expect(copyButton).toHaveAttribute('aria-label', 'Copied')
-    await ClipBoard.shouldHaveText('Copy this message')
-  } finally {
-    await ClipBoard.disableMemoryClipBoard()
-  }
+  const metadata = Locator('.ChatMessageUser .ChatMessageMetadata')
+  const copyButton = Locator('.ChatMessageUser .ChatMessageCopyButton')
+  const assistantMetadata = Locator(
+    '.ChatMessageAssistant .ChatMessageMetadata',
+  )
+  const assistantCopyButton = Locator(
+    '.ChatMessageAssistant .ChatMessageCopyButton',
+  )
+  await expect(metadata).toHaveCSS('opacity', '0')
+  await expect(copyButton).toHaveAttribute('aria-label', 'Copy message')
+  await expect(assistantMetadata).toHaveCount(0)
+  await expect(assistantCopyButton).toHaveCount(0)
+  // eslint-disable-next-line e2e/no-direct-click
+  await copyButton.click()
+  const { promise, resolve } = Promise.withResolvers<void>()
+  setTimeout(resolve, 200)
+  await promise
+  await expect(copyButton).toHaveClass('ChatMessageCopyButtonCopied')
+  await expect(copyButton).toHaveAttribute('aria-label', 'Copied')
+  await ClipBoard.shouldHaveText('Copy this message')
 }
