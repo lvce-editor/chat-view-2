@@ -12,12 +12,19 @@ import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
 import type { ReadPreference } from './FontSize.ts'
 import {
+  type BackendConfiguration,
+  resolveBackendConfiguration,
+} from '../BackendConfiguration/BackendConfiguration.ts'
+import {
   getFocusMode,
   getFocusModeEnabled,
   toggleFocusMode,
 } from '../ChatFocusMode/ChatFocusMode.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
-import { createDefaultChatApi } from '../DefaultChatApi/DefaultChatApi.ts'
+import {
+  createDefaultChatApi,
+  type DefaultChatApiOptions,
+} from '../DefaultChatApi/DefaultChatApi.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
@@ -52,6 +59,17 @@ type ExecuteCommand = (
   ...args: readonly unknown[]
 ) => Promise<unknown>
 
+interface DefaultChatApiHost {
+  readonly createApi: (options: DefaultChatApiOptions) => Promise<ChatApi>
+  readonly resolveConfiguration: () => Promise<BackendConfiguration>
+}
+
+const defaultChatApiHost: DefaultChatApiHost = {
+  createApi: createDefaultChatApi,
+  resolveConfiguration: resolveBackendConfiguration,
+}
+
+const authStatePollInterval = 500
 const copyFeedbackDuration = 2000
 const messagesSelector = '.ChatMessages'
 const maxScrollTop = 9_999_999
@@ -104,6 +122,37 @@ const getActiveInstance = (): ActiveChatViewInstance | undefined => {
   return activeInstances.values().toArray().at(-1)
 }
 
+const getSelectedModelId = (
+  models: ChatViewState['models'],
+  preferredModelId: string,
+): string => {
+  return (
+    models.find(
+      (model) =>
+        model.id === preferredModelId && model.available && model.planEligible,
+    )?.id ||
+    models.find((model) => model.available && model.planEligible)?.id ||
+    ''
+  )
+}
+
+const isSameBackendConfiguration = (
+  oldConfiguration: BackendConfiguration,
+  newConfiguration: BackendConfiguration,
+): boolean => {
+  return (
+    oldConfiguration.accessToken === newConfiguration.accessToken &&
+    oldConfiguration.baseUrl === newConfiguration.baseUrl &&
+    oldConfiguration.supportsStreaming === newConfiguration.supportsStreaming
+  )
+}
+
+const getModelLoadingError = (error: unknown): string => {
+  return error instanceof Error && !(error instanceof TypeError)
+    ? error.message
+    : 'Chat Models could not be loaded from server'
+}
+
 export const submitActiveChatViewInstance = async (): Promise<void> => {
   await getActiveInstance()?.submit(true)
 }
@@ -121,18 +170,22 @@ export const createInstance = async (
   providedApi?: ChatApi,
   readPreference?: ReadPreference,
   execute: ExecuteCommand = executeCommand,
+  defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
 ): Promise<ActiveChatViewInstance> => {
-  let api = providedApi
-  if (!api) {
-    api = await createDefaultChatApi()
+  let api: ChatApi
+  let backendConfiguration: BackendConfiguration | undefined
+  if (providedApi) {
+    api = providedApi
+  } else {
+    backendConfiguration = await defaultApiHost.resolveConfiguration()
+    api = await defaultApiHost.createApi({
+      configuration: backendConfiguration,
+    })
   }
   const saved = getSavedState(context?.state)
   let errorMessage = ''
   const models = await api.listModels().catch((error: unknown) => {
-    errorMessage =
-      error instanceof Error && !(error instanceof TypeError)
-        ? error.message
-        : 'Chat Models could not be loaded from server'
+    errorMessage = getModelLoadingError(error)
     return []
   })
   const tasks = await api.listTasks(20).catch((error: unknown) => {
@@ -143,13 +196,7 @@ export const createInstance = async (
     saved.selectedModelId || (await getPreferredModelId())
   const fontFamily = await readFontFamily(readPreference)
   const fontSize = await readFontSize(readPreference)
-  const selectedModelId =
-    models.find(
-      (model) =>
-        model.id === preferredModelId && model.available && model.planEligible,
-    )?.id ||
-    models.find((model) => model.available && model.planEligible)?.id ||
-    ''
+  const selectedModelId = getSelectedModelId(models, preferredModelId)
   const selectedTask = saved.selectedTaskId
     ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
     : undefined
@@ -176,7 +223,10 @@ export const createInstance = async (
         : 0,
   }
   let activeController: AbortController | undefined
+  let authStatePoll: ReturnType<typeof setInterval> | undefined
+  let authStateSyncing = false
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
+  let disposed = false
   let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
 
@@ -225,6 +275,50 @@ export const createInstance = async (
       state.copiedMessageId = ''
       void context?.requestRerender()
     }, copyFeedbackDuration)
+  }
+
+  const syncAuthState = async (): Promise<void> => {
+    if (!backendConfiguration || authStateSyncing || disposed) {
+      return
+    }
+    authStateSyncing = true
+    try {
+      const nextConfiguration = await defaultApiHost.resolveConfiguration()
+      if (
+        disposed ||
+        isSameBackendConfiguration(backendConfiguration, nextConfiguration)
+      ) {
+        return
+      }
+      const nextApi = await defaultApiHost.createApi({
+        configuration: nextConfiguration,
+      })
+      const nextModels = await nextApi.listModels().catch((error: unknown) => {
+        state.errorMessage = getModelLoadingError(error)
+        return []
+      })
+      if (disposed) {
+        return
+      }
+      api = nextApi
+      backendConfiguration = nextConfiguration
+      state.models = nextModels
+      state.selectedModelId = getSelectedModelId(
+        nextModels,
+        state.selectedModelId,
+      )
+      if (nextModels.length > 0) {
+        state.errorMessage = ''
+      }
+      await context?.requestRerender()
+    } catch (error) {
+      if (!disposed) {
+        state.errorMessage = getModelLoadingError(error)
+        await context?.requestRerender()
+      }
+    } finally {
+      authStateSyncing = false
+    }
   }
 
   const newChat = async (requestRerender = false): Promise<void> => {
@@ -296,7 +390,12 @@ export const createInstance = async (
 
   const instance: ActiveChatViewInstance = {
     dispose(): void {
+      disposed = true
       activeController?.abort()
+      if (authStatePoll !== undefined) {
+        clearInterval(authStatePoll)
+        authStatePoll = undefined
+      }
       resetCopyFeedback()
       stopWorkingTimer()
       activeInstances.delete(instance)
@@ -447,6 +546,11 @@ export const createInstance = async (
     toggleFocusMode: handleToggleFocusMode,
   }
   syncWorkingTimer(selectedTask)
+  if (backendConfiguration?.baseUrl) {
+    authStatePoll = setInterval(() => {
+      void syncAuthState()
+    }, authStatePollInterval)
+  }
   activeInstances.add(instance)
   return instance
 }

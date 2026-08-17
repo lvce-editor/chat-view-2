@@ -2,6 +2,7 @@
 import type { ViewContext, ViewEvent } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { VirtualDomElements } from '@lvce-editor/virtual-dom-worker'
+import type { BackendConfiguration } from '../src/parts/BackendConfiguration/BackendConfiguration.ts'
 import type { ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
 import {
@@ -165,6 +166,73 @@ test('shows the model loading error provided by the backend', async () => {
 
   expect(instance.getState().errorMessage).toBe('Log in to access the chat.')
   expect(getText(dom)).toContain('Log in to access the chat.')
+})
+
+test('reloads models when authentication changes after the view loads', async () => {
+  jest.useFakeTimers()
+  const requestRerender = jest.fn(async () => {})
+  const context = {
+    ...createViewContext(undefined),
+    requestRerender,
+  }
+  let configuration: BackendConfiguration = {
+    accessToken: '',
+    baseUrl: 'https://backend.example.com',
+    supportsStreaming: true,
+  }
+  const loggedOutApi = {
+    ...createMockChatApi(),
+    async listModels() {
+      throw new Error('Log in to access the chat.')
+    },
+  }
+  const loggedInApi = createMockChatApi()
+  const defaultApiHost = {
+    async createApi() {
+      return configuration.accessToken ? loggedInApi : loggedOutApi
+    },
+    async resolveConfiguration() {
+      return configuration
+    },
+  }
+  let instance: Awaited<ReturnType<typeof createInstance>> | undefined
+
+  try {
+    instance = await createInstance(
+      context,
+      undefined,
+      undefined,
+      undefined,
+      defaultApiHost,
+    )
+    expect(instance.getState().errorMessage).toBe('Log in to access the chat.')
+    expect(instance.getState().models).toEqual([])
+
+    configuration = {
+      ...configuration,
+      accessToken: 'token-that-arrived-later',
+    }
+    await jest.advanceTimersByTimeAsync(500)
+
+    expect(instance.getState().errorMessage).toBe('')
+    expect(instance.getState().models).toHaveLength(2)
+    expect(instance.getState().selectedModelId).toBe('gpt-5.4')
+    expect(requestRerender).toHaveBeenCalledTimes(1)
+
+    configuration = {
+      ...configuration,
+      accessToken: '',
+    }
+    await jest.advanceTimersByTimeAsync(500)
+
+    expect(instance.getState().errorMessage).toBe('Log in to access the chat.')
+    expect(instance.getState().models).toEqual([])
+    expect(instance.getState().selectedModelId).toBe('')
+    expect(requestRerender).toHaveBeenCalledTimes(2)
+  } finally {
+    instance?.dispose?.()
+    jest.useRealTimers()
+  }
 })
 
 test('archives a task from the task list', async () => {

@@ -4,7 +4,10 @@ import {
   createAgentToolHost,
   type AgentFileSystemAccess,
 } from '../AgentToolHost/AgentToolHost.ts'
-import { resolveBackendConfiguration } from '../BackendConfiguration/BackendConfiguration.ts'
+import {
+  type BackendConfiguration,
+  resolveBackendConfiguration,
+} from '../BackendConfiguration/BackendConfiguration.ts'
 import { getDefaultComputerUseToolHost } from '../ComputerUseToolHost/ComputerUseToolHost.ts'
 import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
 import { createNodeCommandExecutor } from '../NodeCommandExecutor/NodeCommandExecutor.ts'
@@ -13,15 +16,18 @@ import { createIndexedDbTaskStore } from '../TaskStore/TaskStore.ts'
 
 export interface DefaultChatApiOptions {
   readonly accessToken?: string
+  readonly configuration?: BackendConfiguration
   readonly fileSystemAccess?: AgentFileSystemAccess
 }
 
 export const createDefaultChatApi = async ({
   accessToken: providedAccessToken,
+  configuration: providedConfiguration,
   fileSystemAccess,
 }: DefaultChatApiOptions = {}): Promise<ChatApi> => {
   const { accessToken, baseUrl, supportsStreaming } =
-    await resolveBackendConfiguration(undefined, providedAccessToken)
+    providedConfiguration ||
+    (await resolveBackendConfiguration(undefined, providedAccessToken))
   if (!baseUrl) {
     return createMockChatApi(120)
   }
