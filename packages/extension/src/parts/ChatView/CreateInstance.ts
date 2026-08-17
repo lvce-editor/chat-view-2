@@ -546,7 +546,7 @@ export const createInstance = async (
     toggleFocusMode: handleToggleFocusMode,
   }
   syncWorkingTimer(selectedTask)
-  if (backendConfiguration) {
+  if (backendConfiguration?.baseUrl) {
     authStatePoll = setInterval(() => {
       void syncAuthState()
     }, authStatePollInterval)
