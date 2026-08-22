@@ -29,14 +29,29 @@ fs.cpSync(node, join(root, 'dist', 'node'), {
   recursive: true,
   verbatimSymlinks: true,
 })
-fs.mkdirSync(join(root, 'dist', 'node', 'node_modules', '@agent-sh'), {
-  recursive: true,
-})
-fs.cpSync(
-  join(root, 'node_modules', '@agent-sh', 'computer-use-linux'),
-  join(root, 'dist', 'node', 'node_modules', '@agent-sh', 'computer-use-linux'),
-  { recursive: true, verbatimSymlinks: true },
+const computerUsePackage = join(
+  root,
+  'node_modules',
+  '@agent-sh',
+  'computer-use-linux',
 )
+if (fs.existsSync(computerUsePackage)) {
+  fs.mkdirSync(join(root, 'dist', 'node', 'node_modules', '@agent-sh'), {
+    recursive: true,
+  })
+  fs.cpSync(
+    computerUsePackage,
+    join(
+      root,
+      'dist',
+      'node',
+      'node_modules',
+      '@agent-sh',
+      'computer-use-linux',
+    ),
+    { recursive: true, verbatimSymlinks: true },
+  )
+}
 
 fs.rmSync(join(root, 'dist', 'node', 'node_modules', '.bin'), {
   recursive: true,
