@@ -4,12 +4,10 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
-const computerUsePackage = join(
-  packageRoot,
-  'node_modules',
-  '@agent-sh',
-  'computer-use-linux',
+const computerUsePackage = dirname(
+  fileURLToPath(
+    import.meta.resolve('@agent-sh/computer-use-linux/package.json'),
+  ),
 )
 const computerUseWrapper = join(
   computerUsePackage,

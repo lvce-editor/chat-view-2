@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path, { join } from 'node:path'
 import { type Plugin, rollup } from 'rollup'
+import { build as esbuildBuild } from 'esbuild'
 import esbuild from 'rollup-plugin-esbuild'
 import { root } from './root.ts'
 
@@ -28,6 +29,14 @@ fs.cpSync(node, join(root, 'dist', 'node'), {
   recursive: true,
   verbatimSymlinks: true,
 })
+fs.mkdirSync(join(root, 'dist', 'node', 'node_modules', '@agent-sh'), {
+  recursive: true,
+})
+fs.cpSync(
+  join(root, 'node_modules', '@agent-sh', 'computer-use-linux'),
+  join(root, 'dist', 'node', 'node_modules', '@agent-sh', 'computer-use-linux'),
+  { recursive: true, verbatimSymlinks: true },
+)
 
 fs.rmSync(join(root, 'dist', 'node', 'node_modules', '.bin'), {
   recursive: true,
@@ -65,6 +74,19 @@ await bundle.write({
 })
 
 await bundle.close()
+
+await esbuildBuild({
+  banner: {
+    js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
+  },
+  bundle: true,
+  entryPoints: [join(node, 'src', 'computerUseProcess.js')],
+  external: ['electron', 'node:*', './computerUseClient.js'],
+  format: 'esm',
+  outfile: join(root, 'dist', 'node', 'src', 'computerUseProcess.js'),
+  platform: 'node',
+  target: 'node24',
+})
 
 await packageExtension({
   highestCompression: true,
