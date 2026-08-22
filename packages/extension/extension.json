@@ -47,9 +47,9 @@
   "rpc": [
     {
       "id": "builtin.chat-view-2.computer-use",
-      "type": "node",
+      "type": "node-process",
       "name": "Chat 2 Computer Use",
-      "url": "node/src/computerUseClient.js"
+      "url": "node/src/computerUseProcess.js"
     }
   ],
   "commands": [

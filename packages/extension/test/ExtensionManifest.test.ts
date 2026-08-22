@@ -15,8 +15,8 @@ test('declares the computer-use node rpc', async () => {
   expect(manifest.rpc).toContainEqual({
     id: 'builtin.chat-view-2.computer-use',
     name: 'Chat 2 Computer Use',
-    type: 'node',
-    url: 'node/src/computerUseClient.js',
+    type: 'node-process',
+    url: 'node/src/computerUseProcess.js',
   })
 })
 
