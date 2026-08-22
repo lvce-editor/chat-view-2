@@ -4,23 +4,18 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const computerUsePackage = dirname(
-  fileURLToPath(
-    import.meta.resolve('@agent-sh/computer-use-linux/package.json'),
-  ),
-)
-const computerUseWrapper = join(
-  computerUsePackage,
-  'npm',
-  'bin',
-  'computer-use-linux.js',
-)
-const skillPath = join(
-  computerUsePackage,
-  'skills',
-  'computer-use-linux',
-  'SKILL.md',
-)
+const getComputerUsePackage = () =>
+  dirname(
+    fileURLToPath(
+      import.meta.resolve('@agent-sh/computer-use-linux/package.json'),
+    ),
+  )
+
+const getComputerUseWrapper = () =>
+  join(getComputerUsePackage(), 'npm', 'bin', 'computer-use-linux.js')
+
+const getSkillPath = () =>
+  join(getComputerUsePackage(), 'skills', 'computer-use-linux', 'SKILL.md')
 const protocolVersion = '2024-11-05'
 const maximumErrorCharacters = 16_000
 const desktopIdRegex = /^[\w.+-]+(?:\.desktop)?$/u
@@ -596,7 +591,7 @@ class ComputerUseMcpClient {
     if (process.platform !== 'linux') {
       throw new Error('Computer use is available only on Linux')
     }
-    const child = spawn(process.execPath, [computerUseWrapper, 'mcp'], {
+    const child = spawn(process.execPath, [getComputerUseWrapper(), 'mcp'], {
       env: getComputerUseEnvironment(process.env),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
@@ -693,7 +688,7 @@ const callTool = async (name, arguments_) => {
   return client.request('tools/call', { arguments: toolArguments, name })
 }
 
-const getSkillInstructions = () => readFile(skillPath, 'utf8')
+const getSkillInstructions = () => readFile(getSkillPath(), 'utf8')
 
 process.once('exit', () => client.stop())
 
