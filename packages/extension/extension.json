@@ -28,10 +28,20 @@
       "default": "13px",
       "description": "Font size for chat task list items, for example 20px."
     },
+    "chat2.selectedModelId": {
+      "type": "string",
+      "default": "",
+      "description": "The preferred model for new Chat 2 tasks."
+    },
     "chat2.supportsStreaming": {
       "type": "boolean",
       "default": false,
       "description": "Use the Responses WebSocket streaming protocol for a custom chat backend. The editor backend enables it automatically."
+    },
+    "chat2.useMockBackend": {
+      "type": "boolean",
+      "default": false,
+      "description": "Use the mock Chat 2 backend for development and testing."
     }
   },
   "activation": [
