@@ -87,6 +87,25 @@ test('keeps backend streaming disabled by default', async () => {
   )
 })
 
+test('contributes every preference read by Chat 2', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(
+    Object.keys(manifest.configuration).toSorted((a, b) => a.localeCompare(b)),
+  ).toEqual(
+    [
+      'chat2.backendUrl',
+      'chat2.experimentalFocusMode',
+      'chat2.fontFamily',
+      'chat2.fontSize',
+      'chat2.selectedModelId',
+      'chat2.supportsStreaming',
+      'chat2.useMockBackend',
+    ].toSorted((a, b) => a.localeCompare(b)),
+  )
+})
+
 test('uses the full sidebar without the default header', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
