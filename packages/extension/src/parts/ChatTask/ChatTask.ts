@@ -119,6 +119,13 @@ export const summarizeTask = (task: ChatTask): ChatTaskSummary => {
 
         break
       }
+      case 'status': {
+        if (event.status === 'running') {
+          errorMessage = ''
+        }
+
+        break
+      }
       case 'error': {
         errorMessage = event.message
 

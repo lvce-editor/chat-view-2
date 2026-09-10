@@ -51,3 +51,28 @@ test('reduces messages, activity, errors, and latest changes from events', () =>
     }),
   )
 })
+
+test.each(['running', 'completed', 'cancelled'] as const)(
+  'clears previous errors for a new %s run',
+  (status) => {
+    let task = appendEvent(
+      baseTask,
+      createEvent({ message: 'Previous failure', type: 'error' }),
+    )
+    expect(summarizeTask(task).errorMessage).toBe('Previous failure')
+    task = appendEvent(task, createEvent({ status: 'running', type: 'status' }))
+    task = appendEvent(task, createEvent({ status, type: 'status' }))
+    expect(summarizeTask(task).errorMessage).toBe('')
+  },
+)
+
+test('shows a new failure after clearing an earlier run error', () => {
+  const task = [
+    createEvent({ message: 'Previous failure', type: 'error' }),
+    createEvent({ status: 'failed', type: 'status' }),
+    createEvent({ status: 'running', type: 'status' }),
+    createEvent({ message: 'New failure', type: 'error' }),
+    createEvent({ status: 'failed', type: 'status' }),
+  ].reduce(appendEvent, baseTask)
+  expect(summarizeTask(task).errorMessage).toBe('New failure')
+})
