@@ -216,12 +216,10 @@ const validateUris = (value) => {
     throw new TypeError('uris must be an array of URI strings')
   }
   for (const uri of value) {
-    let parsed
-    try {
-      parsed = new URL(uri)
-    } catch {
+    if (!URL.canParse(uri)) {
       throw new TypeError(`Invalid application URI: ${uri}`)
     }
+    const parsed = new URL(uri)
     if (!supportedUriProtocols.has(parsed.protocol)) {
       throw new TypeError(`Unsupported application URI protocol: ${uri}`)
     }

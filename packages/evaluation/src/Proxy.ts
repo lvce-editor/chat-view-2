@@ -108,12 +108,11 @@ const isAllowedOrigin = (
   if (origin === 'null') {
     return true
   }
-  try {
-    const { hostname } = new URL(origin)
-    return localHostnames.has(hostname)
-  } catch {
+  if (!URL.canParse(origin)) {
     return false
   }
+  const { hostname } = new URL(origin)
+  return localHostnames.has(hostname)
 }
 
 export const startEvaluationProxy = async (
