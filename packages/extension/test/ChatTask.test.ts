@@ -52,7 +52,7 @@ test('reduces messages, activity, errors, and latest changes from events', () =>
   )
 })
 
-test.each(['running', 'completed', 'cancelled'] as const)(
+test.each(['running', 'completed', 'idle'] as const)(
   'clears previous errors for a new %s run',
   (status) => {
     let task = appendEvent(
