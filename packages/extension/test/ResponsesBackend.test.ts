@@ -418,3 +418,119 @@ test('surfaces backend WebSocket error messages', async () => {
   await expect(result).rejects.toThrow('Monthly allowance exceeded')
   expect(createWebSocket).toHaveBeenCalledTimes(1)
 })
+
+test('lists connected OpenRouter models alongside OpenAI models', async () => {
+  const backend = createResponsesBackend({
+    accessToken: 'lvce-token',
+    baseUrl: 'https://backend.example.com',
+    fetch: jest.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        models: [
+          { id: 'gpt-test', provider: 'openai' },
+          {
+            id: 'openrouter/vendor/free:free',
+            label: 'Free model (OpenRouter)',
+            planEligible: true,
+            provider: 'openrouter',
+          },
+        ],
+      }),
+    ),
+  })
+  const models = await backend.listModels()
+  expect(models.map((model) => model.id)).toEqual([
+    'gpt-test',
+    'openrouter/vendor/free:free',
+  ])
+})
+
+test('routes OpenRouter through backend HTTP and preserves tool history across turns', async () => {
+  const toolCall = {
+    arguments: '{}',
+    call_id: 'call-1',
+    name: 'read_file',
+    type: 'function_call',
+  }
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      Response.json({ id: 'response-1', output: [toolCall] }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({
+        id: 'response-2',
+        output: [
+          {
+            content: [{ text: 'Done', type: 'output_text' }],
+            role: 'assistant',
+            type: 'message',
+          },
+        ],
+      }),
+    )
+  const createWebSocket = jest.fn(() => new MockResponsesWebSocket())
+  const backend = createResponsesBackend({
+    accessToken: 'lvce-token',
+    baseUrl: 'https://backend.example.com',
+    createWebSocket,
+    fetch: fetchMock,
+    supportsStreaming: true,
+  })
+  const first = await backend.runStep({
+    input: [{ content: 'Read the file', role: 'user' }],
+    modelId: 'openrouter/vendor/free:free',
+    onTextDelta: () => {},
+    tools: [],
+  })
+  expect(first.toolCalls[0].callId).toBe('call-1')
+  const second = await backend.runStep({
+    input: [
+      {
+        callId: 'call-1',
+        output: 'file content',
+        type: 'function-call-output',
+      },
+    ],
+    modelId: 'openrouter/vendor/free:free',
+    onTextDelta: () => {},
+    previousResponseId: first.responseId,
+    ...(first.responseHistory && { responseHistory: first.responseHistory }),
+    tools: [],
+  })
+  expect(createWebSocket).not.toHaveBeenCalled()
+  expect(second.text).toBe('Done')
+  expect(fetchMock.mock.calls[1][0]).toBe(
+    'https://backend.example.com/v1/responses',
+  )
+  const request = JSON.parse(fetchMock.mock.calls[1][1]?.body as string)
+  expect(request.previous_response_id).toBeUndefined()
+  expect(request.store).toBe(false)
+  expect(request.stream).toBe(false)
+  expect(request.input).toEqual([
+    { content: [{ text: 'Read the file', type: 'input_text' }], role: 'user' },
+    toolCall,
+    { call_id: 'call-1', output: 'file content', type: 'function_call_output' },
+  ])
+  expect(fetchMock.mock.calls[1][1]?.headers).toEqual(
+    expect.objectContaining({ Authorization: 'Bearer lvce-token' }),
+  )
+})
+
+test('does not silently lose an OpenRouter conversation whose history is unavailable', async () => {
+  const fetchMock = jest.fn<typeof fetch>()
+  const backend = createResponsesBackend({
+    accessToken: 'token',
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+  await expect(
+    backend.runStep({
+      input: [{ content: 'Continue', role: 'user' }],
+      modelId: 'openrouter/vendor/model',
+      onTextDelta: () => {},
+      previousResponseId: 'old-response',
+      tools: [],
+    }),
+  ).rejects.toThrow('history is unavailable')
+  expect(fetchMock).not.toHaveBeenCalled()
+})

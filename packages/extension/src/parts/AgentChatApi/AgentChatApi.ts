@@ -173,6 +173,9 @@ export const createAgentChatApi = ({
         }
         const result = await backend.runStep({
           input,
+          ...(task.responseHistory && {
+            responseHistory: task.responseHistory,
+          }),
           modelId: task.modelId,
           onTextDelta: async (delta) => {
             streamedText += delta
@@ -212,6 +215,9 @@ export const createAgentChatApi = ({
           task
         task = {
           ...taskWithoutStreamingText,
+          ...(result.responseHistory && {
+            responseHistory: result.responseHistory,
+          }),
           ...(previousResponseId && { responseId: previousResponseId }),
         }
         streamedText = ''

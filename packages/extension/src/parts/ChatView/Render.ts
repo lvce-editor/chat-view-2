@@ -186,7 +186,7 @@ const renderModelPicker = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     return Dom.div('ChatModelPickerHidden', [])
   }
   return Dom.div('ChatModelPicker', [
-    Dom.div('ChatModelPickerTitle', [Dom.textNode('OpenAI models')]),
+    Dom.div('ChatModelPickerTitle', [Dom.textNode('Models')]),
     ...models.map(renderModel),
   ])
 }
