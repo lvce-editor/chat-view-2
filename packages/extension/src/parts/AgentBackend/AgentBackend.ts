@@ -24,11 +24,13 @@ export interface AgentStepOptions {
   readonly modelId: string
   readonly onTextDelta: (delta: string) => void | Promise<void>
   readonly previousResponseId?: string
+  readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly signal?: AbortSignal
   readonly tools: readonly AgentToolDefinition[]
 }
 
 export interface AgentStepResult {
+  readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly responseId: string
   readonly text: string
   readonly toolCalls: readonly AgentToolCall[]

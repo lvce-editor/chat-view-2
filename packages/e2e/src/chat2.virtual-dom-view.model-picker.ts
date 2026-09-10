@@ -13,7 +13,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
 
   const picker = Locator('.ChatModelPicker')
   const options = Locator('.ChatModelOption')
-  const title = Locator('text=OpenAI models')
+  const title = Locator('text=Models')
   await expect(picker).toBeVisible()
   await expect(picker).toHaveCSS('right', '16px')
   await expect(picker).toHaveCSS('max-width', '300px')

@@ -146,7 +146,7 @@ const parseModels = (value: unknown): readonly ChatModel[] => {
     }
     const provider =
       typeof model.provider === 'string' ? model.provider : 'openai'
-    if (provider.toLowerCase() !== 'openai') {
+    if (!['openai', 'openrouter'].includes(provider.toLowerCase())) {
       return []
     }
     return [
@@ -522,17 +522,36 @@ export const createResponsesBackend = ({
       }
       const models = parseModels(await response.json())
       if (models.length === 0) {
-        throw new Error('The backend returned no OpenAI models')
+        throw new Error('The backend returned no available models')
       }
       return models
     },
     async runStep(options) {
-      if (supportsStreaming) {
+      const isOpenRouter = options.modelId.startsWith('openrouter/')
+      if (
+        isOpenRouter &&
+        options.previousResponseId &&
+        !options.responseHistory
+      ) {
+        throw new Error(
+          'OpenRouter conversation history is unavailable. Start a new chat.',
+        )
+      }
+      const request = createResponseRequest(options)
+      const openRouterInput = isOpenRouter
+        ? [...(options.responseHistory || []), ...options.input.map(mapInput)]
+        : []
+      if (supportsStreaming && !isOpenRouter) {
         return runWebSocketStep(root, accessToken, createWebSocket, options)
       }
       const response = await fetchImplementation(`${root}/v1/responses`, {
         body: JSON.stringify({
-          ...createResponseRequest(options),
+          ...request,
+          ...(isOpenRouter && {
+            input: openRouterInput,
+            previous_response_id: undefined,
+            store: false,
+          }),
           stream: false,
         }),
         credentials: 'include',
@@ -544,6 +563,18 @@ export const createResponsesBackend = ({
         throw new Error(
           `Model request failed (${response.status}): ${await getErrorMessage(response)}`,
         )
+      }
+      if (isOpenRouter) {
+        const value = getRecord(await response.json())
+        if (!value || !Array.isArray(value.output)) {
+          throw new Error('OpenRouter returned an invalid response')
+        }
+        return {
+          responseHistory: [...openRouterInput, ...value.output],
+          responseId: typeof value.id === 'string' ? value.id : '',
+          text: getResponseText(value),
+          toolCalls: getResponseToolCalls(value),
+        }
       }
       return readResponse(response)
     },

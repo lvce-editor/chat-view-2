@@ -121,6 +121,7 @@ export interface ChatTask {
   readonly events: readonly ChatTaskEvent[]
   readonly id: string
   readonly modelId: string
+  readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly responseId?: string
   readonly status: ChatTaskStatus
   readonly streamingText?: string

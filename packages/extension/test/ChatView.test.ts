@@ -481,13 +481,13 @@ test('renders user message actions and shows feedback after copying', async () =
   instance.dispose?.()
 })
 
-test('opens the OpenAI model picker without adding model controls to the header', async () => {
+test('opens the model picker without adding model controls to the header', async () => {
   const instance = await createTestInstance()
   await dispatch(instance, { name: 'model-picker', type: 'click' })
 
   const dom = instance.render() as readonly any[]
   expect(getNodesByClass(dom, 'ChatModelPicker')).toHaveLength(1)
-  expect(getText(dom)).toContain('OpenAI models')
+  expect(getText(dom)).toContain('Models')
   expect(getText(dom)).toContain('GPT-5.4')
 })
 
