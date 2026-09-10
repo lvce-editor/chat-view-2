@@ -166,12 +166,10 @@ const getWorkspaceBase = async (
   if (!workspace) {
     throw new Error('Open a workspace before running a coding task')
   }
-  let url: URL
-  try {
-    url = new URL(workspace)
-  } catch {
+  if (!URL.canParse(workspace)) {
     throw new Error(`Workspace URI is invalid: ${workspace}`)
   }
+  const url = new URL(workspace)
   if (url.search || url.hash) {
     throw new Error(`Workspace URI is invalid: ${workspace}`)
   }

@@ -17,9 +17,7 @@ export const test: Test = async ({
   const composer = Locator('textarea[name="composer"]')
   await composer.type('Build a smaller chat view')
   await composer.dispatchEvent('focus', { bubbles: true } as unknown as string)
-  await new Promise((resolve) => {
-    setTimeout(resolve, 200)
-  })
+  await expect(composer).toBeFocused()
   await KeyBoard.press('Enter')
 
   const detail = Locator('.ChatDetailView')
