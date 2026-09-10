@@ -1,3 +1,4 @@
+// cspell:words nemotron logprobs
 /* eslint-disable unicorn/max-nested-calls */
 import { expect, jest, test } from '@jest/globals'
 import type { AgentBackend } from '../src/parts/AgentBackend/AgentBackend.ts'
@@ -321,31 +322,31 @@ test('clears an earlier OpenRouter error when a Nemotron follow-up succeeds', as
     )
     .mockResolvedValueOnce(
       Response.json({
+        error: null,
         id: 'nemotron-response',
         object: 'response',
-        status: 'completed',
-        error: null,
         output: [
           {
-            type: 'reasoning',
-            content: [{ type: 'reasoning_text', text: 'Compute the sum.' }],
-            summary: [],
+            content: [{ text: 'Compute the sum.', type: 'reasoning_text' }],
             format: 'unknown',
+            summary: [],
+            type: 'reasoning',
           },
           {
-            type: 'message',
-            role: 'assistant',
-            status: 'completed',
             content: [
               {
-                type: 'output_text',
-                text: '2+2 is **4**.',
                 annotations: [],
                 logprobs: [],
+                text: '2+2 is **4**.',
+                type: 'output_text',
               },
             ],
+            role: 'assistant',
+            status: 'completed',
+            type: 'message',
           },
         ],
+        status: 'completed',
       }),
     )
   const store = createMemoryTaskStore()

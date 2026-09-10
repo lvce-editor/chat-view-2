@@ -1,3 +1,4 @@
+// cspell:words nemotron
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import type { ViewContext, ViewEvent } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
@@ -615,11 +616,6 @@ test('reopening a recovered task renders its answer without the previous error b
   const timestamp = '2026-09-10T12:00:00.000Z'
   const task: ChatTask = {
     createdAt: timestamp,
-    updatedAt: timestamp,
-    id: 'recovered-task',
-    modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
-    status: 'completed',
-    title: '1+1',
     events: [
       createEvent({
         message: 'Model request failed (502): Invalid response from OpenRouter',
@@ -631,6 +627,11 @@ test('reopening a recovered task renders its answer without the previous error b
       createEvent({ text: '2+2 is **4**.', type: 'assistant-message' }),
       createEvent({ status: 'completed', type: 'status' }),
     ],
+    id: 'recovered-task',
+    modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+    status: 'completed',
+    title: '1+1',
+    updatedAt: timestamp,
   }
   const instance = await createInstance(
     createViewContext({ selectedTaskId: task.id }),
