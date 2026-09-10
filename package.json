@@ -33,6 +33,9 @@
     "prettier": "^4.0.0-alpha.10",
     "typescript": "^6.0.3"
   },
+  "overrides": {
+    "@lvce-editor/test-worker": "17.8.0"
+  },
   "prettier": {
     "semi": false,
     "singleQuote": true
