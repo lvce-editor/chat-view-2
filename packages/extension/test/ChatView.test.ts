@@ -1,9 +1,11 @@
+// cspell:words nemotron
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import type { ViewContext, ViewEvent } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { VirtualDomElements } from '@lvce-editor/virtual-dom-worker'
 import type { BackendConfiguration } from '../src/parts/BackendConfiguration/BackendConfiguration.ts'
 import type { ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
+import { createEvent } from '../src/parts/ChatTask/ChatTask.ts'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
 import {
   createMockChatApi,
@@ -608,4 +610,43 @@ test('opens a new chat from the active task', async () => {
     }),
   )
   expect(instance.renderTitle()).toBe('Chat 2')
+})
+
+test('reopening a recovered task renders its answer without the previous error banner', async () => {
+  const timestamp = '2026-09-10T12:00:00.000Z'
+  const task: ChatTask = {
+    createdAt: timestamp,
+    events: [
+      createEvent({
+        message: 'Model request failed (502): Invalid response from OpenRouter',
+        type: 'error',
+      }),
+      createEvent({ status: 'failed', type: 'status' }),
+      createEvent({ text: '2+2', type: 'user-message' }),
+      createEvent({ status: 'running', type: 'status' }),
+      createEvent({ text: '2+2 is **4**.', type: 'assistant-message' }),
+      createEvent({ status: 'completed', type: 'status' }),
+    ],
+    id: 'recovered-task',
+    modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+    status: 'completed',
+    title: '1+1',
+    updatedAt: timestamp,
+  }
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: task.id }),
+    {
+      ...createMockChatApi(),
+      async getTask() {
+        return task
+      },
+    },
+  )
+  try {
+    const dom = instance.render() as readonly any[]
+    expect(getText(dom)).toContain('2+2 is **4**.')
+    expect(getNodesByClass(dom, 'ChatErrorBanner')).toHaveLength(0)
+  } finally {
+    instance.dispose?.()
+  }
 })

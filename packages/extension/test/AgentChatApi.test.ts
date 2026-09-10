@@ -1,9 +1,11 @@
+// cspell:words nemotron logprobs
 /* eslint-disable unicorn/max-nested-calls */
 import { expect, jest, test } from '@jest/globals'
 import type { AgentBackend } from '../src/parts/AgentBackend/AgentBackend.ts'
 import type { AgentToolHost } from '../src/parts/AgentToolHost/AgentToolHost.ts'
 import { createAgentChatApi } from '../src/parts/AgentChatApi/AgentChatApi.ts'
 import { summarizeTask } from '../src/parts/ChatTask/ChatTask.ts'
+import { createResponsesBackend } from '../src/parts/ResponsesBackend/ResponsesBackend.ts'
 import { createMemoryTaskStore } from '../src/parts/TaskStore/TaskStore.ts'
 
 test('runs a multi-step tool loop and records a compact event history', async () => {
@@ -307,4 +309,85 @@ test('returns automatic verification failures to the model for repair', async ()
     'Repaired and verified.',
   )
   expect(summary.checksPassed).toBe(2)
+})
+
+test('clears an earlier OpenRouter error when a Nemotron follow-up succeeds', async () => {
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      Response.json(
+        { error: 'Invalid response from OpenRouter' },
+        { status: 502 },
+      ),
+    )
+    .mockResolvedValueOnce(
+      Response.json({
+        error: null,
+        id: 'nemotron-response',
+        object: 'response',
+        output: [
+          {
+            content: [{ text: 'Compute the sum.', type: 'reasoning_text' }],
+            format: 'unknown',
+            summary: [],
+            type: 'reasoning',
+          },
+          {
+            content: [
+              {
+                annotations: [],
+                logprobs: [],
+                text: '2+2 is **4**.',
+                type: 'output_text',
+              },
+            ],
+            role: 'assistant',
+            status: 'completed',
+            type: 'message',
+          },
+        ],
+        status: 'completed',
+      }),
+    )
+  const store = createMemoryTaskStore()
+  const api = createAgentChatApi({
+    backend: createResponsesBackend({
+      baseUrl: 'https://backend.example.com',
+      fetch: fetchMock,
+    }),
+    store,
+    toolHost: {
+      beginTurn() {},
+      async execute() {
+        return { content: '', isError: false }
+      },
+      getChangedFiles() {
+        return []
+      },
+      getDefinitions() {
+        return []
+      },
+      async getWorkspaceContext() {
+        return 'Workspace'
+      },
+      async revert() {
+        return []
+      },
+    },
+  })
+  const failed = await api.createTask(
+    '1+1',
+    'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+  )
+  expect(failed.status).toBe('failed')
+  expect(summarizeTask(failed).errorMessage).toBe(
+    'Model request failed (502): Invalid response from OpenRouter',
+  )
+  const completed = await api.sendMessage(failed, '2+2')
+  expect(completed.status).toBe('completed')
+  expect(summarizeTask(completed).messages.at(-1)?.text).toBe('2+2 is **4**.')
+  expect(summarizeTask(completed).errorMessage).toBe('')
+  expect(completed.events.some((event) => event.type === 'error')).toBe(true)
+  expect(summarizeTask((await store.get(completed.id))!).errorMessage).toBe('')
+  expect(fetchMock).toHaveBeenCalledTimes(2)
 })
