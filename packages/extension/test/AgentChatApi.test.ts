@@ -11,6 +11,15 @@ test('runs a multi-step tool loop and records a compact event history', async ()
   const runStep = jest
     .fn<AgentBackend['runStep']>()
     .mockResolvedValueOnce({
+      responseHistory: [
+        { role: 'user', content: 'Read file' },
+        {
+          type: 'function_call',
+          call_id: 'call-1',
+          name: 'read_file',
+          arguments: '{}',
+        },
+      ],
       responseId: 'response-1',
       text: '',
       toolCalls: [
@@ -22,6 +31,7 @@ test('runs a multi-step tool loop and records a compact event history', async ()
       ],
     })
     .mockResolvedValueOnce({
+      responseHistory: [{ role: 'assistant', content: 'Finished' }],
       responseId: 'response-2',
       text: 'The repository is ready.',
       toolCalls: [],
@@ -90,6 +100,20 @@ test('runs a multi-step tool loop and records a compact event history', async ()
     expect.objectContaining({ name: 'read_file' }),
     undefined,
   )
+  expect(runStep.mock.calls[1]?.[0].responseHistory).toEqual([
+    { role: 'user', content: 'Read file' },
+    {
+      type: 'function_call',
+      call_id: 'call-1',
+      name: 'read_file',
+      arguments: '{}',
+    },
+  ])
+  expect(task.responseHistory).toEqual([
+    { role: 'assistant', content: 'Finished' },
+  ])
+  const restoredTask = await api.getTask(task.id)
+  expect(restoredTask?.responseHistory).toEqual(task.responseHistory)
   expect(runStep).toHaveBeenCalledTimes(2)
   expect(runStep.mock.calls[1]?.[0].input).toEqual([
     {
