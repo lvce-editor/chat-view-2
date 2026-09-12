@@ -650,3 +650,103 @@ test('reopening a recovered task renders its answer without the previous error b
     instance.dispose?.()
   }
 })
+
+test('renders only the login screen and replaces it after login, then hides chat on logout', async () => {
+  jest.useFakeTimers()
+  let configuration: BackendConfiguration = {
+    accessToken: '',
+    baseUrl: 'https://backend.example.com',
+    loginRequired: true,
+    supportsStreaming: true,
+  }
+  const execute = jest.fn(async (id: string) => {
+    expect(id).toBe('Layout.signIn')
+    configuration = {
+      ...configuration,
+      accessToken: 'token',
+      loginRequired: false,
+    }
+  })
+  const api = createMockChatApi()
+  const listModels = jest.fn(api.listModels)
+  const host = {
+    async createApi() {
+      return { ...api, listModels }
+    },
+    async resolveConfiguration() {
+      return configuration
+    },
+  }
+  const instance = await createInstance(
+    createViewContext(undefined),
+    undefined,
+    undefined,
+    execute,
+    host,
+  )
+  try {
+    const dom = instance.render()
+    expect(getNodesByClass(dom, 'ChatComposerInput')).toHaveLength(0)
+    expect(getNodesByClass(dom, 'ChatTaskList')).toHaveLength(0)
+    expect(getNodesByClass(dom, 'ChatModelButton')).toHaveLength(0)
+    expect(getText(dom)).toContain('Log in to Chat 2')
+    expect(getText(dom)).toContain('Login')
+    expect(listModels).not.toHaveBeenCalled()
+    await dispatch(instance, { name: 'login', type: 'click' })
+    expect(execute).toHaveBeenCalledWith('Layout.signIn')
+    expect(
+      getNodesByClass(instance.render(), 'ChatComposerInput'),
+    ).toHaveLength(1)
+    expect(getNodesByClass(instance.render(), 'ChatLoginButton')).toHaveLength(
+      0,
+    )
+    configuration = { ...configuration, accessToken: '', loginRequired: true }
+    await jest.advanceTimersByTimeAsync(500)
+    expect(
+      getNodesByClass(instance.render(), 'ChatComposerInput'),
+    ).toHaveLength(0)
+    expect(getNodesByClass(instance.render(), 'ChatLoginButton')).toHaveLength(
+      1,
+    )
+  } finally {
+    instance.dispose?.()
+    jest.useRealTimers()
+  }
+})
+
+test('keeps login available after a failed or cancelled login', async () => {
+  const configuration: BackendConfiguration = {
+    accessToken: '',
+    baseUrl: 'https://backend.example.com',
+    loginRequired: true,
+    supportsStreaming: true,
+  }
+  const execute = jest.fn(async () => {
+    throw new Error('Login cancelled')
+  })
+  const instance = await createInstance(
+    createViewContext(undefined),
+    undefined,
+    undefined,
+    execute,
+    {
+      async createApi() {
+        return createMockChatApi()
+      },
+      async resolveConfiguration() {
+        return configuration
+      },
+    },
+  )
+  try {
+    await dispatch(instance, { name: 'login', type: 'click' })
+    expect(getText(instance.render())).toContain('Login cancelled')
+    expect(instance.getState().loginPending).toBe(false)
+    expect(instance.getState().loginRequired).toBe(true)
+    expect(
+      getNodesByClass(instance.render(), 'ChatComposerInput'),
+    ).toHaveLength(0)
+  } finally {
+    instance.dispose?.()
+  }
+})
