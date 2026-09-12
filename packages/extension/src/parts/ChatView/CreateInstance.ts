@@ -142,6 +142,7 @@ const isSameBackendConfiguration = (
 ): boolean => {
   return (
     oldConfiguration.accessToken === newConfiguration.accessToken &&
+    oldConfiguration.loginRequired === newConfiguration.loginRequired &&
     oldConfiguration.baseUrl === newConfiguration.baseUrl &&
     oldConfiguration.supportsStreaming === newConfiguration.supportsStreaming
   )
@@ -184,10 +185,12 @@ export const createInstance = async (
   }
   const saved = getSavedState(context?.state)
   let errorMessage = ''
-  const models = await api.listModels().catch((error: unknown) => {
-    errorMessage = getModelLoadingError(error)
-    return []
-  })
+  const models = backendConfiguration?.loginRequired
+    ? []
+    : await api.listModels().catch((error: unknown) => {
+        errorMessage = getModelLoadingError(error)
+        return []
+      })
   const tasks = await api.listTasks(20).catch((error: unknown) => {
     errorMessage = error instanceof Error ? error.message : String(error)
     return []
@@ -212,6 +215,8 @@ export const createInstance = async (
     focusModeEnabled,
     fontFamily,
     fontSize,
+    loginRequired: backendConfiguration?.loginRequired === true,
+    loginPending: false,
     modelPickerOpen: false,
     models,
     selectedModelId,
@@ -293,15 +298,21 @@ export const createInstance = async (
       const nextApi = await defaultApiHost.createApi({
         configuration: nextConfiguration,
       })
-      const nextModels = await nextApi.listModels().catch((error: unknown) => {
-        state.errorMessage = getModelLoadingError(error)
-        return []
-      })
+      const nextModels = nextConfiguration.loginRequired
+        ? []
+        : await nextApi.listModels().catch((error: unknown) => {
+            state.errorMessage = getModelLoadingError(error)
+            return []
+          })
       if (disposed) {
         return
       }
       api = nextApi
       backendConfiguration = nextConfiguration
+      state.loginRequired = nextConfiguration.loginRequired === true
+      if (state.loginRequired) {
+        state.errorMessage = ''
+      }
       state.models = nextModels
       state.selectedModelId = getSelectedModelId(
         nextModels,
@@ -349,7 +360,7 @@ export const createInstance = async (
 
   const submit = async (requestRerender = false): Promise<void> => {
     const message = state.draft.trim()
-    if (!message || !state.selectedModelId) {
+    if (state.loginRequired || !message || !state.selectedModelId) {
       return
     }
     state.draft = ''
@@ -411,6 +422,30 @@ export const createInstance = async (
       return state
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
+      if (event.type === 'click' && event.name === 'login') {
+        if (!state.loginRequired || state.loginPending) {
+          return
+        }
+        state.loginPending = true
+        state.errorMessage = ''
+        await context?.requestRerender()
+        try {
+          await execute('Layout.signIn')
+          await syncAuthState()
+        } catch (error) {
+          state.errorMessage =
+            error instanceof Error ? error.message : String(error)
+        } finally {
+          state.loginPending = false
+          if (!disposed) {
+            await context?.requestRerender()
+          }
+        }
+        return
+      }
+      if (state.loginRequired) {
+        return
+      }
       if (event.type === 'input' && event.name === 'composer') {
         state.composerFocused = true
         state.draft = getEventString(event)

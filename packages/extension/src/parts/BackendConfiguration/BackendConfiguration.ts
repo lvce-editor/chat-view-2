@@ -1,6 +1,7 @@
 import { executeCommand, getAccessToken, getPreference } from '@lvce-editor/api'
 
 export interface BackendConfiguration {
+  readonly loginRequired?: boolean
   readonly accessToken: string
   readonly baseUrl: string
   readonly supportsStreaming: boolean
@@ -113,5 +114,10 @@ export const resolveBackendConfiguration = async (
     ? providedAccessToken || (await resolveAccessToken(host))
     : ''
   const supportsStreaming = usesEditorBackend || configuredSupportsStreaming
-  return { accessToken, baseUrl, supportsStreaming }
+  return {
+    accessToken,
+    baseUrl,
+    supportsStreaming,
+    ...(usesEditorBackend && !accessToken && { loginRequired: true }),
+  }
 }

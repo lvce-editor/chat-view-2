@@ -1,5 +1,8 @@
 /* eslint-disable sonarjs/no-nested-conditional, unicorn/max-nested-calls, unicorn/prefer-iterator-to-array */
-import type { VirtualDomNode } from '@lvce-editor/virtual-dom-worker'
+import {
+  VirtualDomElements,
+  type VirtualDomNode,
+} from '@lvce-editor/virtual-dom-worker'
 import type {
   ChatChangedFile,
   ChatModel,
@@ -433,6 +436,23 @@ export const render = (
   state: Readonly<ChatViewState>,
 ): readonly VirtualDomNode[] => {
   const { selectedTask } = state
+  if (state.loginRequired) {
+    return Dom.flatten(
+      Dom.div('ChatView ChatLoggedOut', [
+        Dom.node(VirtualDomElements.P, { className: 'ChatLoginDescription' }, [
+          Dom.textNode(
+            'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
+          ),
+        ]),
+        Dom.button('login', 'Login', 'ChatLoginButton', {
+          disabled: state.loginPending,
+        }),
+        ...(state.errorMessage && state.loginPending === false
+          ? [Dom.div('ChatError', [Dom.textNode(state.errorMessage)])]
+          : []),
+      ]),
+    )
+  }
   return Dom.flatten(
     selectedTask ? renderDetailView(state) : renderListView(state),
   )

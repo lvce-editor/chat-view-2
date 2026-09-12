@@ -735,3 +735,37 @@
     color-mix(in srgb, var(--ChatErrorForeground) 35%, transparent);
   border-radius: 6px;
 }
+
+.ChatLoggedOut {
+  padding: 20px;
+  gap: 12px;
+  align-items: flex-start;
+  overflow: auto;
+}
+
+.ChatLoginDescription {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.ChatLoginButton {
+  border: none;
+  padding: 6px 16px;
+  color: var(--ChatButtonForeground);
+  background: var(--ChatButtonBackground);
+  cursor: pointer;
+}
+
+.ChatLoginButton:hover {
+  background: var(--ChatButtonHoverBackground);
+}
+
+.ChatLoginButton:focus-visible {
+  outline: 1px solid var(--ChatFocusBorder);
+  outline-offset: 2px;
+}
+
+.ChatLoginButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

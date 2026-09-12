@@ -11,6 +11,8 @@ export interface ChatViewState {
   readonly focusModeEnabled: boolean
   readonly fontFamily: string
   readonly fontSize: string
+  readonly loginRequired: boolean
+  readonly loginPending: boolean
   readonly modelPickerOpen: boolean
   readonly models: readonly ChatModel[]
   readonly selectedModelId: string

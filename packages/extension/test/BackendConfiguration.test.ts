@@ -138,3 +138,14 @@ test('enables streaming for a custom backend only when explicitly configured', a
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.supportsStreaming')
 })
+
+test('requires login only for the editor backend without an access token', async () => {
+  await expect(
+    resolveBackendConfiguration(createHost({ accessToken: '' })),
+  ).resolves.toEqual({
+    accessToken: '',
+    baseUrl: 'https://lvce-editor.dev',
+    supportsStreaming: true,
+    loginRequired: true,
+  })
+})
