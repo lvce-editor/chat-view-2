@@ -656,8 +656,8 @@ test('renders only the login screen and replaces it after login, then hides chat
   let configuration: BackendConfiguration = {
     accessToken: '',
     baseUrl: 'https://backend.example.com',
-    supportsStreaming: true,
     loginRequired: true,
+    supportsStreaming: true,
   }
   const execute = jest.fn(async () => {
     configuration = {
@@ -691,7 +691,7 @@ test('renders only the login screen and replaces it after login, then hides chat
     expect(getText(dom)).toContain('Log in to Chat 2')
     expect(getText(dom)).toContain('Login')
     expect(listModels).not.toHaveBeenCalled()
-    await dispatch(instance, { type: 'click', name: 'login' })
+    await dispatch(instance, { name: 'login', type: 'click' })
     expect(execute).toHaveBeenCalledWith('Layout.signIn')
     expect(
       getNodesByClass(instance.render(), 'ChatComposerInput'),
@@ -717,8 +717,8 @@ test('keeps login available after a failed or cancelled login', async () => {
   const configuration: BackendConfiguration = {
     accessToken: '',
     baseUrl: 'https://backend.example.com',
-    supportsStreaming: true,
     loginRequired: true,
+    supportsStreaming: true,
   }
   const execute = jest.fn(async () => {
     throw new Error('Login cancelled')
@@ -738,7 +738,7 @@ test('keeps login available after a failed or cancelled login', async () => {
     },
   )
   try {
-    await dispatch(instance, { type: 'click', name: 'login' })
+    await dispatch(instance, { name: 'login', type: 'click' })
     expect(getText(instance.render())).toContain('Login cancelled')
     expect(instance.getState().loginPending).toBe(false)
     expect(instance.getState().loginRequired).toBe(true)

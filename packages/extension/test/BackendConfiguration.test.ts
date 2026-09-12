@@ -145,7 +145,7 @@ test('requires login only for the editor backend without an access token', async
   ).resolves.toEqual({
     accessToken: '',
     baseUrl: 'https://lvce-editor.dev',
-    supportsStreaming: true,
     loginRequired: true,
+    supportsStreaming: true,
   })
 })

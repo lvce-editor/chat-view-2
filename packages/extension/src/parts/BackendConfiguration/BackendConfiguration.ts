@@ -1,9 +1,9 @@
 import { executeCommand, getAccessToken, getPreference } from '@lvce-editor/api'
 
 export interface BackendConfiguration {
-  readonly loginRequired?: boolean
   readonly accessToken: string
   readonly baseUrl: string
+  readonly loginRequired?: boolean
   readonly supportsStreaming: boolean
 }
 

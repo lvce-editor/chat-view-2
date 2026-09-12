@@ -435,8 +435,8 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 export const render = (
   state: Readonly<ChatViewState>,
 ): readonly VirtualDomNode[] => {
-  const { selectedTask } = state
-  if (state.loginRequired) {
+  const { errorMessage, loginPending, loginRequired, selectedTask } = state
+  if (loginRequired) {
     return Dom.flatten(
       Dom.div('ChatView ChatLoggedOut', [
         Dom.node(VirtualDomElements.P, { className: 'ChatLoginDescription' }, [
@@ -445,10 +445,10 @@ export const render = (
           ),
         ]),
         Dom.button('login', 'Login', 'ChatLoginButton', {
-          disabled: state.loginPending,
+          disabled: loginPending,
         }),
-        ...(state.errorMessage && state.loginPending === false
-          ? [Dom.div('ChatError', [Dom.textNode(state.errorMessage)])]
+        ...(errorMessage && !loginPending
+          ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
           : []),
       ]),
     )
