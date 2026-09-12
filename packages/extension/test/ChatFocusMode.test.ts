@@ -13,6 +13,8 @@ const createState = (): ChatViewState => ({
   focusModeEnabled: true,
   fontFamily: 'inherit',
   fontSize: '13px',
+  loginPending: false,
+  loginRequired: false,
   modelPickerOpen: false,
   models: [],
   selectedModelId: '',

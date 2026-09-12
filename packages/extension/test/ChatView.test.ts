@@ -659,7 +659,8 @@ test('renders only the login screen and replaces it after login, then hides chat
     loginRequired: true,
     supportsStreaming: true,
   }
-  const execute = jest.fn(async () => {
+  const execute = jest.fn(async (id: string) => {
+    expect(id).toBe('Layout.signIn')
     configuration = {
       ...configuration,
       accessToken: 'token',
