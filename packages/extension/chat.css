@@ -389,8 +389,11 @@
 .ChatModelOption {
   min-height: 30px;
   padding: 5px 8px;
+  overflow: hidden;
   color: var(--ChatForeground);
   text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   background: transparent;
   border: 0;
   border-radius: 5px;
