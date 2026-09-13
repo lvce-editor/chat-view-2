@@ -405,17 +405,15 @@ test.each([
 ])(
   'explains OpenRouter HTTP %s errors without duplicating the status',
   async (status, expected) => {
-    const fetchMock = jest
-      .fn<typeof fetch>()
-      .mockResolvedValue(
-        Response.json(
-          {
-            code: 'OPENROUTER_REQUEST_FAILED',
-            error: `OpenRouter request failed (${status})`,
-          },
-          { status },
-        ),
-      )
+    const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+      Response.json(
+        {
+          code: 'OPENROUTER_REQUEST_FAILED',
+          error: `OpenRouter request failed (${status})`,
+        },
+        { status },
+      ),
+    )
     const backend = createResponsesBackend({
       baseUrl: 'https://backend.example.com',
       fetch: fetchMock,
@@ -431,6 +429,30 @@ test.each([
     ).rejects.toThrow(expected)
   },
 )
+
+test('keeps generic error handling for other providers', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json(
+      { error: { message: 'Plan limit reached' } },
+      {
+        status: 429,
+      },
+    ),
+  )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await expect(
+    backend.runStep({
+      input: [{ content: 'Work', role: 'user' }],
+      modelId: 'gpt-test',
+      onTextDelta() {},
+      tools: [],
+    }),
+  ).rejects.toThrow('Model request failed (429): Plan limit reached')
+})
 
 test('surfaces backend WebSocket error messages', async () => {
   const socket = new MockResponsesWebSocket()
