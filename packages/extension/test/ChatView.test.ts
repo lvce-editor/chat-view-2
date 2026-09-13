@@ -217,7 +217,7 @@ test('reloads models when authentication changes after the view loads', async ()
     await jest.advanceTimersByTimeAsync(500)
 
     expect(instance.getState().errorMessage).toBe('')
-    expect(instance.getState().models).toHaveLength(2)
+    expect(instance.getState().models).toHaveLength(4)
     expect(instance.getState().selectedModelId).toBe('gpt-5.4')
     expect(requestRerender).toHaveBeenCalledTimes(1)
 

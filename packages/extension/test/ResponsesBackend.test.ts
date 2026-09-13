@@ -393,6 +393,45 @@ test('surfaces backend errors without retrying unsafe work', async () => {
   ).rejects.toThrow('Plan limit reached')
 })
 
+test.each([
+  [
+    429,
+    'OpenRouter is rate limiting requests. Please wait a moment and try again. (E_OPENROUTER_TOO_MANY_REQUESTS, 429)',
+  ],
+  [
+    404,
+    'The selected OpenRouter model could not be found. Check the model name and try again. (E_OPENROUTER_MODEL_NOT_FOUND, 404)',
+  ],
+])(
+  'explains OpenRouter HTTP %s errors without duplicating the status',
+  async (status, expected) => {
+    const fetchMock = jest
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        Response.json(
+          {
+            code: 'OPENROUTER_REQUEST_FAILED',
+            error: `OpenRouter request failed (${status})`,
+          },
+          { status },
+        ),
+      )
+    const backend = createResponsesBackend({
+      baseUrl: 'https://backend.example.com',
+      fetch: fetchMock,
+    })
+
+    await expect(
+      backend.runStep({
+        input: [{ content: 'Work', role: 'user' }],
+        modelId: 'openrouter/vendor/model',
+        onTextDelta() {},
+        tools: [],
+      }),
+    ).rejects.toThrow(expected)
+  },
+)
+
 test('surfaces backend WebSocket error messages', async () => {
   const socket = new MockResponsesWebSocket()
   const createWebSocket = jest.fn(() => socket)

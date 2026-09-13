@@ -57,6 +57,8 @@ const webSocketConnecting = 0
 const webSocketOpen = 1
 const loginRequiredMessage = 'You must log in to continue.'
 const noAccessTokenProvidedCode = 'E_NO_ACCESS_TOKEN_PROVIDED'
+const openRouterTooManyRequestsCode = 'E_OPENROUTER_TOO_MANY_REQUESTS'
+const openRouterModelNotFoundCode = 'E_OPENROUTER_MODEL_NOT_FOUND'
 const computerUseToolPrefix = 'computer_use_'
 const defaultAgentInstructions =
   'You are the Lvce coding agent. Inspect relevant files before editing. Keep changes scoped, use tools to modify the workspace, run available verification, and end with a concise result. Treat every tool registered with the request as an available capability.'
@@ -194,6 +196,29 @@ const getErrorMessage = async (
   } catch {
     return fallback
   }
+}
+
+const getOpenRouterErrorMessage = (status: number): string | undefined => {
+  if (status === 429) {
+    return `OpenRouter is rate limiting requests. Please wait a moment and try again. (${openRouterTooManyRequestsCode}, 429)`
+  }
+  if (status === 404) {
+    return `The selected OpenRouter model could not be found. Check the model name and try again. (${openRouterModelNotFoundCode}, 404)`
+  }
+  return undefined
+}
+
+const getModelRequestErrorMessage = async (
+  response: Response,
+  isOpenRouter: boolean,
+): Promise<string> => {
+  const openRouterErrorMessage = isOpenRouter
+    ? getOpenRouterErrorMessage(response.status)
+    : undefined
+  if (openRouterErrorMessage) {
+    return openRouterErrorMessage
+  }
+  return `Model request failed (${response.status}): ${await getErrorMessage(response)}`
 }
 
 const getWebSocketUrl = (root: string, path: string): string => {
@@ -561,7 +586,7 @@ export const createResponsesBackend = ({
       })
       if (!response.ok) {
         throw new Error(
-          `Model request failed (${response.status}): ${await getErrorMessage(response)}`,
+          await getModelRequestErrorMessage(response, isOpenRouter),
         )
       }
       if (isOpenRouter) {
