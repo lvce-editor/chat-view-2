@@ -18,5 +18,9 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(picker).toHaveCSS('right', '16px')
   await expect(picker).toHaveCSS('max-width', '300px')
   await expect(options).toHaveCount(2)
+  await expect(options.first()).toHaveCSS('overflow', 'hidden')
+  await expect(options.first()).toHaveCSS('text-overflow', 'ellipsis')
+  await expect(options.first()).toHaveCSS('white-space', 'nowrap')
+  await expect(options.first()).toHaveAttribute('title', 'GPT-5.4')
   await expect(title).toBeVisible()
 }
