@@ -17,7 +17,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(picker).toBeVisible()
   await expect(picker).toHaveCSS('right', '16px')
   await expect(picker).toHaveCSS('max-width', '300px')
-  await expect(options).toHaveCount(2)
+  await expect(options).toHaveCount(4)
   await expect(options.first()).toHaveCSS('overflow', 'hidden')
   await expect(options.first()).toHaveCSS('text-overflow', 'ellipsis')
   await expect(options.first()).toHaveCSS('white-space', 'nowrap')

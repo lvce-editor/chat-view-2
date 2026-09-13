@@ -23,7 +23,30 @@ const models: readonly ChatModel[] = [
     label: 'GPT-5.4 Mini',
     planEligible: true,
   },
+  {
+    available: true,
+    id: 'openrouter/test/too-many-requests',
+    label: 'OpenRouter test: too many requests',
+    planEligible: true,
+  },
+  {
+    available: true,
+    id: 'openrouter/test/model-not-found',
+    label: 'OpenRouter test: model not found',
+    planEligible: true,
+  },
 ]
+
+const mockOpenRouterErrors = new Map([
+  [
+    'openrouter/test/too-many-requests',
+    'OpenRouter is rate limiting requests. Please wait a moment and try again. (E_OPENROUTER_TOO_MANY_REQUESTS, 429)',
+  ],
+  [
+    'openrouter/test/model-not-found',
+    'The selected OpenRouter model could not be found. Check the model name and try again. (E_OPENROUTER_MODEL_NOT_FOUND, 404)',
+  ],
+])
 
 const taskTitles = [
   'Add worker memory usage',
@@ -104,6 +127,7 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
     createTask(`mock-task-${index + 1}`, title),
   )
   const archivedTaskIds = new Set<string>()
+  const failedOpenRouterTaskIds = new Set<string>()
   let nextTaskId = tasks.length + 1
   const steering = new Map<string, string[]>()
 
@@ -130,6 +154,20 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
           type: 'activity',
         }),
       )
+      const mockOpenRouterError = mockOpenRouterErrors.get(task.modelId)
+      if (mockOpenRouterError && !failedOpenRouterTaskIds.has(task.id)) {
+        failedOpenRouterTaskIds.add(task.id)
+        task = appendEvent(
+          task,
+          createEvent({ message: mockOpenRouterError, type: 'error' }),
+        )
+        task = setStatus(task, 'failed')
+        tasks = [task, ...tasks.filter((item) => item.id !== task.id)].slice(
+          0,
+          20,
+        )
+        return emit(task, options)
+      }
       const updates = steering.get(task.id) || []
       steering.delete(task.id)
       const response =

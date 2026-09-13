@@ -2,12 +2,14 @@ import { expect, test } from '@jest/globals'
 import { summarizeTask } from '../src/parts/ChatTask/ChatTask.ts'
 import { createMockChatApi } from '../src/parts/MockChatApi/MockChatApi.ts'
 
-test('returns only OpenAI models', async () => {
+test('returns deterministic test models', async () => {
   const api = createMockChatApi()
   const models = await api.listModels()
 
-  expect(models).toHaveLength(2)
-  expect(models.every((model) => model.id.startsWith('gpt-'))).toBe(true)
+  expect(models).toHaveLength(4)
+  expect(models.slice(0, 2).every((model) => model.id.startsWith('gpt-'))).toBe(
+    true,
+  )
 })
 
 test('limits the number of returned tasks', async () => {
