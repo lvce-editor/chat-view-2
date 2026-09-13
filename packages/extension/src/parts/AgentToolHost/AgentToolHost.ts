@@ -600,7 +600,12 @@ export const createAgentToolHost = ({
             `Visible diagnostics:\n${editorContext.diagnostics.slice(0, 50).join('\n')}`,
           )
         }
-        if (await exists(agentsUri)) {
+        const entries = await readDirWithFileTypes(workspace)
+        if (
+          entries.some(
+            (entry) => entry.name === 'AGENTS.md' && entry.type === fileType,
+          )
+        ) {
           const contents = await readFile(agentsUri)
           const instructions = contents.slice(0, 16_000)
           contextParts.push(
