@@ -35,6 +35,12 @@ const models: readonly ChatModel[] = [
     label: 'OpenRouter test: model not found',
     planEligible: true,
   },
+  {
+    available: true,
+    id: 'openrouter/test/api-bad-response',
+    label: 'OpenRouter test: invalid response',
+    planEligible: true,
+  },
 ]
 
 const mockOpenRouterErrors = new Map([
@@ -45,6 +51,10 @@ const mockOpenRouterErrors = new Map([
   [
     'openrouter/test/model-not-found',
     'The selected OpenRouter model could not be found. Check the model name and try again. (E_OPENROUTER_MODEL_NOT_FOUND, 404)',
+  ],
+  [
+    'openrouter/test/api-bad-response',
+    "Openrouter reports request as invalid: [ApiIdParam] [previous_response_id] [invalid_id_prefix] Invalid 'previous_response_id': 'gen-123'. Expected an ID that begins with 'resp'. (E_OPENROUTER_API_BAD_RESPONSE, 400)",
   ],
 ])
 
