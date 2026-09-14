@@ -59,6 +59,7 @@ const loginRequiredMessage = 'You must log in to continue.'
 const noAccessTokenProvidedCode = 'E_NO_ACCESS_TOKEN_PROVIDED'
 const openRouterTooManyRequestsCode = 'E_OPENROUTER_TOO_MANY_REQUESTS'
 const openRouterModelNotFoundCode = 'E_OPENROUTER_MODEL_NOT_FOUND'
+const openRouterApiBadResponseCode = 'E_OPENROUTER_API_BAD_RESPONSE'
 const computerUseToolPrefix = 'computer_use_'
 const defaultAgentInstructions =
   'You are the Lvce coding agent. Inspect relevant files before editing. Keep changes scoped, use tools to modify the workspace, run available verification, and end with a concise result. Treat every tool registered with the request as an available capability.'
@@ -167,35 +168,53 @@ const parseModels = (value: unknown): readonly ChatModel[] => {
   })
 }
 
-const parseErrorMessage = (value: unknown): string => {
+const parseErrorDetails = (
+  value: unknown,
+): { readonly code?: string; readonly message: string } => {
   if (typeof value === 'string') {
-    return value
+    return { message: value }
   }
   if (!value || typeof value !== 'object') {
-    return ''
+    return { message: '' }
   }
   const record = value as Readonly<Record<string, unknown>>
+  const code = typeof record.code === 'string' ? record.code : undefined
   if (typeof record.error === 'string') {
-    return record.error
+    return { ...(code && { code }), message: record.error }
   }
   if (record.error && typeof record.error === 'object') {
     const error = record.error as Readonly<Record<string, unknown>>
     if (typeof error.message === 'string') {
-      return error.message
+      return { ...(code && { code }), message: error.message }
     }
   }
-  return typeof record.message === 'string' ? record.message : ''
+  return {
+    ...(code && { code }),
+    message: typeof record.message === 'string' ? record.message : '',
+  }
+}
+
+const parseErrorMessage = (value: unknown): string =>
+  parseErrorDetails(value).message
+
+const getErrorDetails = async (
+  response: Response,
+  fallback = response.statusText,
+): Promise<{ readonly code?: string; readonly message: string }> => {
+  try {
+    const details = parseErrorDetails(await response.json())
+    return { ...details, message: details.message || fallback }
+  } catch {
+    return { message: fallback }
+  }
 }
 
 const getErrorMessage = async (
   response: Response,
   fallback = response.statusText,
 ): Promise<string> => {
-  try {
-    return parseErrorMessage(await response.json()) || fallback
-  } catch {
-    return fallback
-  }
+  const details = await getErrorDetails(response, fallback)
+  return details.message
 }
 
 const getOpenRouterErrorMessage = (status: number): string | undefined => {
@@ -212,13 +231,17 @@ const getModelRequestErrorMessage = async (
   response: Response,
   isOpenRouter: boolean,
 ): Promise<string> => {
+  const details = await getErrorDetails(response)
+  if (isOpenRouter && details.code === openRouterApiBadResponseCode) {
+    return `${details.message} (${openRouterApiBadResponseCode}, ${response.status})`
+  }
   const openRouterErrorMessage = isOpenRouter
     ? getOpenRouterErrorMessage(response.status)
     : undefined
   if (openRouterErrorMessage) {
     return openRouterErrorMessage
   }
-  return `Model request failed (${response.status}): ${await getErrorMessage(response)}`
+  return `Model request failed (${response.status}): ${details.message}`
 }
 
 const getWebSocketUrl = (root: string, path: string): string => {

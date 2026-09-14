@@ -430,6 +430,36 @@ test.each([
   },
 )
 
+test('surfaces the OpenRouter invalid response id diagnostic and code', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json(
+      {
+        code: 'E_OPENROUTER_API_BAD_RESPONSE',
+        error:
+          "Openrouter reports request as invalid: [ApiIdParam] [previous_response_id] [invalid_id_prefix] Invalid 'previous_response_id': 'gen-123'. Expected an ID that begins with 'resp'.",
+      },
+      { status: 400 },
+    ),
+  )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await expect(
+    backend.runStep({
+      input: [{ content: 'Work', role: 'user' }],
+      modelId: 'openrouter/vendor/model',
+      onTextDelta() {},
+      previousResponseId: 'gen-123',
+      responseHistory: [{ content: 'Work', role: 'user' }],
+      tools: [],
+    }),
+  ).rejects.toThrow(
+    "Openrouter reports request as invalid: [ApiIdParam] [previous_response_id] [invalid_id_prefix] Invalid 'previous_response_id': 'gen-123'. Expected an ID that begins with 'resp'. (E_OPENROUTER_API_BAD_RESPONSE, 400)",
+  )
+})
+
 test('keeps generic error handling for other providers', async () => {
   const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
     Response.json(

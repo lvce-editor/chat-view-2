@@ -6,7 +6,7 @@ test('returns deterministic test models', async () => {
   const api = createMockChatApi()
   const models = await api.listModels()
 
-  expect(models).toHaveLength(4)
+  expect(models).toHaveLength(5)
   expect(models.slice(0, 2).every((model) => model.id.startsWith('gpt-'))).toBe(
     true,
   )
