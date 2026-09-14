@@ -212,7 +212,10 @@ const getErrorDetails = async (
 const getErrorMessage = async (
   response: Response,
   fallback = response.statusText,
-): Promise<string> => (await getErrorDetails(response, fallback)).message
+): Promise<string> => {
+  const details = await getErrorDetails(response, fallback)
+  return details.message
+}
 
 const getOpenRouterErrorMessage = (status: number): string | undefined => {
   if (status === 429) {
