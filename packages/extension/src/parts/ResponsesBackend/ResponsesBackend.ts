@@ -180,16 +180,16 @@ const parseErrorDetails = (
   const record = value as Readonly<Record<string, unknown>>
   const code = typeof record.code === 'string' ? record.code : undefined
   if (typeof record.error === 'string') {
-    return { code, message: record.error }
+    return { ...(code && { code }), message: record.error }
   }
   if (record.error && typeof record.error === 'object') {
     const error = record.error as Readonly<Record<string, unknown>>
     if (typeof error.message === 'string') {
-      return { code, message: error.message }
+      return { ...(code && { code }), message: error.message }
     }
   }
   return {
-    code,
+    ...(code && { code }),
     message: typeof record.message === 'string' ? record.message : '',
   }
 }
