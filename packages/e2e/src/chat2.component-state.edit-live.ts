@@ -35,6 +35,10 @@ export const test: Test = async ({
   // eslint-disable-next-line e2e/no-direct-click -- the card click and live editor subscription are the behavior under test
   await card.click()
 
+  const selectedTabTitle = Locator('.MainTabSelected .TabTitle')
+  await expect(selectedTabTitle).toHaveText(`${component.uid}.json`)
+  const editor = Locator('.Editor')
+  await expect(editor).toBeVisible()
   const state = JSON.parse(await Editor.getText())
   await Editor.setText(
     `${JSON.stringify({ ...state, draft: 'Live component state' }, null, 2)}\n`,
