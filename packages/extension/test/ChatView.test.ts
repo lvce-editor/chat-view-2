@@ -6,6 +6,7 @@ import { VirtualDomElements } from '@lvce-editor/virtual-dom-worker'
 import type { BackendConfiguration } from '../src/parts/BackendConfiguration/BackendConfiguration.ts'
 import type { ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createEvent } from '../src/parts/ChatTask/ChatTask.ts'
+import { view } from '../src/parts/ChatView/ChatView.ts'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
 import {
   createMockChatApi,
@@ -135,6 +136,41 @@ test('saves and restores the composer draft through view state', async () => {
       value: 'Keep this draft across reloads',
     }),
   )
+})
+
+test('exposes and applies live component state without replacing the chat instance', async () => {
+  const instance = await createTestInstance()
+  expect(view).toEqual(
+    expect.objectContaining({
+      getComponentState: expect.any(Function),
+      setComponentState: expect.any(Function),
+    }),
+  )
+  const currentState = instance.getState()
+  const newState = { ...currentState, draft: 'Edit the live state' }
+
+  instance.setState(newState)
+
+  expect(instance.getState()).toEqual(
+    expect.objectContaining({ draft: 'Edit the live state' }),
+  )
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      className: 'ChatComposerInput',
+      value: 'Edit the live state',
+    }),
+  )
+})
+
+test('rejects invalid live component state without changing the chat', async () => {
+  const instance = await createTestInstance()
+  const originalState = instance.getState()
+
+  expect(() => instance.setState({ ...originalState, draft: 42 })).toThrow(
+    'Chat 2 state must be a valid state object',
+  )
+  expect(instance.getState()).toBe(originalState)
+  expect(instance.getState().draft).toBe('')
 })
 
 test('shows a clear error when chat models cannot be loaded', async () => {

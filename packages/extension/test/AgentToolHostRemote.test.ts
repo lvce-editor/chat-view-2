@@ -1,6 +1,9 @@
 import { beforeEach, expect, jest, test } from '@jest/globals'
 import { createMockRpc } from '@lvce-editor/rpc'
-import { FileSystemWorker } from '@lvce-editor/rpc-registry'
+import {
+  ExtensionManagementWorker,
+  FileSystemWorker,
+} from '@lvce-editor/rpc-registry'
 import {
   createAgentToolHost,
   type AgentToolResult,
@@ -33,7 +36,13 @@ beforeEach(() => {
     createMockRpc({
       commandMap: {
         'FileSystem.readDirWithFileTypes': readDirWithFileTypes,
-        'FileSystem.readFile': readFile,
+      },
+    }),
+  )
+  ExtensionManagementWorker.set(
+    createMockRpc({
+      commandMap: {
+        'ExtensionApi.readFile': readFile,
       },
     }),
   )

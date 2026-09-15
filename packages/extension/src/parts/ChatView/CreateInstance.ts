@@ -25,6 +25,7 @@ import {
   createDefaultChatApi,
   type DefaultChatApiOptions,
 } from '../DefaultChatApi/DefaultChatApi.ts'
+import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
@@ -40,6 +41,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
     scrollTop: number,
   ]
   readonly renderTitle: () => string
+  readonly setState: (state: unknown) => void
   readonly submit: (requestRerender?: boolean) => Promise<void>
   readonly toggleFocusMode: (requestRerender?: boolean) => Promise<void>
 }
@@ -576,6 +578,16 @@ export const createInstance = async (
         selectedModelId: state.selectedModelId,
         selectedTaskId: state.selectedTask?.id,
       }
+    },
+    setState(newState: unknown): void {
+      if (!isChatViewState(newState)) {
+        throw new TypeError('Chat 2 state must be a valid state object')
+      }
+      Object.assign(state, {
+        ...newState,
+        selectedTask: newState.selectedTask,
+      })
+      syncWorkingTimer(state.selectedTask)
     },
     submit,
     toggleFocusMode: handleToggleFocusMode,
