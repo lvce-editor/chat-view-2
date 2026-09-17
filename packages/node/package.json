@@ -9,12 +9,12 @@
     "test": "node --test test/*.test.js"
   },
   "devDependencies": {
-    "@types/node": "^26.1.1"
+    "@types/node": "^26.6.1"
   },
   "dependencies": {
-    "@lvce-editor/rpc": "^6.19.3"
+    "@lvce-editor/rpc": "^6.21.0"
   },
   "optionalDependencies": {
-    "@agent-sh/computer-use-linux": "0.5.0"
+    "@agent-sh/computer-use-linux": "0.7.0"
   }
 }

@@ -13,9 +13,9 @@
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.3",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.6.1",
     "esbuild": "^0.28.2",
-    "rollup": "^4.63.1",
+    "rollup": "^4.63.3",
     "rollup-plugin-esbuild": "^6.2.1"
   }
 }
