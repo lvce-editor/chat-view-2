@@ -43,4 +43,9 @@ export default defineConfig([
       'virtual-dom/prefer-state-destructuring': 'off',
     },
   },
+  {
+    rules: {
+      '@typescript-eslint/no-deprecated': 'off',
+    },
+  },
 ])
