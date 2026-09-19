@@ -180,3 +180,40 @@ test('rejects unsupported sandbox roots', () => {
     }),
   ).toThrow('Unsupported agent sandbox root: /tmp')
 })
+
+test('exposes the TypeScript execution tool and returns its result', async () => {
+  const typeScriptExecutor = jest.fn(async (_code: string) => ({
+    result: '3',
+    success: true as const,
+  }))
+  const host = createAgentToolHost({ typeScriptExecutor })
+
+  expect(host.getDefinitions()).toContainEqual(
+    expect.objectContaining({ name: 'execute_typescript' }),
+  )
+  await expect(
+    host.execute({
+      arguments: JSON.stringify({ code: 'export const main = () => 1' }),
+      callId: 'call-1',
+      name: 'execute_typescript',
+    }),
+  ).resolves.toEqual({ content: '3', isError: false })
+  expect(typeScriptExecutor).toHaveBeenCalledWith('export const main = () => 1')
+})
+
+test('returns TypeScript execution errors as tool errors', async () => {
+  const host = createAgentToolHost({
+    typeScriptExecutor: async () => ({
+      error: 'main failed',
+      success: false as const,
+    }),
+  })
+
+  await expect(
+    host.execute({
+      arguments: JSON.stringify({ code: 'export const main = () => 1' }),
+      callId: 'call-1',
+      name: 'execute_typescript',
+    }),
+  ).resolves.toEqual({ content: 'main failed', isError: true })
+})

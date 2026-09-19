@@ -5,6 +5,11 @@ import { root } from './root.ts'
 
 const extension = path.join(root, 'packages', 'extension')
 const entryPoint = path.join(extension, 'src', 'chatMain.ts')
+const workerEntryPoint = path.join(
+  extension,
+  'src',
+  'typeScriptEvaluationWorkerMain.ts',
+)
 const outdir = path.join(extension, 'dist')
 
 fs.rmSync(outdir, { recursive: true, force: true })
@@ -18,5 +23,15 @@ await esbuild.build({
   outfile: path.join(outdir, 'chatMain.js'),
   platform: 'browser',
   sourcemap: true,
+  target: 'esnext',
+})
+
+await esbuild.build({
+  bundle: true,
+  entryPoints: [workerEntryPoint],
+  external: ['electron', 'node:*'],
+  format: 'esm',
+  outfile: path.join(outdir, 'typeScriptEvaluationWorkerMain.js'),
+  platform: 'browser',
   target: 'esnext',
 })

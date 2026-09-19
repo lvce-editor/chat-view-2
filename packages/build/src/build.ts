@@ -10,6 +10,11 @@ import { root } from './root.ts'
 
 const extension = path.join(root, 'packages', 'extension')
 const node = path.join(root, 'packages', 'node')
+const workerEntryPoint = join(
+  extension,
+  'src',
+  'typeScriptEvaluationWorkerMain.ts',
+)
 const require = createRequire(import.meta.url)
 const commonjs = require('@rollup/plugin-commonjs') as () => Plugin
 const json = require('@rollup/plugin-json') as () => Plugin
@@ -89,6 +94,32 @@ await bundle.write({
 })
 
 await bundle.close()
+
+const workerBundle = await rollup({
+  input: workerEntryPoint,
+  external: ['electron', 'node:*'],
+  plugins: [
+    json(),
+    nodeResolve({
+      browser: true,
+    }),
+    commonjs(),
+    esbuild({
+      target: 'esnext',
+    }),
+  ],
+  treeshake: {
+    moduleSideEffects: false,
+  },
+})
+
+await workerBundle.write({
+  file: join(root, 'dist', 'dist', 'typeScriptEvaluationWorkerMain.js'),
+  format: 'esm',
+  inlineDynamicImports: true,
+})
+
+await workerBundle.close()
 
 await esbuildBuild({
   banner: {

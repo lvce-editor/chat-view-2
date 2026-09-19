@@ -20,6 +20,22 @@ test('declares the computer-use node rpc', async () => {
   })
 })
 
+test('declares the TypeScript evaluation web worker rpc', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.rpc).toContainEqual({
+    contentSecurityPolicy: [
+      "default-src 'none'",
+      "script-src 'self' 'unsafe-eval'",
+    ],
+    id: 'builtin.chat-view-2.typescript-evaluation-worker',
+    name: 'Chat 2 TypeScript Evaluation Worker',
+    type: 'web-worker',
+    url: 'dist/typeScriptEvaluationWorkerMain.js',
+  })
+})
+
 test('maps Enter in the composer to the submit command', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))

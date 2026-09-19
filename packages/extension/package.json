@@ -27,6 +27,9 @@
       ]
     }
   },
+  "dependencies": {
+    "@babel/standalone": "7.29.9"
+  },
   "devDependencies": {
     "@lvce-editor/api": "9.33.1",
     "@lvce-editor/rpc": "6.21.0",
