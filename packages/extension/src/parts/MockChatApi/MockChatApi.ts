@@ -202,7 +202,7 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
             {
               additions: 12,
               deletions: 3,
-              path: 'packages/extension/chat.css',
+              path: 'packages/extension/media/chat.css',
               status: 'modified',
             },
             {

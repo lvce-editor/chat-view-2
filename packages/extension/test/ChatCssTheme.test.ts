@@ -2,7 +2,7 @@ import { expect, test } from '@jest/globals'
 import { readFile } from 'node:fs/promises'
 
 const readChatCss = async (): Promise<string> => {
-  return readFile(new URL('../chat.css', import.meta.url), 'utf8')
+  return readFile(new URL('../media/chat.css', import.meta.url), 'utf8')
 }
 
 test('chat messages use a theme-aware native scrollbar', async () => {

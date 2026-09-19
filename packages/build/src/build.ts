@@ -28,8 +28,10 @@ fs.copyFileSync(
   join(extension, 'extension.json'),
   join(root, 'dist', 'extension.json'),
 )
-fs.copyFileSync(join(extension, 'chat.css'), join(root, 'dist', 'chat.css'))
-fs.copyFileSync(join(extension, 'chat.svg'), join(root, 'dist', 'chat.svg'))
+fs.cpSync(join(extension, 'media'), join(root, 'dist', 'media'), {
+  recursive: true,
+  verbatimSymlinks: true,
+})
 fs.cpSync(node, join(root, 'dist', 'node'), {
   recursive: true,
   verbatimSymlinks: true,
