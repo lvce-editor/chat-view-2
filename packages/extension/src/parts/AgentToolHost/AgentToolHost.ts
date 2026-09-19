@@ -8,6 +8,10 @@ import {
   writeFile,
 } from '@lvce-editor/api'
 import type { ChatChangedFile } from '../ChatApi/ChatApi.ts'
+import {
+  executeTypeScript,
+  type TypeScriptExecutionResult,
+} from '../TypeScriptEvaluationWorker/TypeScriptEvaluationWorker.ts'
 import definitions from './AgentToolDefinitions.json' with { type: 'json' }
 
 export interface AgentToolDefinition {
@@ -91,6 +95,9 @@ export interface AgentToolHostOptions {
   readonly editorContextProvider?: AgentEditorContextProvider
   readonly externalToolHost?: AgentExternalToolHost
   readonly fileSystemAccess?: AgentFileSystemAccess
+  readonly typeScriptExecutor?: (
+    code: string,
+  ) => Promise<TypeScriptExecutionResult>
   readonly workspaceUriProvider?: () => Promise<string>
 }
 
@@ -117,6 +124,7 @@ interface FileSnapshot {
 }
 
 interface ToolArguments {
+  readonly code?: string
   readonly command?: string
   readonly endLine?: number
   readonly expectedHash?: string
@@ -303,6 +311,7 @@ export const createAgentToolHost = ({
   editorContextProvider,
   externalToolHost,
   fileSystemAccess,
+  typeScriptExecutor = executeTypeScript,
   workspaceUriProvider = getWorkspaceUri,
 }: AgentToolHostOptions = {}): AgentToolHost => {
   if (fileSystemAccess && fileSystemAccess.root !== '.') {
@@ -554,6 +563,15 @@ export const createAgentToolHost = ({
                   `Command exited with code ${result.exitCode}\n${result.output.slice(0, 128_000)}`,
                 ),
               )
+        }
+        if (call.name === 'execute_typescript') {
+          if (typeof args.code !== 'string') {
+            throw new TypeError('execute_typescript requires code')
+          }
+          const result = await typeScriptExecutor(args.code)
+          return result.success
+            ? success(result.result)
+            : failure(new Error(result.error))
         }
         if (externalToolHost) {
           return externalToolHost.execute(call, signal)

@@ -78,6 +78,8 @@ const getActivityLabel = (call: AgentToolCall): string => {
   switch (call.name) {
     case 'apply_patch':
       return 'Editing workspace'
+    case 'execute_typescript':
+      return 'Executing TypeScript'
     case 'get_diagnostics':
       return 'Checking diagnostics'
     case 'get_workspace_uri':

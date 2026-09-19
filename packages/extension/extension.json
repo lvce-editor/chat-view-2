@@ -61,6 +61,16 @@
       "type": "node-process",
       "name": "Chat 2 Computer Use",
       "url": "node/src/computerUseProcess.js"
+    },
+    {
+      "contentSecurityPolicy": [
+        "default-src 'none'",
+        "script-src 'self' 'unsafe-eval'"
+      ],
+      "id": "builtin.chat-view-2.typescript-evaluation-worker",
+      "name": "Chat 2 TypeScript Evaluation Worker",
+      "type": "web-worker",
+      "url": "dist/typeScriptEvaluationWorkerMain.js"
     }
   ],
   "commands": [

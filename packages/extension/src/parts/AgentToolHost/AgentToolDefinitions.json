@@ -1,5 +1,17 @@
 [
   {
+    "description": "Execute raw TypeScript in a reusable worker. Export an async or synchronous main function that receives { FileSystem, Workspace }. The worker provides a mock in-memory FileSystem (readFile returns an empty string for unknown URIs and writeFile persists for later calls) and Workspace.uri is file:///workspace/. Return JSON-serializable values.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "code": { "minLength": 1, "type": "string" }
+      },
+      "required": ["code"],
+      "type": "object"
+    },
+    "name": "execute_typescript"
+  },
+  {
     "description": "Return the currently open workspace root URI. Call this before using file tools that require a URI.",
     "inputSchema": {
       "additionalProperties": false,

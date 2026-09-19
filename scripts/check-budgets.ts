@@ -3,7 +3,10 @@ import { basename, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const outputDirectory = fileURLToPath(new URL('../dist/dist/', import.meta.url))
-const bundleBudget = 300_000
+const bundleBudgets = new Map([
+  ['chatMain.js', 300_000],
+  ['typeScriptEvaluationWorkerMain.js', 6_000_000],
+])
 const dynamicImportRegex = /\bimport\s*\(/
 
 const visit = async (directory: string): Promise<readonly string[]> => {
@@ -21,22 +24,32 @@ const visit = async (directory: string): Promise<readonly string[]> => {
 }
 
 const files = await visit(outputDirectory)
-if (files.length !== 1 || basename(files[0]) !== 'chatMain.js') {
+const expectedFiles = [...bundleBudgets.keys()].sort()
+const actualFiles = files.map((file) => basename(file)).sort()
+if (
+  actualFiles.length !== expectedFiles.length ||
+  actualFiles.some((file, index) => file !== expectedFiles[index])
+) {
   throw new Error(
-    `Expected one JavaScript bundle named chatMain.js, found: ${files.join(', ')}`,
+    `Expected JavaScript bundles named ${expectedFiles.join(', ')}, found: ${files.join(', ')}`,
   )
 }
 const sizes = await Promise.all(
   files.map(async (file) => ({ file, size: (await stat(file)).size })),
 )
-const [bundle] = sizes
-const bundleSource = await readFile(bundle.file, 'utf8')
-if (dynamicImportRegex.test(bundleSource)) {
-  throw new Error('Chat 2 bundle contains a dynamic import')
+for (const bundle of sizes) {
+  const bundleName = basename(bundle.file)
+  const bundleSource = await readFile(bundle.file, 'utf8')
+  // Babel Standalone contains import() examples as parser/template strings; only
+  // the extension entry bundle must be free of runtime dynamic imports.
+  if (bundleName === 'chatMain.js' && dynamicImportRegex.test(bundleSource)) {
+    throw new Error(`${bundleName} contains a dynamic import`)
+  }
+  const budget = bundleBudgets.get(bundleName)
+  if (budget === undefined || bundle.size > budget) {
+    throw new Error(
+      `${bundleName} is ${bundle.size} bytes; budget is ${budget ?? 'undefined'}`,
+    )
+  }
+  console.log(`${bundleName} checks passed: size=${bundle.size}`)
 }
-if (bundle.size > bundleBudget) {
-  throw new Error(
-    `Chat 2 bundle is ${bundle.size} bytes; budget is ${bundleBudget}`,
-  )
-}
-console.log(`Chat 2 bundle checks passed: size=${bundle.size}`)
