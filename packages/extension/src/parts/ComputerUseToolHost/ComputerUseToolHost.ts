@@ -1,11 +1,11 @@
-import { createNodeRpc } from '@lvce-editor/api'
 import type {
   AgentExternalToolHost,
   AgentToolCall,
   AgentToolDefinition,
   AgentToolImageOutput,
   AgentToolResult,
-} from '../AgentToolHost/AgentToolHost.ts'
+} from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
+import { createNodeRpc } from '@lvce-editor/api'
 
 interface NodeRpc {
   readonly invoke: (

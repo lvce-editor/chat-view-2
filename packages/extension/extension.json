@@ -63,6 +63,13 @@
       "url": "node/src/computerUseProcess.js"
     },
     {
+      "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"],
+      "id": "builtin.chat-view-2.chat-tool-worker",
+      "name": "Chat 2 Tool Worker",
+      "type": "web-worker",
+      "url": "dist/chatToolWorkerMain.js"
+    },
+    {
       "contentSecurityPolicy": [
         "default-src 'none'",
         "script-src 'self' 'unsafe-eval'"

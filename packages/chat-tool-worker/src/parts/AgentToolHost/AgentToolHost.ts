@@ -1,17 +1,25 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, sonarjs/cognitive-complexity, unicorn/max-nested-calls, unicorn/no-break-in-nested-loop, unicorn/no-declarations-before-early-exit, unicorn/prefer-code-point, unicorn/prefer-iterator-to-array */
-import {
-  exists,
-  getWorkspaceUri,
-  readDirWithFileTypes,
-  readFile,
-  remove,
-  writeFile,
-} from '@lvce-editor/api'
-import type { ChatChangedFile } from '../ChatApi/ChatApi.ts'
-import {
-  executeTypeScript,
-  type TypeScriptExecutionResult,
-} from '../TypeScriptEvaluationWorker/TypeScriptEvaluationWorker.ts'
+export interface ChatChangedFile {
+  readonly additions: number
+  readonly deletions: number
+  readonly path: string
+  readonly status: 'added' | 'deleted' | 'modified'
+}
+
+export interface AgentFileSystemEntry {
+  readonly name: string
+  readonly type: number
+}
+
+export interface AgentFileSystem {
+  readonly exists: (uri: string) => Promise<boolean>
+  readonly readDirWithFileTypes: (
+    uri: string,
+  ) => Promise<readonly AgentFileSystemEntry[]>
+  readonly readFile: (uri: string) => Promise<string>
+  readonly remove: (uri: string) => Promise<void>
+  readonly writeFile: (uri: string, content: string) => Promise<void>
+}
 import definitions from './AgentToolDefinitions.json' with { type: 'json' }
 
 export interface AgentToolDefinition {
@@ -39,6 +47,16 @@ export interface AgentToolResult {
   readonly isError: boolean
   readonly modelOutput?: AgentToolModelOutput
 }
+
+export type TypeScriptExecutionResult =
+  | {
+      readonly result: string
+      readonly success: true
+    }
+  | {
+      readonly error: string
+      readonly success: false
+    }
 
 export interface AgentExternalToolHost {
   readonly execute: (
@@ -94,6 +112,7 @@ export interface AgentToolHostOptions {
   readonly commandExecutor?: AgentCommandExecutor
   readonly editorContextProvider?: AgentEditorContextProvider
   readonly externalToolHost?: AgentExternalToolHost
+  readonly fileSystem?: AgentFileSystem
   readonly fileSystemAccess?: AgentFileSystemAccess
   readonly typeScriptExecutor?: (
     code: string,
@@ -102,13 +121,17 @@ export interface AgentToolHostOptions {
 }
 
 export interface AgentToolHost {
-  readonly beginTurn: (taskId: string) => void
+  readonly beginTurn: (taskId: string) => void | Promise<void>
   readonly execute: (
     call: AgentToolCall,
     signal?: AbortSignal,
   ) => Promise<AgentToolResult>
-  readonly getChangedFiles: () => readonly ChatChangedFile[]
-  readonly getDefinitions: () => readonly AgentToolDefinition[]
+  readonly getChangedFiles: () =>
+    | readonly ChatChangedFile[]
+    | Promise<readonly ChatChangedFile[]>
+  readonly getDefinitions: () =>
+    | readonly AgentToolDefinition[]
+    | Promise<readonly AgentToolDefinition[]>
   readonly getWorkspaceContext: () => Promise<string>
   readonly revert: () => Promise<readonly ChatChangedFile[]>
   readonly verifyChanges?: (
@@ -155,6 +178,27 @@ const readToolNames = new Set([
   'search_workspace',
 ])
 const writeToolNames = new Set(['apply_patch'])
+
+const unavailable = async (): Promise<never> => {
+  throw new Error('Workspace file system access is unavailable')
+}
+
+const defaultFileSystem: AgentFileSystem = {
+  exists: async () => false,
+  readDirWithFileTypes: unavailable,
+  readFile: unavailable,
+  remove: unavailable,
+  writeFile: unavailable,
+}
+
+const unavailableWorkspace = async (): Promise<string> => {
+  throw new Error('Workspace access is unavailable')
+}
+
+const unavailableTypeScript = async (): Promise<TypeScriptExecutionResult> => ({
+  error: 'TypeScript execution is unavailable',
+  success: false,
+})
 
 export const getWorkspaceContextLabel = (workspaceUri: string): string =>
   `Current workspace URI: ${workspaceUri}\nWorkspace file tools use absolute URIs, and only URIs inside this workspace are valid.`
@@ -268,13 +312,14 @@ export const getLineChanges = (
 const resolveWorkspaceUri = async (
   uri: string,
   workspaceUriProvider: () => Promise<string>,
+  fileSystem: AgentFileSystem,
 ): Promise<Readonly<{ relativePath: string; uri: string }>> => {
   const base = await getWorkspaceBase(workspaceUriProvider)
   const relativePath = getWorkspaceRelativePath(base, uri)
   const segments = relativePath.split('/')
   let parent = base
   for (const segment of segments) {
-    const entries = await readDirWithFileTypes(parent)
+    const entries = await fileSystem.readDirWithFileTypes(parent)
     const entry = entries.find((item) => item.name === segment)
     if (!entry) {
       break
@@ -310,9 +355,10 @@ export const createAgentToolHost = ({
   commandExecutor,
   editorContextProvider,
   externalToolHost,
+  fileSystem = defaultFileSystem,
   fileSystemAccess,
-  typeScriptExecutor = executeTypeScript,
-  workspaceUriProvider = getWorkspaceUri,
+  typeScriptExecutor = unavailableTypeScript,
+  workspaceUriProvider = unavailableWorkspace,
 }: AgentToolHostOptions = {}): AgentToolHost => {
   if (fileSystemAccess && fileSystemAccess.root !== '.') {
     throw new Error(
@@ -360,7 +406,7 @@ export const createAgentToolHost = ({
     ) {
       signal?.throwIfAborted()
       const directory = directories.shift() || ''
-      const entries = await readDirWithFileTypes(
+      const entries = await fileSystem.readDirWithFileTypes(
         toWorkspaceUri(workspace, directory),
       )
       for (const entry of entries) {
@@ -380,7 +426,7 @@ export const createAgentToolHost = ({
         visitedFiles++
         try {
           const uri = toWorkspaceUri(workspace, relativePath)
-          const content = await readFile(uri)
+          const content = await fileSystem.readFile(uri)
           if (content.length > maximumFileCharacters) {
             continue
           }
@@ -412,8 +458,12 @@ export const createAgentToolHost = ({
     startLine = 1,
     endLine = startLine + 399,
   ): Promise<string> => {
-    const target = await resolveWorkspaceUri(uri, workspaceUriProvider)
-    const content = await readFile(target.uri)
+    const target = await resolveWorkspaceUri(
+      uri,
+      workspaceUriProvider,
+      fileSystem,
+    )
+    const content = await fileSystem.readFile(target.uri)
     const lines = content.split('\n')
     const start = Math.max(1, startLine)
     const end = Math.min(lines.length, Math.max(start, endLine), start + 399)
@@ -430,9 +480,13 @@ export const createAgentToolHost = ({
     newText: string,
     expectedHash?: string,
   ): Promise<string> => {
-    const target = await resolveWorkspaceUri(uri, workspaceUriProvider)
-    const existed = await exists(target.uri)
-    const content = existed ? await readFile(target.uri) : ''
+    const target = await resolveWorkspaceUri(
+      uri,
+      workspaceUriProvider,
+      fileSystem,
+    )
+    const existed = await fileSystem.exists(target.uri)
+    const content = existed ? await fileSystem.readFile(target.uri) : ''
     if (expectedHash && hashText(content) !== expectedHash) {
       throw new Error(`File changed since it was read: ${target.relativePath}`)
     }
@@ -460,7 +514,7 @@ export const createAgentToolHost = ({
       }
       updated = `${content.slice(0, firstIndex)}${newText}${content.slice(firstIndex + oldText.length)}`
     }
-    await writeFile(target.uri, updated)
+    await fileSystem.writeFile(target.uri, updated)
     snapshots.set(target.relativePath, {
       ...originalSnapshot,
       appliedContent: updated,
@@ -618,13 +672,13 @@ export const createAgentToolHost = ({
             `Visible diagnostics:\n${editorContext.diagnostics.slice(0, 50).join('\n')}`,
           )
         }
-        const entries = await readDirWithFileTypes(workspace)
+        const entries = await fileSystem.readDirWithFileTypes(workspace)
         if (
           entries.some(
             (entry) => entry.name === 'AGENTS.md' && entry.type === fileType,
           )
         ) {
-          const contents = await readFile(agentsUri)
+          const contents = await fileSystem.readFile(agentsUri)
           const instructions = contents.slice(0, 16_000)
           contextParts.push(
             `Repository instructions from AGENTS.md:\n${instructions}`,
@@ -641,9 +695,9 @@ export const createAgentToolHost = ({
       }
       const reverted: ChatChangedFile[] = []
       for (const [path, snapshot] of snapshots) {
-        const currentlyExists = await exists(snapshot.uri)
+        const currentlyExists = await fileSystem.exists(snapshot.uri)
         const currentContent = currentlyExists
-          ? await readFile(snapshot.uri)
+          ? await fileSystem.readFile(snapshot.uri)
           : ''
         if (currentContent !== snapshot.appliedContent) {
           throw new Error(
@@ -651,9 +705,9 @@ export const createAgentToolHost = ({
           )
         }
         if (snapshot.existed) {
-          await writeFile(snapshot.uri, snapshot.content)
-        } else if (await exists(snapshot.uri)) {
-          await remove(snapshot.uri)
+          await fileSystem.writeFile(snapshot.uri, snapshot.content)
+        } else if (await fileSystem.exists(snapshot.uri)) {
+          await fileSystem.remove(snapshot.uri)
         }
         reverted.push({ additions: 0, deletions: 0, path, status: 'modified' })
       }
@@ -665,10 +719,12 @@ export const createAgentToolHost = ({
       async verifyChanges(signal?: AbortSignal) {
         const workspace = await getWorkspaceBase(workspaceUriProvider)
         const packageUri = toWorkspaceUri(workspace, 'package.json')
-        if (!(await exists(packageUri)) || changedFiles.size === 0) {
+        if (!(await fileSystem.exists(packageUri)) || changedFiles.size === 0) {
           return { checksPassed: 0, failed: false, output: '' }
         }
-        const packageJson = JSON.parse(await readFile(packageUri)) as {
+        const packageJson = JSON.parse(
+          await fileSystem.readFile(packageUri),
+        ) as {
           readonly scripts?: Readonly<Record<string, string>>
         }
         const scripts = packageJson.scripts || {}

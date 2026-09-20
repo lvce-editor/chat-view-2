@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, regex/hoist-regex, sonarjs/no-nested-conditional, sonarjs/super-linear-regex, unicorn/prefer-iterator-to-array */
+import type { AgentToolCall } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import type {
   AgentBackend,
   AgentInput,
   AgentStepOptions,
   AgentStepResult,
 } from '../AgentBackend/AgentBackend.ts'
-import type { AgentToolCall } from '../AgentToolHost/AgentToolHost.ts'
 import type { ChatModel } from '../ChatApi/ChatApi.ts'
 
 export interface ResponsesBackendOptions {

@@ -1,16 +1,12 @@
+import type { AgentFileSystemAccess } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import type { ChatApi } from '../ChatApi/ChatApi.ts'
 import { createAgentChatApi } from '../AgentChatApi/AgentChatApi.ts'
-import {
-  createAgentToolHost,
-  type AgentFileSystemAccess,
-} from '../AgentToolHost/AgentToolHost.ts'
 import {
   type BackendConfiguration,
   resolveBackendConfiguration,
 } from '../BackendConfiguration/BackendConfiguration.ts'
-import { getDefaultComputerUseToolHost } from '../ComputerUseToolHost/ComputerUseToolHost.ts'
+import { createRemoteAgentToolHost } from '../ChatToolWorker/ChatToolWorker.ts'
 import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
-import { createNodeCommandExecutor } from '../NodeCommandExecutor/NodeCommandExecutor.ts'
 import { createResponsesBackend } from '../ResponsesBackend/ResponsesBackend.ts'
 import { createIndexedDbTaskStore } from '../TaskStore/TaskStore.ts'
 
@@ -31,8 +27,6 @@ export const createDefaultChatApi = async ({
   if (!baseUrl) {
     return createMockChatApi(120)
   }
-  const commandExecutor = createNodeCommandExecutor()
-  const externalToolHost = await getDefaultComputerUseToolHost()
   return createAgentChatApi({
     backend: createResponsesBackend({
       accessToken,
@@ -40,10 +34,6 @@ export const createDefaultChatApi = async ({
       supportsStreaming,
     }),
     store: createIndexedDbTaskStore(),
-    toolHost: createAgentToolHost({
-      ...(commandExecutor && { commandExecutor }),
-      ...(externalToolHost && { externalToolHost }),
-      ...(fileSystemAccess && { fileSystemAccess }),
-    }),
+    toolHost: await createRemoteAgentToolHost(fileSystemAccess),
   })
 }

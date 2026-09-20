@@ -36,6 +36,19 @@ test('declares the TypeScript evaluation web worker rpc', async () => {
   })
 })
 
+test('declares the isolated chat tool web worker rpc', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.rpc).toContainEqual({
+    contentSecurityPolicy: ["default-src 'none'", "script-src 'self'"],
+    id: 'builtin.chat-view-2.chat-tool-worker',
+    name: 'Chat 2 Tool Worker',
+    type: 'web-worker',
+    url: 'dist/chatToolWorkerMain.js',
+  })
+})
+
 test('maps Enter in the composer to the submit command', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))

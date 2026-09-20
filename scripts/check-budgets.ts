@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 const outputDirectory = fileURLToPath(new URL('../dist/dist/', import.meta.url))
 const bundleBudgets = new Map([
   ['chatMain.js', 300_000],
+  ['chatToolWorkerMain.js', 100_000],
   ['typeScriptEvaluationWorkerMain.js', 6_000_000],
 ])
 const dynamicImportRegex = /\bimport\s*\(/

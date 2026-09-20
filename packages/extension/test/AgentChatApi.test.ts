@@ -1,8 +1,8 @@
 // cspell:words nemotron logprobs
 /* eslint-disable unicorn/max-nested-calls */
+import type { AgentToolHost } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { expect, jest, test } from '@jest/globals'
 import type { AgentBackend } from '../src/parts/AgentBackend/AgentBackend.ts'
-import type { AgentToolHost } from '../src/parts/AgentToolHost/AgentToolHost.ts'
 import { createAgentChatApi } from '../src/parts/AgentChatApi/AgentChatApi.ts'
 import { summarizeTask } from '../src/parts/ChatTask/ChatTask.ts'
 import { createResponsesBackend } from '../src/parts/ResponsesBackend/ResponsesBackend.ts'

@@ -15,6 +15,13 @@ const workerEntryPoint = join(
   'src',
   'typeScriptEvaluationWorkerMain.ts',
 )
+const chatToolWorkerEntryPoint = join(
+  root,
+  'packages',
+  'chat-tool-worker',
+  'src',
+  'chatToolWorkerMain.ts',
+)
 const require = createRequire(import.meta.url)
 const commonjs = require('@rollup/plugin-commonjs') as () => Plugin
 const json = require('@rollup/plugin-json') as () => Plugin
@@ -122,6 +129,32 @@ await workerBundle.write({
 })
 
 await workerBundle.close()
+
+const chatToolWorkerBundle = await rollup({
+  input: chatToolWorkerEntryPoint,
+  external: ['electron', 'node:*'],
+  plugins: [
+    json(),
+    nodeResolve({
+      browser: true,
+    }),
+    commonjs(),
+    esbuild({
+      target: 'esnext',
+    }),
+  ],
+  treeshake: {
+    moduleSideEffects: false,
+  },
+})
+
+await chatToolWorkerBundle.write({
+  file: join(root, 'dist', 'dist', 'chatToolWorkerMain.js'),
+  format: 'esm',
+  inlineDynamicImports: true,
+})
+
+await chatToolWorkerBundle.close()
 
 await esbuildBuild({
   banner: {
