@@ -10,6 +10,13 @@ const workerEntryPoint = path.join(
   'src',
   'typeScriptEvaluationWorkerMain.ts',
 )
+const chatToolWorkerEntryPoint = path.join(
+  root,
+  'packages',
+  'chat-tool-worker',
+  'src',
+  'chatToolWorkerMain.ts',
+)
 const outdir = path.join(extension, 'dist')
 
 fs.rmSync(outdir, { recursive: true, force: true })
@@ -23,6 +30,16 @@ await esbuild.build({
   outfile: path.join(outdir, 'chatMain.js'),
   platform: 'browser',
   sourcemap: true,
+  target: 'esnext',
+})
+
+await esbuild.build({
+  bundle: true,
+  entryPoints: [chatToolWorkerEntryPoint],
+  external: ['electron', 'node:*'],
+  format: 'esm',
+  outfile: path.join(outdir, 'chatToolWorkerMain.js'),
+  platform: 'browser',
   target: 'esnext',
 })
 

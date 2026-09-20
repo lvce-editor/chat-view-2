@@ -3,7 +3,7 @@ import type {
   AgentToolCall,
   AgentToolDefinition,
   AgentToolModelOutput,
-} from '../AgentToolHost/AgentToolHost.ts'
+} from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import type { ChatModel } from '../ChatApi/ChatApi.ts'
 
 export interface AgentInputMessage {

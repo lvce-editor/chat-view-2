@@ -1,0 +1,16 @@
+{
+  "name": "@lvce-editor/chat-tool-worker",
+  "version": "0.0.0-dev",
+  "description": "Chat 2 tool execution worker",
+  "main": "dist/chatToolWorkerMain.js",
+  "type": "module",
+  "exports": {
+    "./parts/*": "./src/parts/*"
+  },
+  "scripts": {},
+  "author": "Lvce Editor",
+  "license": "MIT",
+  "dependencies": {
+    "@lvce-editor/rpc": "6.21.0"
+  }
+}

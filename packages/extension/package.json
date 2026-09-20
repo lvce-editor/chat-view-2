@@ -28,7 +28,8 @@
     }
   },
   "dependencies": {
-    "@babel/standalone": "7.29.9"
+    "@babel/standalone": "7.29.9",
+    "@lvce-editor/chat-tool-worker": "0.0.0-dev"
   },
   "devDependencies": {
     "@lvce-editor/api": "9.33.1",

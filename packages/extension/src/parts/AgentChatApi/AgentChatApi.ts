@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, sonarjs/cognitive-complexity, sonarjs/no-nested-conditional, unicorn/no-top-level-assignment-in-function */
-import type { AgentBackend, AgentInput } from '../AgentBackend/AgentBackend.ts'
 import type {
   AgentToolCall,
   AgentToolHost,
   AgentToolResult,
-} from '../AgentToolHost/AgentToolHost.ts'
+} from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
+import type { AgentBackend, AgentInput } from '../AgentBackend/AgentBackend.ts'
 import type {
   ChatApi,
   ChatRunOptions,
@@ -139,7 +139,7 @@ export const createAgentChatApi = ({
       },
       options,
     )
-    toolHost.beginTurn(task.id)
+    await toolHost.beginTurn(task.id)
     await store.save(task)
     await notify(task, options)
     let input: readonly AgentInput[] = [
@@ -190,7 +190,7 @@ export const createAgentChatApi = ({
           },
           ...(previousResponseId && { previousResponseId }),
           ...(options?.signal && { signal: options.signal }),
-          tools: toolHost.getDefinitions(),
+          tools: await toolHost.getDefinitions(),
         })
         await trace(
           {
@@ -241,7 +241,7 @@ export const createAgentChatApi = ({
           continue
         }
         if (result.toolCalls.length === 0) {
-          const files = toolHost.getChangedFiles()
+          const files = await toolHost.getChangedFiles()
           let checksPassed = 0
           if (files.length > 0 && toolHost.verifyChanges) {
             task = await withEvent(

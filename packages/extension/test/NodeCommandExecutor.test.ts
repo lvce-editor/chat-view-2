@@ -1,9 +1,10 @@
+/* eslint-disable unicorn/no-await-expression-member */
 import { expect, test } from '@jest/globals'
+import { createAgentToolHost } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { createAgentToolHost } from '../src/parts/AgentToolHost/AgentToolHost.ts'
 import {
   createNodeCommandExecutor,
   isNodeRuntime,
@@ -53,9 +54,9 @@ test('runs Bash commands from a file URI workspace', async () => {
     })
 
     expect(result).toEqual({ exitCode: 0, output: basename(workspace) })
-    const definitions = createAgentToolHost({ commandExecutor: executor })
-      .getDefinitions()
-      .map((definition) => definition.name)
+    const definitions = (
+      await createAgentToolHost({ commandExecutor: executor }).getDefinitions()
+    ).map((definition) => definition.name)
     expect(definitions).toContain('run_command')
   } finally {
     await rm(workspace, { recursive: true })

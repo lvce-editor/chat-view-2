@@ -1,11 +1,11 @@
-import type { spawn as spawnProcess } from 'node:child_process'
-import type { fileURLToPath as fileUrlToPath } from 'node:url'
-import { getWorkspaceFolder } from '@lvce-editor/api'
 import type {
   AgentCommandExecutor,
   AgentCommandOptions,
   AgentCommandResult,
-} from '../AgentToolHost/AgentToolHost.ts'
+} from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
+import type { spawn as spawnProcess } from 'node:child_process'
+import type { fileURLToPath as fileUrlToPath } from 'node:url'
+import { getWorkspaceFolder } from '@lvce-editor/api'
 
 // cspell:ignore taskkill
 

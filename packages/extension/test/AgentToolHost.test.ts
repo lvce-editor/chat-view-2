@@ -1,3 +1,4 @@
+/* eslint-disable unicorn/no-await-expression-member */
 /* eslint-disable unicorn/max-nested-calls */
 import { expect, jest, test } from '@jest/globals'
 import {
@@ -5,7 +6,7 @@ import {
   getLineChanges,
   getWorkspaceContextLabel,
   getWorkspaceRelativePath,
-} from '../src/parts/AgentToolHost/AgentToolHost.ts'
+} from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 
 test.each([
   ['', 'first\nsecond\n', { additions: 2, deletions: 0 }],
@@ -56,8 +57,8 @@ test.each(['file:///workspace/', 'memfs:///workspace/'])(
   },
 )
 
-test('uses uri arguments for file tools', () => {
-  const definitions = createAgentToolHost().getDefinitions()
+test('uses uri arguments for file tools', async () => {
+  const definitions = await createAgentToolHost().getDefinitions()
   const readFile = definitions.find(({ name }) => name === 'read_file')
   const applyPatch = definitions.find(({ name }) => name === 'apply_patch')
 
@@ -97,10 +98,10 @@ test('get_workspace_uri returns the current workspace uri', async () => {
   expect(workspaceUriProvider).toHaveBeenCalledTimes(1)
 })
 
-test('removes commands and diagnostics from the catalog when their secure hosts are unavailable', () => {
-  const names = createAgentToolHost()
-    .getDefinitions()
-    .map((definition) => definition.name)
+test('removes commands and diagnostics from the catalog when their secure hosts are unavailable', async () => {
+  const names = (await createAgentToolHost().getDefinitions()).map(
+    (definition) => definition.name,
+  )
 
   expect(names).not.toContain('run_command')
   expect(names).not.toContain('get_diagnostics')
@@ -122,7 +123,9 @@ test('exposes read tools but not write tools in a read-only workspace sandbox', 
       root: '.',
     },
   })
-  const names = host.getDefinitions().map((definition) => definition.name)
+  const names = (await host.getDefinitions()).map(
+    (definition) => definition.name,
+  )
 
   expect(names).toEqual(
     expect.arrayContaining([
@@ -148,16 +151,16 @@ test('exposes read tools but not write tools in a read-only workspace sandbox', 
   })
 })
 
-test('write access implies workspace read access', () => {
-  const names = createAgentToolHost({
-    fileSystemAccess: {
-      allowRead: false,
-      allowWrite: true,
-      root: '.',
-    },
-  })
-    .getDefinitions()
-    .map((definition) => definition.name)
+test('write access implies workspace read access', async () => {
+  const names = (
+    await createAgentToolHost({
+      fileSystemAccess: {
+        allowRead: false,
+        allowWrite: true,
+        root: '.',
+      },
+    }).getDefinitions()
+  ).map((definition) => definition.name)
 
   expect(names).toEqual(
     expect.arrayContaining([
