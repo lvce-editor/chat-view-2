@@ -232,37 +232,45 @@ const validateUris = (value) => {
  * @param {string[]} uris
  * @returns {Promise<void>}
  */
-const defaultLaunchApplication = (desktopId, uris) =>
-  new Promise((resolvePromise, rejectPromise) => {
+const defaultLaunchApplication = (desktopId, uris) => {
+  const { promise, reject, resolve } = Promise.withResolvers()
+  try {
     const child = spawn('gtk-launch', [desktopId, ...uris], {
       detached: true,
       stdio: 'ignore',
     })
-    child.once('error', rejectPromise)
+    child.once('error', reject)
     child.once('spawn', () => {
       child.unref()
-      resolvePromise()
+      resolve(undefined)
     })
-  })
+  } catch (error) {
+    reject(error)
+  }
+  return promise
+}
 
 /**
  * @param {string[]} arguments_
  * @returns {Promise<void>}
  */
-const defaultRunXdotool = (arguments_) =>
-  new Promise((resolvePromise, rejectPromise) => {
+const defaultRunXdotool = (arguments_) => {
+  const { promise, reject, resolve } = Promise.withResolvers()
+  try {
     const child = spawn('xdotool', arguments_, { stdio: 'ignore' })
-    child.once('error', rejectPromise)
+    child.once('error', reject)
     child.once('exit', (code, signal) => {
       if (code === 0) {
-        resolvePromise()
+        resolve(undefined)
         return
       }
-      rejectPromise(
-        new Error(`xdotool exited (${signal ?? code ?? 'unknown'})`),
-      )
+      reject(new Error(`xdotool exited (${signal ?? code ?? 'unknown'})`))
     })
-  })
+  } catch (error) {
+    reject(error)
+  }
+  return promise
+}
 
 /**
  * @param {Record<string, unknown>} arguments_
@@ -563,13 +571,17 @@ class ComputerUseMcpClient {
       return Promise.reject(new Error('Computer-use MCP server is not running'))
     }
     const id = this.nextRequestId++
-    const result = new Promise((resolve, reject) => {
+    const { promise, reject, resolve } = Promise.withResolvers()
+    try {
       this.pending.set(id, { reject, resolve })
-    })
+    } catch (error) {
+      reject(error)
+      return promise
+    }
     child.stdin.write(
       `${JSON.stringify({ id, jsonrpc: '2.0', method, params })}\n`,
     )
-    return result
+    return promise
   }
 
   async connect() {

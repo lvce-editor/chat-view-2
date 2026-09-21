@@ -94,7 +94,9 @@ export const createNodeCommandExecutor = ({
       child.stdout.setEncoding('utf8')
       child.stderr.setEncoding('utf8')
 
-      return await new Promise((resolve) => {
+      const { promise, reject, resolve } =
+        Promise.withResolvers<AgentCommandResult>()
+      try {
         let output = ''
         let stopReason: 'aborted' | 'timeout' | undefined
         let settled = false
@@ -196,7 +198,10 @@ export const createNodeCommandExecutor = ({
         if (options.signal?.aborted) {
           handleAbort()
         }
-      })
+      } catch (error) {
+        reject(error)
+      }
+      return await promise
     },
   }
 }

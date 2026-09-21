@@ -53,10 +53,14 @@ test(
         }
         void attach()
       })
-      await new Promise((resolve, reject) => {
-        server.once('error', reject)
-        server.listen(0, '127.0.0.1', resolve)
-      })
+      const listening = Promise.withResolvers()
+      try {
+        server.once('error', listening.reject)
+        server.listen(0, '127.0.0.1', listening.resolve)
+      } catch (error) {
+        listening.reject(error)
+      }
+      await listening.promise
       const address = server.address()
       assert.ok(address && typeof address === 'object')
       const webSocket = new WebSocket(`ws://127.0.0.1:${address.port}`)
@@ -74,7 +78,13 @@ test(
         socket.destroy()
       }
       server.closeAllConnections()
-      await new Promise((resolve) => server.close(resolve))
+      const closed = Promise.withResolvers()
+      try {
+        server.close(closed.resolve)
+      } catch (error) {
+        closed.reject(error)
+      }
+      await closed.promise
     }
   },
 )
