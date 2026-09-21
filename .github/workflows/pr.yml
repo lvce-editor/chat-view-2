@@ -21,7 +21,7 @@ jobs:
       - name: Compute node modules cache key
         id: nodeModulesCacheKey
         run: |
-          value=$(node scripts/computeNodeModulesCacheKey.ts)
+          value=$(node packages/build/src/computeNodeModulesCacheKey.ts)
           echo "value=$value" >> "$GITHUB_OUTPUT"
         shell: bash
       - uses: actions/cache@v5
@@ -46,13 +46,13 @@ jobs:
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Build release archive
-        run: node scripts/build.ts
+        run: node packages/build/src/build.ts
       - name: Check Chat 2 bundle budgets
         run: npm run check:budgets
       - name: Ensure static build dependencies
         run: node -e "const { createRequire } = require('node:module'); createRequire(process.cwd() + '/packages/server/package.json').resolve('@lvce-editor/shared-process')" || npm ci
         shell: bash
       - name: Build static site
-        run: node scripts/build-static.ts
+        run: node packages/build/src/build-static.ts
         env:
           PATH_PREFIX: auto

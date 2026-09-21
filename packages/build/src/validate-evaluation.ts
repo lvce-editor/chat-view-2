@@ -1,14 +1,10 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { parseScenario } from '../packages/evaluation/src/Scenario.ts'
+import { parseScenario } from '../../../packages/evaluation/src/Scenario.ts'
+import { root } from './root.ts'
 
-const scenariosDirectory = new URL(
-  '../packages/evaluation/scenarios/',
-  import.meta.url,
-)
-const scenariosPath = fileURLToPath(scenariosDirectory)
-const entries = (await readdir(scenariosDirectory, { withFileTypes: true }))
+const scenariosPath = join(root, 'packages', 'evaluation', 'scenarios')
+const entries = (await readdir(scenariosPath, { withFileTypes: true }))
   .filter((entry) => entry.isDirectory())
   .sort((left, right) => left.name.localeCompare(right.name))
 

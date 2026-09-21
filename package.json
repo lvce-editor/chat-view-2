@@ -9,9 +9,9 @@
   "scripts": {
     "build": "node packages/build/src/build.ts",
     "build:extension": "node packages/build/src/build-extension.ts",
-    "build:static": "node scripts/build-static.ts",
+    "build:static": "node packages/build/src/build-static.ts",
     "build:watch": "./node_modules/.bin/esbuild --format=esm --bundle --external:electron --external:node:* --watch packages/extension/src/chatMain.ts --outfile=packages/extension/dist/chatMain.js",
-    "check:budgets": "node scripts/check-budgets.ts",
+    "check:budgets": "node packages/build/src/check-budgets.ts",
     "dev": "node packages/build/src/dev.ts",
     "e2e": "cd packages/e2e && npm run e2e",
     "e2e:headless": "cd packages/e2e && npm run e2e:headless",
@@ -21,7 +21,7 @@
     "format": "prettier --write .",
     "install:extension": "node packages/build/src/install-extension.ts",
     "lint": "eslint . && prettier --check .",
-    "test": "npm run build && npm test --workspaces --if-present && node scripts/validate-evaluation.ts",
+    "test": "npm run build && npm test --workspaces --if-present && node packages/build/src/validate-evaluation.ts",
     "test:watch": "node --unhandled-rejections=warn --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
     "type-check": "tsc -b"
   },
