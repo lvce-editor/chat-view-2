@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..')
+import { join } from 'node:path'
+import { root } from './root.ts'
 
 const locations: string[] = ['package.json', 'package-lock.json']
 

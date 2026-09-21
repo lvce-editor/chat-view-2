@@ -15,9 +15,14 @@
     "noImplicitAny": false,
     "allowImportingTsExtensions": true,
     "forceConsistentCasingInFileNames": true,
-    "rootDir": ".",
+    "rootDir": "../..",
     "composite": true
   },
-  "include": ["src", "test"],
+  "include": [
+    "src",
+    "test",
+    "../evaluation/src/Scenario.ts",
+    "../evaluation/src/Types.ts"
+  ],
   "exclude": ["third_party", "coverage"]
 }

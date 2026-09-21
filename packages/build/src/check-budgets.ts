@@ -1,8 +1,8 @@
 import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { root } from './root.ts'
 
-const outputDirectory = fileURLToPath(new URL('../dist/dist/', import.meta.url))
+const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
   ['chatMain.js', 300_000],
   ['chatToolWorkerMain.js', 100_000],
