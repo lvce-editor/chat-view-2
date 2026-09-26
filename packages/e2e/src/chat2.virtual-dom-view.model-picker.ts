@@ -15,6 +15,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const options = Locator('.ChatModelOption')
   const title = Locator('text=Models')
   await expect(picker).toBeVisible()
+  await expect(picker).toHaveJSProperty('offsetTop', -289)
   await expect(picker).toHaveCSS('right', '16px')
   await expect(picker).toHaveCSS('max-width', '300px')
   await expect(options).toHaveCount(5)
