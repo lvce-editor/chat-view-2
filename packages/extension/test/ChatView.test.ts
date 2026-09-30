@@ -206,6 +206,54 @@ test('shows the model loading error provided by the backend', async () => {
   expect(getText(dom)).toContain('Log in to access the chat.')
 })
 
+test('keeps failed token refreshes in the login state without unauthenticated requests or retries', async () => {
+  jest.useFakeTimers()
+  const configuration: BackendConfiguration = {
+    accessToken: '',
+    baseUrl: 'https://backend.example.com',
+    loginRequired: true,
+    supportsStreaming: true,
+  }
+  const listModels = jest.fn(createMockChatApi().listModels)
+  const listTasks = jest.fn(createMockChatApi().listTasks)
+  const resolveConfiguration = jest.fn(async () => configuration)
+  const instance = await createInstance(
+    createViewContext(undefined),
+    undefined,
+    undefined,
+    undefined,
+    {
+      async createApi() {
+        return { ...createMockChatApi(), listModels, listTasks }
+      },
+      resolveConfiguration,
+    },
+  )
+
+  try {
+    expect(instance.getState()).toEqual(
+      expect.objectContaining({
+        errorMessage: '',
+        loginRequired: true,
+        models: [],
+        tasks: [],
+      }),
+    )
+    expect(getNodesByClass(instance.render(), 'ChatLoginButton')).toHaveLength(
+      1,
+    )
+    expect(listModels).not.toHaveBeenCalled()
+    expect(listTasks).not.toHaveBeenCalled()
+
+    await jest.advanceTimersByTimeAsync(1000)
+
+    expect(resolveConfiguration).toHaveBeenCalledTimes(1)
+  } finally {
+    instance.dispose?.()
+    jest.useRealTimers()
+  }
+})
+
 test('reloads models when authentication changes after the view loads', async () => {
   jest.useFakeTimers()
   const requestRerender = jest.fn(async () => {})

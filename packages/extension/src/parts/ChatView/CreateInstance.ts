@@ -193,10 +193,12 @@ export const createInstance = async (
         errorMessage = getModelLoadingError(error)
         return []
       })
-  const tasks = await api.listTasks(20).catch((error: unknown) => {
-    errorMessage = error instanceof Error ? error.message : String(error)
-    return []
-  })
+  const tasks = backendConfiguration?.loginRequired
+    ? []
+    : await api.listTasks(20).catch((error: unknown) => {
+        errorMessage = error instanceof Error ? error.message : String(error)
+        return []
+      })
   const preferredModelId =
     saved.selectedModelId || (await getPreferredModelId())
   const fontFamily = await readFontFamily(readPreference)
@@ -284,8 +286,13 @@ export const createInstance = async (
     }, copyFeedbackDuration)
   }
 
-  const syncAuthState = async (): Promise<void> => {
-    if (!backendConfiguration || authStateSyncing || disposed) {
+  const syncAuthState = async (retryLogin = false): Promise<void> => {
+    if (
+      !backendConfiguration ||
+      (state.loginRequired && !retryLogin) ||
+      authStateSyncing ||
+      disposed
+    ) {
       return
     }
     authStateSyncing = true
@@ -433,7 +440,7 @@ export const createInstance = async (
         await context?.requestRerender()
         try {
           await execute('Layout.signIn')
-          await syncAuthState()
+          await syncAuthState(true)
         } catch (error) {
           state.errorMessage =
             error instanceof Error ? error.message : String(error)
