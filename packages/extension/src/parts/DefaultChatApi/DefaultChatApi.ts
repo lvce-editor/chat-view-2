@@ -33,8 +33,8 @@ export const createDefaultChatApi = async ({
     backend: createResponsesBackend({
       accessToken,
       baseUrl,
-      onLoginRequired,
-      refreshAccessToken,
+      ...(onLoginRequired && { onLoginRequired }),
+      ...(refreshAccessToken && { refreshAccessToken }),
       supportsStreaming,
     }),
     store: createIndexedDbTaskStore(),
