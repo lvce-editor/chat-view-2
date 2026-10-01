@@ -834,3 +834,84 @@ test('keeps login available after a failed or cancelled login', async () => {
     instance.dispose?.()
   }
 })
+
+test('releases the submit event before awaiting a queued rerender', async () => {
+  const gate = Promise.withResolvers<void>()
+  const completed = Promise.withResolvers<void>()
+  const context = {
+    ...createViewContext(undefined),
+    requestRerender: async () => gate.promise,
+  }
+  const api = createMockChatApi(0)
+  const instance = await createInstance(context, {
+    ...api,
+    async createTask(
+      message,
+      modelId,
+      // AbortSignal is supplied by the view and forwarded unchanged.
+      // eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
+      options: Parameters<typeof api.createTask>[2],
+    ) {
+      const task = await api.createTask(message, modelId, options)
+      completed.resolve()
+      return task
+    },
+  })
+  await instance.handleEvent({
+    name: 'composer',
+    type: 'input',
+    value: 'Test queued rendering',
+  })
+  const event = instance.handleEvent({ name: 'submit', type: 'click' })
+  try {
+    const released = await Promise.race([
+      (async () => {
+        await event
+        return true
+      })(),
+      new Promise<boolean>((resolve) => setTimeout(resolve, 0, false)),
+    ])
+    expect(released).toBe(true)
+  } finally {
+    gate.resolve()
+    await event
+    await completed.promise
+    instance.dispose?.()
+  }
+})
+
+test('reports a background submit failure and allows retry', async () => {
+  const rendered = Promise.withResolvers<void>()
+  const api = createMockChatApi(0)
+  const createTask = jest
+    .fn<typeof api.createTask>()
+    .mockRejectedValue(new Error('Request failed'))
+  const instance = await createInstance(
+    {
+      ...createViewContext(undefined),
+      async requestRerender() {
+        rendered.resolve()
+      },
+    },
+    { ...api, createTask },
+  )
+  try {
+    await instance.handleEvent({
+      name: 'composer',
+      type: 'input',
+      value: 'First',
+    })
+    await instance.handleEvent({ name: 'submit', type: 'click' })
+    await rendered.promise
+    expect(instance.getState().errorMessage).toBe('Request failed')
+    await instance.handleEvent({
+      name: 'composer',
+      type: 'input',
+      value: 'Retry',
+    })
+    await instance.handleEvent({ name: 'submit', type: 'click' })
+    expect(createTask).toHaveBeenCalledTimes(2)
+  } finally {
+    instance.dispose?.()
+  }
+})
