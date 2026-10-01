@@ -11,6 +11,6 @@
   "author": "Lvce Editor",
   "license": "MIT",
   "dependencies": {
-    "@lvce-editor/rpc": "6.21.0"
+    "@lvce-editor/rpc": "6.21.1"
   }
 }
