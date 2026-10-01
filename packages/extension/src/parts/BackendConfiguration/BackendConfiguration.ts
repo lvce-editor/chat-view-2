@@ -4,6 +4,7 @@ export interface BackendConfiguration {
   readonly accessToken: string
   readonly baseUrl: string
   readonly loginRequired?: boolean
+  readonly refreshAccessToken?: () => Promise<string>
   readonly supportsStreaming: boolean
 }
 
@@ -13,7 +14,7 @@ interface BackendConfigurationHost {
     ...args: readonly unknown[]
   ) => Promise<unknown>
   readonly getAccessToken: (options: {
-    readonly refresh: 'if-needed'
+    readonly refresh: 'if-needed' | 'always'
   }) => Promise<unknown>
   readonly getPreference: (key: string) => Promise<unknown>
 }
@@ -118,6 +119,10 @@ export const resolveBackendConfiguration = async (
     accessToken,
     baseUrl,
     supportsStreaming,
+    ...(usesEditorBackend && {
+      refreshAccessToken: async (): Promise<string> =>
+        getString(await host.getAccessToken({ refresh: 'always' })),
+    }),
     ...(usesEditorBackend && !accessToken && { loginRequired: true }),
   }
 }

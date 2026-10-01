@@ -175,6 +175,16 @@ export const createInstance = async (
   execute: ExecuteCommand = executeCommand,
   defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
 ): Promise<ActiveChatViewInstance> => {
+  let authenticationRejected = false
+  let currentState: MutableChatViewState | undefined
+  const onLoginRequired = (): void => {
+    authenticationRejected = true
+    if (currentState) {
+      currentState.loginRequired = true
+      currentState.errorMessage = ''
+      void context?.requestRerender()
+    }
+  }
   let api: ChatApi
   let backendConfiguration: BackendConfiguration | undefined
   if (providedApi) {
@@ -183,6 +193,7 @@ export const createInstance = async (
     backendConfiguration = await defaultApiHost.resolveConfiguration()
     api = await defaultApiHost.createApi({
       configuration: backendConfiguration,
+      onLoginRequired,
     })
   }
   const saved = getSavedState(context?.state)
@@ -220,7 +231,8 @@ export const createInstance = async (
     fontFamily,
     fontSize,
     loginPending: false,
-    loginRequired: backendConfiguration?.loginRequired === true,
+    loginRequired:
+      authenticationRejected || backendConfiguration?.loginRequired === true,
     modelPickerOpen: false,
     models,
     selectedModelId,
@@ -231,6 +243,7 @@ export const createInstance = async (
         ? getWorkingSeconds(selectedTask)
         : 0,
   }
+  currentState = state
   let activeController: AbortController | undefined
   let authStatePoll: ReturnType<typeof setInterval> | undefined
   let authStateSyncing = false
@@ -291,6 +304,7 @@ export const createInstance = async (
       !backendConfiguration ||
       (state.loginRequired && !retryLogin) ||
       authStateSyncing ||
+      activeController ||
       disposed
     ) {
       return
@@ -300,12 +314,15 @@ export const createInstance = async (
       const nextConfiguration = await defaultApiHost.resolveConfiguration()
       if (
         disposed ||
-        isSameBackendConfiguration(backendConfiguration, nextConfiguration)
+        (!retryLogin &&
+          isSameBackendConfiguration(backendConfiguration, nextConfiguration))
       ) {
         return
       }
+      authenticationRejected = false
       const nextApi = await defaultApiHost.createApi({
         configuration: nextConfiguration,
+        onLoginRequired,
       })
       const nextModels = nextConfiguration.loginRequired
         ? []
@@ -318,7 +335,8 @@ export const createInstance = async (
       }
       api = nextApi
       backendConfiguration = nextConfiguration
-      state.loginRequired = nextConfiguration.loginRequired === true
+      state.loginRequired =
+        authenticationRejected || nextConfiguration.loginRequired === true
       if (state.loginRequired) {
         state.errorMessage = ''
       }
@@ -423,6 +441,7 @@ export const createInstance = async (
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       disposed = true
+      currentState = undefined
       activeController?.abort()
       if (authStatePoll !== undefined) {
         clearInterval(authStatePoll)

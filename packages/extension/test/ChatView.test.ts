@@ -915,3 +915,62 @@ test('reports a background submit failure and allows retry', async () => {
     instance.dispose?.()
   }
 })
+
+test.each(['models', 'request'])(
+  'shows actionable Login after %s authentication recovery fails and stops polling',
+  async (phase) => {
+    jest.useFakeTimers()
+    let rejectAuthentication: (() => void) | undefined
+    let signedIn = false
+    const configuration: BackendConfiguration = {
+      accessToken: 'rejected-token',
+      baseUrl: 'https://backend.example.com',
+      supportsStreaming: true,
+    }
+    const resolveConfiguration = jest.fn(async () => configuration)
+    const api = createMockChatApi(0)
+    const instance = await createInstance(
+      createViewContext(undefined),
+      undefined,
+      undefined,
+      async () => {
+        signedIn = true
+      },
+      {
+        async createApi(options) {
+          rejectAuthentication = options.onLoginRequired
+          return {
+            ...api,
+            async listModels() {
+              if (phase === 'models' && !signedIn) {
+                options.onLoginRequired?.()
+                throw new Error('You must log in to continue.')
+              }
+              return api.listModels()
+            },
+          }
+        },
+        resolveConfiguration,
+      },
+    )
+    try {
+      if (phase === 'request') {
+        rejectAuthentication?.()
+      }
+      expect(instance.getState().loginRequired).toBe(true)
+      expect(
+        getNodesByClass(instance.render(), 'ChatLoginButton'),
+      ).toHaveLength(1)
+      await jest.advanceTimersByTimeAsync(2000)
+      expect(resolveConfiguration).toHaveBeenCalledTimes(1)
+      await dispatch(instance, { name: 'login', type: 'click' })
+      expect(instance.getState().loginRequired).toBe(false)
+      expect(
+        getNodesByClass(instance.render(), 'ChatComposerInput'),
+      ).toHaveLength(1)
+    } finally {
+      instance.dispose?.()
+      jest.useRealTimers()
+    }
+  },
+)
