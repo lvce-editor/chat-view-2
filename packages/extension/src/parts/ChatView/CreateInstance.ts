@@ -353,9 +353,8 @@ export const createInstance = async (
     }
   }
 
-  const updateTask = async (task: ChatTask): Promise<void> => {
+  const setTask = (task: ChatTask): void => {
     if (archivedTaskIds.has(task.id)) {
-      await context?.requestRerender()
       return
     }
     state.selectedTask = task
@@ -364,12 +363,22 @@ export const createInstance = async (
       task,
       ...state.tasks.filter((item) => item.id !== task.id),
     ].slice(0, 20)
+  }
+
+  const updateTask = async (task: ChatTask): Promise<void> => {
+    if (disposed) {
+      return
+    }
+    setTask(task)
     await context?.requestRerender()
   }
 
   const submit = async (requestRerender = false): Promise<void> => {
     const message = state.draft.trim()
     if (state.loginRequired || !message || !state.selectedModelId) {
+      return
+    }
+    if (activeController && state.selectedTask?.status !== 'running') {
       return
     }
     state.draft = ''
@@ -389,11 +398,14 @@ export const createInstance = async (
     const selectedTask = state.selectedTask
       ? { ...state.selectedTask, modelId: state.selectedModelId }
       : undefined
-    const task = selectedTask
-      ? await api.sendMessage(selectedTask, message, options)
-      : await api.createTask(message, state.selectedModelId, options)
-    activeController = undefined
-    await updateTask(task)
+    try {
+      const task = selectedTask
+        ? await api.sendMessage(selectedTask, message, options)
+        : await api.createTask(message, state.selectedModelId, options)
+      await updateTask(task)
+    } finally {
+      activeController = undefined
+    }
     if (requestRerender) {
       await context?.requestRerender()
     }
@@ -472,7 +484,17 @@ export const createInstance = async (
         return
       }
       if (event.name === 'submit') {
-        await submit()
+        // Rendering is serialized behind this event by the host.
+        void submit()
+          .catch(async (error: unknown) => {
+            if (disposed) {
+              return
+            }
+            state.errorMessage =
+              error instanceof Error ? error.message : String(error)
+            await context?.requestRerender()
+          })
+          .catch(() => {})
         return
       }
       if (event.name === 'toggle-focus-mode') {
@@ -481,7 +503,7 @@ export const createInstance = async (
       }
       if (event.name === 'stop') {
         if (state.selectedTask?.status === 'running') {
-          await updateTask(setStatus(state.selectedTask, 'stopping'))
+          setTask(setStatus(state.selectedTask, 'stopping'))
         }
         activeController?.abort()
         return
