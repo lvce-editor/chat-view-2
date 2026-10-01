@@ -13,6 +13,8 @@ export interface ResponsesBackendOptions {
   readonly baseUrl: string
   readonly createWebSocket?: ResponsesWebSocketFactory
   readonly fetch?: typeof fetch
+  readonly onLoginRequired?: () => void
+  readonly refreshAccessToken?: () => Promise<string>
   readonly supportsStreaming?: boolean
 }
 
@@ -542,12 +544,118 @@ export const createResponsesBackend = ({
   baseUrl,
   createWebSocket = defaultCreateWebSocket,
   fetch: fetchImplementation = globalThis.fetch,
+  onLoginRequired,
+  refreshAccessToken,
   supportsStreaming = false,
 }: ResponsesBackendOptions): AgentBackend => {
   const root = trimTrailingSlash(baseUrl)
+  let currentAccessToken = accessToken
+  let refreshPending: Promise<string> | undefined
+  const requireLogin = (): never => {
+    onLoginRequired?.()
+    throw new ResponsesBackendError(
+      loginRequiredMessage,
+      noAccessTokenProvidedCode,
+    )
+  }
+  const recoverAccessToken = async (
+    rejectedToken: string | undefined,
+  ): Promise<void> => {
+    if (currentAccessToken && currentAccessToken !== rejectedToken) {
+      return
+    }
+    const refresh = async (): Promise<string> => {
+      try {
+        return refreshAccessToken ? await refreshAccessToken() : ''
+      } finally {
+        refreshPending = undefined
+      }
+    }
+    refreshPending ||= refresh()
+    try {
+      currentAccessToken = await refreshPending
+    } catch {
+      requireLogin()
+    }
+    if (!currentAccessToken) {
+      requireLogin()
+    }
+  }
+  const authenticatedFetch = async (
+    url: string,
+    init: RequestInit,
+  ): Promise<Response> => {
+    const rejectedToken = currentAccessToken
+    let response = await fetchImplementation(url, {
+      ...init,
+      headers: getHeaders(currentAccessToken),
+    })
+    if (response.status === 401 && refreshAccessToken) {
+      await recoverAccessToken(rejectedToken)
+      init.signal?.throwIfAborted()
+      response = await fetchImplementation(url, {
+        ...init,
+        headers: getHeaders(currentAccessToken),
+      })
+      if (response.status === 401) {
+        requireLogin()
+      }
+    }
+    return response
+  }
+  const runAuthenticatedWebSocket = async (
+    options: AgentStepOptions,
+  ): Promise<AgentStepResult> => {
+    const rejectedToken = currentAccessToken
+    try {
+      return await runWebSocketStep(
+        root,
+        currentAccessToken,
+        createWebSocket,
+        options,
+      )
+    } catch (error) {
+      // Browser WebSocket errors hide the upgrade status. Confirm an auth
+      // rejection with a read-only request before refreshing or retrying.
+      if (!(error instanceof WebSocketUpgradeError) || !refreshAccessToken) {
+        throw error
+      }
+      const probe = await fetchImplementation(`${root}/v1/models`, {
+        credentials: 'include',
+        headers: getHeaders(rejectedToken),
+        ...(options.signal && { signal: options.signal }),
+      })
+      if (probe.status !== 401) {
+        throw error
+      }
+      await recoverAccessToken(rejectedToken)
+      options.signal?.throwIfAborted()
+      try {
+        return await runWebSocketStep(
+          root,
+          currentAccessToken,
+          createWebSocket,
+          options,
+        )
+      } catch (retryError) {
+        if (!(retryError instanceof WebSocketUpgradeError)) {
+          throw retryError
+        }
+        const retryProbe = await fetchImplementation(`${root}/v1/models`, {
+          credentials: 'include',
+          headers: getHeaders(currentAccessToken),
+          ...(options.signal && { signal: options.signal }),
+        })
+        if (retryProbe.status === 401) {
+          requireLogin()
+        }
+        throw retryError
+      }
+    }
+  }
   return {
     async listModels() {
-      const response = await fetchImplementation(`${root}/v1/models`, {
+      const response = await authenticatedFetch(`${root}/v1/models`, {
         credentials: 'include',
         headers: getHeaders(accessToken),
       })
@@ -590,9 +698,9 @@ export const createResponsesBackend = ({
         ? [...(options.responseHistory || []), ...options.input.map(mapInput)]
         : []
       if (supportsStreaming && !isOpenRouter) {
-        return runWebSocketStep(root, accessToken, createWebSocket, options)
+        return runAuthenticatedWebSocket(options)
       }
-      const response = await fetchImplementation(`${root}/v1/responses`, {
+      const response = await authenticatedFetch(`${root}/v1/responses`, {
         body: JSON.stringify({
           ...request,
           ...(isOpenRouter && {

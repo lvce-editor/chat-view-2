@@ -14,14 +14,16 @@ export interface DefaultChatApiOptions {
   readonly accessToken?: string
   readonly configuration?: BackendConfiguration
   readonly fileSystemAccess?: AgentFileSystemAccess
+  readonly onLoginRequired?: () => void
 }
 
 export const createDefaultChatApi = async ({
   accessToken: providedAccessToken,
   configuration: providedConfiguration,
   fileSystemAccess,
+  onLoginRequired,
 }: DefaultChatApiOptions = {}): Promise<ChatApi> => {
-  const { accessToken, baseUrl, supportsStreaming } =
+  const { accessToken, baseUrl, refreshAccessToken, supportsStreaming } =
     providedConfiguration ||
     (await resolveBackendConfiguration(undefined, providedAccessToken))
   if (!baseUrl) {
@@ -31,6 +33,8 @@ export const createDefaultChatApi = async ({
     backend: createResponsesBackend({
       accessToken,
       baseUrl,
+      ...(onLoginRequired && { onLoginRequired }),
+      ...(refreshAccessToken && { refreshAccessToken }),
       supportsStreaming,
     }),
     store: createIndexedDbTaskStore(),

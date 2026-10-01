@@ -44,6 +44,7 @@ test('uses the editor backend and authentication by default', async () => {
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
     baseUrl: 'https://lvce-editor.dev',
+    refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.backendUrl')
@@ -62,6 +63,7 @@ test('uses editor authentication for an equivalent configured backend URL', asyn
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
     baseUrl: 'https://lvce-editor.dev',
+    refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
   })
 })
@@ -74,6 +76,7 @@ test('prefers prompt authentication for the editor backend', async () => {
   ).resolves.toEqual({
     accessToken: 'prompt-access-token',
     baseUrl: 'https://lvce-editor.dev',
+    refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
@@ -146,6 +149,20 @@ test('requires login only for the editor backend without an access token', async
     accessToken: '',
     baseUrl: 'https://lvce-editor.dev',
     loginRequired: true,
+    refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
   })
+})
+
+test('forces refresh only through the editor backend configuration', async () => {
+  const host = createHost()
+  const configuration = await resolveBackendConfiguration(host)
+  await expect(configuration.refreshAccessToken?.()).resolves.toBe(
+    'editor-token',
+  )
+  expect(host.getAccessToken).toHaveBeenLastCalledWith({ refresh: 'always' })
+  const custom = await resolveBackendConfiguration(
+    createHost({ configuredBackendUrl: 'https://custom.example' }),
+  )
+  expect(custom.refreshAccessToken).toBeUndefined()
 })
