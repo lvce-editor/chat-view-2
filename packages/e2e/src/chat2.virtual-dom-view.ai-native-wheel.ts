@@ -2,12 +2,8 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.ai-native-wheel'
 
-// Enable after integrating the host layout API from lvce-editor/lvce-editor#15716.
-export const skip = 1
-
 export const test: Test = async ({ Command, expect, Locator }) => {
   await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
-  await Command.executeExtensionCommand('chat2.show')
   const activityBar = Locator('.ActivityBarLayout')
   const aiLayout = Locator('.ChatAiNativeLayout')
   await expect(aiLayout).toHaveCount(0)

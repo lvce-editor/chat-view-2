@@ -14,8 +14,6 @@ import { headlessChatCommands } from '../HeadlessChat/HeadlessChat.ts'
 
 const state = {
   activated: false,
-  previousSideBarView: '',
-  previousSideBarVisible: true,
 }
 
 export const activate = async (): Promise<void> => {
@@ -75,27 +73,10 @@ export const activate = async (): Promise<void> => {
   for (const id of ['chat2.toggleFocusMode', 'chat2.toggleAiNativeLayout']) {
     registerCommand({
       async execute() {
-        const leaving =
-          (await executeCommand('Layout.getSideBarFocusMode')) === true
-        if (!leaving) {
-          state.previousSideBarView = String(
-            await executeCommand('Layout.getActiveSideBarView'),
-          )
-          state.previousSideBarVisible =
-            (await executeCommand('Layout.getSideBarVisible')) === true
+        if (!(await executeCommand('Layout.getSideBarFocusMode'))) {
           await executeCommand('SideBar.show', viewId, true)
         }
         await toggleActiveChatViewFocusMode()
-        if (
-          leaving &&
-          state.previousSideBarView &&
-          state.previousSideBarView !== viewId
-        ) {
-          await executeCommand('SideBar.show', state.previousSideBarView, true)
-        }
-        if (leaving && !state.previousSideBarVisible) {
-          await executeCommand('SideBar.hide')
-        }
       },
       id,
     })

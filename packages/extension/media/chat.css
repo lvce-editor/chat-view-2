@@ -816,3 +816,9 @@
   margin-inline: auto;
   box-sizing: border-box;
 }
+
+.AiNativeLayout .ActivityBarLayout {
+  --ActivityBarActiveBackground: #e6e6e6;
+  --ActivityBarActiveForeground: #202124;
+  --ActivityBarBorder: #e5e5e5;
+}

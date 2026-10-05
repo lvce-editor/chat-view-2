@@ -246,6 +246,9 @@ const renderFocusModeButton = (
       focusMode ? 'IDE' : 'Focus',
       'ChatFocusModeButton',
       {
+        ariaLabel: focusMode
+          ? 'Return to IDE layout'
+          : 'Focus entirely on chat',
         title: focusMode ? 'Return to IDE layout' : 'Focus entirely on chat',
       },
     ),
