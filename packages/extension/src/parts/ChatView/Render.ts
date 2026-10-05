@@ -109,7 +109,9 @@ const trimUrl = (value: string): string => {
   return url
 }
 
-const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
+const renderMessageTextWithoutBold = (
+  text: string,
+): readonly Dom.TreeNode[] => {
   const children: Dom.TreeNode[] = []
   let previousIndex = 0
   for (const match of text.matchAll(urlPattern)) {
@@ -124,6 +126,33 @@ const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
   }
   if (previousIndex < text.length) {
     children.push(Dom.textNode(text.slice(previousIndex)))
+  }
+  return children
+}
+
+const boldPattern = /\*\*([\s\S]+?)\*\*/gu
+
+const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
+  const children: Dom.TreeNode[] = []
+  let previousIndex = 0
+  for (const match of text.matchAll(boldPattern)) {
+    const matchIndex = match.index
+    if (matchIndex > previousIndex) {
+      children.push(
+        ...renderMessageTextWithoutBold(text.slice(previousIndex, matchIndex)),
+      )
+    }
+    children.push(
+      Dom.node(
+        VirtualDomElements.Strong,
+        {},
+        renderMessageTextWithoutBold(match[1]),
+      ),
+    )
+    previousIndex = matchIndex + match[0].length
+  }
+  if (previousIndex < text.length) {
+    children.push(...renderMessageTextWithoutBold(text.slice(previousIndex)))
   }
   return children
 }
