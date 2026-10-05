@@ -7,9 +7,15 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
   await Command.executeExtensionCommand('chat2.show')
 
-  await Locator('textarea[name="composer"]').type('Inspect https://example.com')
+  await Locator('textarea[name="composer"]').type(
+    'Inspect **bold** <img src=x onerror=alert(1)> https://example.com',
+  )
   await Command.executeExtensionCommand('chat2.submit')
 
+  const bold = Locator('.ChatMessageUser .ChatMessageText strong')
+  await expect(bold).toHaveText('bold')
+  const injectedImage = Locator('.ChatMessageUser .ChatMessageText img')
+  await expect(injectedImage).toHaveCount(0)
   const link = Locator('.ChatMessageUser .ChatMessageLink')
   await expect(link).toHaveAttribute('href', 'https://example.com')
   await expect(link).toHaveAttribute('target', '_blank')

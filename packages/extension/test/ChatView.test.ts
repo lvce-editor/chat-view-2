@@ -708,12 +708,16 @@ test('reopening a recovered task renders its answer without the previous error b
       createEvent({ status: 'failed', type: 'status' }),
       createEvent({ text: '2+2', type: 'user-message' }),
       createEvent({ status: 'running', type: 'status' }),
-      createEvent({ text: '2+2 is **4**.', type: 'assistant-message' }),
+      createEvent({
+        text: '2+2 is **4**. Also **5**! Visit https://example.com.',
+        type: 'assistant-message',
+      }),
       createEvent({ status: 'completed', type: 'status' }),
     ],
     id: 'recovered-task',
     modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
     status: 'completed',
+    streamingText: 'Streaming **bold** and unmatched **',
     title: '1+1',
     updatedAt: timestamp,
   }
@@ -728,7 +732,14 @@ test('reopening a recovered task renders its answer without the previous error b
   )
   try {
     const dom = instance.render() as readonly any[]
-    expect(getText(dom)).toContain('2+2 is **4**.')
+    expect(getText(dom)).toContain(
+      '2+2 is \n4\n. Also \n5\n! Visit \nhttps://example.com\n.',
+    )
+    expect(getText(dom)).toContain('Streaming \nbold\n and unmatched **')
+    expect(getNodesByClass(dom, 'ChatMessageLink')).toHaveLength(1)
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Strong),
+    ).toHaveLength(3)
     expect(getNodesByClass(dom, 'ChatErrorBanner')).toHaveLength(0)
   } finally {
     instance.dispose?.()
