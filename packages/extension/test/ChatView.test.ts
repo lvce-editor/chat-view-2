@@ -572,7 +572,7 @@ test('opens the model picker without adding model controls to the header', async
   await dispatch(instance, { name: 'model-picker', type: 'click' })
 
   const dom = instance.render() as readonly any[]
-  expect(getNodesByClass(dom, 'ChatModelPicker')).toHaveLength(1)
+  expect(getNodesByClass(dom, 'Chat2ModelPicker')).toHaveLength(1)
   expect(getText(dom)).toContain('Models')
   expect(getText(dom)).toContain('GPT-5.4')
 })
