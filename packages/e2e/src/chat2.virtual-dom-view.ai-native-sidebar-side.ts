@@ -2,9 +2,6 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.ai-native-sidebar-side'
 
-// Enable after integrating the host's preserved AI-native sidebar position.
-export const skip = 1
-
 export const test: Test = async ({ Command, expect, Locator }) => {
   await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
   await Command.executeExtensionCommand('chat2.show')
