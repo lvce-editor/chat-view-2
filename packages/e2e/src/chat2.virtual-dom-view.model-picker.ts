@@ -11,11 +11,11 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   // eslint-disable-next-line e2e/no-direct-click
   await toggle.click()
 
-  const picker = Locator('.ChatModelPicker')
+  const picker = Locator('.Chat2ModelPicker')
   const options = Locator('.ChatModelOption')
   const title = Locator('text=Models')
   await expect(picker).toBeVisible()
-  await expect(picker).toHaveJSProperty('offsetTop', -289)
+  await expect(picker).toHaveJSProperty('offsetTop', -199)
   await expect(picker).toHaveCSS('right', '16px')
   await expect(picker).toHaveCSS('max-width', '300px')
   await expect(options).toHaveCount(5)

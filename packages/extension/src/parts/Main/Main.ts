@@ -70,13 +70,17 @@ export const activate = async (): Promise<void> => {
     },
     id: 'chat2.submit',
   })
-  registerCommand({
-    async execute() {
-      await executeCommand('SideBar.show', viewId, true)
-      await toggleActiveChatViewFocusMode()
-    },
-    id: 'chat2.toggleFocusMode',
-  })
+  for (const id of ['chat2.toggleFocusMode', 'chat2.toggleAiNativeLayout']) {
+    registerCommand({
+      async execute() {
+        if (!(await executeCommand('Layout.getSideBarFocusMode'))) {
+          await executeCommand('SideBar.show', viewId, true)
+        }
+        await toggleActiveChatViewFocusMode()
+      },
+      id,
+    })
+  }
 }
 
 export const deactivate = (): void => {}

@@ -16,7 +16,7 @@
     },
     "chat2.experimentalFocusMode": {
       "type": "boolean",
-      "default": false,
+      "default": true,
       "description": "Show an experimental control that lets Chat 2 temporarily take over the workbench."
     },
     "chat2.fontFamily": {
@@ -53,7 +53,8 @@
     "onCommand:chat2.sendMessage",
     "onCommand:chat2.show",
     "onCommand:chat2.submit",
-    "onCommand:chat2.toggleFocusMode"
+    "onCommand:chat2.toggleFocusMode",
+    "onCommand:chat2.toggleAiNativeLayout"
   ],
   "rpc": [
     {
@@ -81,6 +82,10 @@
     }
   ],
   "commands": [
+    {
+      "id": "chat2.toggleAiNativeLayout",
+      "label": "View: Toggle AI-Native / IDE Layout"
+    },
     {
       "id": "chat2.createSession",
       "label": "Chat 2: Create Headless Session"

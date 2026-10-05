@@ -91,17 +91,22 @@ test('contributes the headless chat commands for browser evaluations', async () 
   }
 })
 
-test('keeps experimental focus mode disabled by default', async () => {
+test('makes AI-native layout switching available by default', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
 
   expect(manifest.configuration['chat2.experimentalFocusMode']).toEqual(
     expect.objectContaining({
-      default: false,
+      default: true,
       type: 'boolean',
     }),
   )
   expect(manifest.activation).toContain('onCommand:chat2.toggleFocusMode')
+  expect(manifest.commands).toContainEqual({
+    id: 'chat2.toggleAiNativeLayout',
+    label: 'View: Toggle AI-Native / IDE Layout',
+  })
+  expect(manifest.activation).toContain('onCommand:chat2.toggleAiNativeLayout')
 })
 
 test('keeps backend streaming disabled by default', async () => {

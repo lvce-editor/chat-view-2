@@ -432,6 +432,7 @@ export const createInstance = async (
   const handleToggleFocusMode = async (
     requestRerender = false,
   ): Promise<void> => {
+    state.focusMode = await getFocusMode()
     state.focusMode = await toggleFocusMode(state)
     if (requestRerender) {
       await context?.requestRerender()
@@ -545,12 +546,11 @@ export const createInstance = async (
       }
       if (event.name === 'revert' && state.selectedTask) {
         try {
-          await updateTask(await api.revertTask(state.selectedTask))
+          setTask(await api.revertTask(state.selectedTask))
           state.errorMessage = ''
         } catch (error) {
           state.errorMessage =
             error instanceof Error ? error.message : String(error)
-          await context?.requestRerender()
         }
         return
       }

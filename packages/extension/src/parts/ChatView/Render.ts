@@ -188,7 +188,7 @@ const renderModelPicker = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   if (!modelPickerOpen) {
     return Dom.div('ChatModelPickerHidden', [])
   }
-  return Dom.div('ChatModelPicker', [
+  return Dom.div('Chat2ModelPicker', [
     Dom.div('ChatModelPickerTitle', [Dom.textNode('Models')]),
     ...models.map(renderModel),
   ])
@@ -246,6 +246,9 @@ const renderFocusModeButton = (
       focusMode ? 'IDE' : 'Focus',
       'ChatFocusModeButton',
       {
+        ariaLabel: focusMode
+          ? 'Return to IDE layout'
+          : 'Focus entirely on chat',
         title: focusMode ? 'Return to IDE layout' : 'Focus entirely on chat',
       },
     ),
@@ -435,10 +438,20 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 export const render = (
   state: Readonly<ChatViewState>,
 ): readonly VirtualDomNode[] => {
-  const { errorMessage, loginPending, loginRequired, selectedTask } = state
+  const {
+    errorMessage,
+    focusMode,
+    fontFamily,
+    fontSize,
+    loginPending,
+    loginRequired,
+    selectedTask,
+    tasks,
+  } = state
   if (loginRequired) {
     return Dom.flatten(
-      Dom.div('ChatView ChatLoggedOut', [
+      Dom.div(getRootClassName(state, 'ChatLoggedOut'), [
+        ...renderFocusModeButton(state),
         Dom.node(VirtualDomElements.P, { className: 'ChatLoginDescription' }, [
           Dom.textNode(
             'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
@@ -450,6 +463,35 @@ export const render = (
         ...(errorMessage && !loginPending
           ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
           : []),
+      ]),
+    )
+  }
+  if (focusMode) {
+    const conversation = selectedTask
+      ? renderDetailView(state)
+      : Dom.div('ChatView ChatDetailView', [
+          Dom.div('ChatDetailHeader', [
+            Dom.heading(1, 'ChatTitle', 'Chat'),
+            ...renderFocusModeButton(state),
+          ]),
+          Dom.div('ChatMessages', [
+            Dom.heading(2, 'ChatEmptyTitle', 'What would you like to work on?'),
+          ]),
+          ...(errorMessage
+            ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+            : []),
+          renderComposer(state),
+        ])
+    return Dom.flatten(
+      Dom.div('ChatView ChatAiNativeLayout', [
+        Dom.div('ChatSessions', [
+          Dom.div('ChatTaskListHeader', [
+            Dom.heading(1, 'ChatTitle', 'Sessions'),
+            Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
+          ]),
+          renderTaskList(tasks, fontFamily, fontSize),
+        ]),
+        conversation,
       ]),
     )
   }
