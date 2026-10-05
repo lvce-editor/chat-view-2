@@ -329,6 +329,7 @@
 .ChatBackButton:hover,
 .ChatNewTaskButton:hover,
 .ChatFocusModeButton:hover {
+  color: var(--ChatButtonForeground);
   background: var(--ChatButtonHoverBackground);
 }
 
