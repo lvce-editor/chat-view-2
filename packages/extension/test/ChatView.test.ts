@@ -364,7 +364,7 @@ test('renders the experimental focus mode control when enabled', async () => {
   )
   expect(focusedDom[0]).toEqual(
     expect.objectContaining({
-      className: 'ChatView ChatListView ChatFocusMode',
+      className: 'ChatView ChatAiNativeLayout',
     }),
   )
 })
@@ -974,3 +974,18 @@ test.each(['models', 'request'])(
     }
   },
 )
+
+test('AI-native view keeps sessions visible while changing the active conversation', async () => {
+  const instance = await createTestInstance()
+  const state = instance.getState() as { focusMode: boolean }
+  state.focusMode = true
+  expect(getNodesByClass(instance.render(), 'ChatSessions')).toHaveLength(1)
+  await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
+  expect(getNodesByClass(instance.render(), 'ChatTaskButton')).toHaveLength(20)
+  expect(getNodesByClass(instance.render(), 'ChatMessages')).toHaveLength(1)
+  expect(getText(instance.render())).toContain('Add worker memory usage')
+  await dispatch(instance, { name: 'new-task', type: 'click' })
+  expect(getNodesByClass(instance.render(), 'ChatSessions')).toHaveLength(1)
+  expect(getNodesByClass(instance.render(), 'ChatComposer')).toHaveLength(1)
+  instance.dispose?.()
+})

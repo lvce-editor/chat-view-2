@@ -8,7 +8,7 @@ type ExecuteCommand = (
 
 export const getFocusModeEnabled = async (): Promise<boolean> => {
   try {
-    return (await getPreference('chat2.experimentalFocusMode')) === true
+    return (await getPreference('chat2.experimentalFocusMode')) !== false
   } catch {
     return false
   }
@@ -31,7 +31,7 @@ export const toggleFocusMode = async (
   }
   const focusMode = !state.focusMode
   await execute(
-    focusMode ? 'Layout.enterSideBarFocusMode' : 'Layout.leaveSideBarFocusMode',
+    focusMode ? 'Layout.enterAiNativeLayout' : 'Layout.leaveSideBarFocusMode',
   )
   return focusMode
 }

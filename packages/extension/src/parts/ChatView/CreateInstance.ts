@@ -432,6 +432,7 @@ export const createInstance = async (
   const handleToggleFocusMode = async (
     requestRerender = false,
   ): Promise<void> => {
+    state.focusMode = await getFocusMode()
     state.focusMode = await toggleFocusMode(state)
     if (requestRerender) {
       await context?.requestRerender()

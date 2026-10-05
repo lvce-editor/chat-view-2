@@ -31,7 +31,7 @@ test('enters and leaves side bar focus mode', async () => {
   state = { ...state, focusMode: await toggleFocusMode(state, execute) }
 
   expect(execute.mock.calls).toEqual([
-    ['Layout.enterSideBarFocusMode'],
+    ['Layout.enterAiNativeLayout'],
     ['Layout.leaveSideBarFocusMode'],
   ])
   expect(state.focusMode).toBe(false)

@@ -772,3 +772,47 @@
   opacity: 0.6;
   cursor: default;
 }
+
+.ChatAiNativeLayout,
+.ChatAiNativeLayout .ChatView,
+.ChatLoggedOut.ChatFocusMode {
+  --ChatBackground: #ffffff;
+  --ChatForeground: #202124;
+  --ChatMutedForeground: #666666;
+  --ChatBorder: #e5e5e5;
+  --ChatHoverBackground: #eeeeee;
+  --ChatInputBackground: #f5f5f5;
+  --ChatInputForeground: #202124;
+  --ChatButtonBackground: #202124;
+  --ChatButtonForeground: #ffffff;
+  --ChatButtonHoverBackground: #383a3d;
+  --ChatErrorForeground: #b3261e;
+  --ChatScrollbarThumb: #bbbbbb;
+  --ChatScrollbarTrack: #ffffff;
+  color-scheme: light;
+}
+.ChatAiNativeLayout {
+  flex-direction: row;
+  width: 100%;
+}
+.ChatSessions {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 min(280px, 32%);
+  min-width: 0;
+  min-height: 0;
+  background: #f5f5f5;
+  border-right: 1px solid var(--ChatBorder);
+}
+.ChatAiNativeLayout > .ChatDetailView {
+  flex: 1;
+  min-width: 0;
+}
+.ChatAiNativeLayout .ChatBackButton {
+  display: none;
+}
+.ChatAiNativeLayout .ChatDetailView > * {
+  width: min(100%, 960px);
+  margin-inline: auto;
+  box-sizing: border-box;
+}
