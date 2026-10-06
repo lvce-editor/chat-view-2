@@ -179,6 +179,72 @@ test('runs a multi-step tool loop and records a compact event history', async ()
   ])
 })
 
+test('answers a general question and follow-up when no workspace is open', async () => {
+  const runStep = jest
+    .fn<AgentBackend['runStep']>()
+    .mockResolvedValueOnce({
+      responseId: 'response-1',
+      text: 'JSON is a text format for structured data.',
+      toolCalls: [],
+    })
+    .mockResolvedValueOnce({
+      responseId: 'response-2',
+      text: 'Use quotes around property names and strings.',
+      toolCalls: [],
+    })
+  const backend: AgentBackend = {
+    async listModels() {
+      return []
+    },
+    runStep,
+  }
+  const execute = jest.fn<AgentToolHost['execute']>()
+  const toolHost: AgentToolHost = {
+    beginTurn() {},
+    execute,
+    getChangedFiles() {
+      return []
+    },
+    getDefinitions() {
+      return []
+    },
+    async getWorkspaceContext() {
+      return 'Workspace context is unavailable. Answer general questions without workspace access.'
+    },
+    async revert() {
+      return []
+    },
+  }
+  const api = createAgentChatApi({
+    backend,
+    store: createMemoryTaskStore(),
+    toolHost,
+  })
+
+  const first = await api.createTask('whats json', 'gpt-test')
+  const followUp = await api.sendMessage(first, 'How do I write a JSON string?')
+
+  expect(first.status).toBe('completed')
+  expect(summarizeTask(first).messages.at(-1)?.text).toBe(
+    'JSON is a text format for structured data.',
+  )
+  expect(followUp.status).toBe('completed')
+  expect(summarizeTask(followUp).messages.at(-1)?.text).toBe(
+    'Use quotes around property names and strings.',
+  )
+  expect(runStep.mock.calls[0]?.[0].input).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        content: expect.stringContaining(
+          'Answer general questions without workspace access.',
+        ),
+      }),
+    ]),
+  )
+  expect(runStep.mock.calls[1]?.[0].previousResponseId).toBe('response-1')
+  expect(execute).not.toHaveBeenCalled()
+})
+
 test('records a failed task when the backend rejects the request', async () => {
   const backend: AgentBackend = {
     async listModels() {
