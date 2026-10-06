@@ -67,6 +67,63 @@ test('loads only OpenAI models from the authenticated catalog', async () => {
   )
 })
 
+test('instructs the assistant to answer questions without requiring a workspace', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      error: null,
+      id: 'response-1',
+      object: 'response',
+      output: [
+        {
+          content: [{ text: 'JSON is a data format.', type: 'output_text' }],
+          role: 'assistant',
+          status: 'completed',
+          type: 'message',
+        },
+      ],
+      status: 'completed',
+    }),
+  )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await backend.runStep({
+    input: [
+      {
+        content: `Workspace context is unavailable: Workspace access is unavailable
+Answer general questions without workspace access. Workspace tools require an open workspace.
+
+User task:
+whats json`,
+        role: 'user',
+      },
+    ],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+
+  const requestBody = fetchMock.mock.calls[0]?.[1]?.body
+  if (typeof requestBody !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  const request = JSON.parse(requestBody) as Readonly<{
+    readonly input: readonly Readonly<{
+      readonly content: readonly Readonly<{ readonly text: string }>[]
+    }>[]
+    readonly instructions: string
+  }>
+  expect(request.instructions).toContain('Answer general questions directly.')
+  expect(request.instructions).toContain(
+    'continue with requests that do not need workspace access',
+  )
+  expect(request.input[0]?.content[0]?.text).toContain(
+    'Answer general questions without workspace access.',
+  )
+})
+
 test('uses the backend message when loading models is unauthorized', async () => {
   const fetchMock = jest
     .fn<typeof fetch>()
