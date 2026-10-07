@@ -185,10 +185,27 @@ test('renders a Sessions sash and resizes the panel with bounded pointer movemen
   expect(instance.getState().sessionsWidth).toBe(230)
 })
 
-test('requests scrolling the messages to the bottom after every render', async () => {
+test('keeps scrolling to the bottom for the ordinary chat layout', async () => {
   const instance = await createTestInstance()
 
   expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+})
+
+test('scrolls to the latest AI-native turn once after each submission', async () => {
+  const instance = await createTestInstance()
+  instance.setState({ ...instance.getState(), draft: 'First', focusMode: true })
+
+  await instance.submit()
+
+  expect(getNodesByClass(instance.render(), 'ChatTurnLatest')).toHaveLength(1)
+  expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+  expect(instance.renderScrollPosition()).toEqual([])
+
+  instance.setState({ ...instance.getState(), draft: 'Follow-up' })
+  await instance.submit()
+
+  expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+  expect(instance.renderScrollPosition()).toEqual([])
 })
 
 test('shows loading feedback and blocks submission until images finish loading', async () => {

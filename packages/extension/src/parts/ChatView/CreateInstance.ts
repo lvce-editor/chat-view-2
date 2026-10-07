@@ -59,10 +59,9 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly handleSessionsSashPointerUp: () => void
   readonly newChat: (requestRerender?: boolean) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
-  readonly renderScrollPosition: () => readonly [
-    selector: string,
-    scrollTop: number,
-  ]
+  readonly renderScrollPosition: () =>
+    | readonly []
+    | readonly [selector: string, scrollTop: number]
   readonly renderTitle: () => string
   readonly renderWorkbenchLayout: () => 'ide' | 'ai-native' | undefined
   readonly setState: (state: unknown) => void
@@ -401,6 +400,7 @@ export const createInstance = async (
   let sessionsSashDrag: SessionsSashDrag | undefined
   let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
+  let scrollToLatestTurn = state.focusMode && Boolean(state.selectedTask)
 
   const addImageFiles = async (files: readonly File[]): Promise<void> => {
     const imageFiles = files.filter(isImageFile)
@@ -614,6 +614,9 @@ export const createInstance = async (
     }
     if (activeController && state.selectedTask?.status !== 'running') {
       return
+    }
+    if (state.focusMode) {
+      scrollToLatestTurn = true
     }
     state.draft = ''
     state.composerImages = []
@@ -847,6 +850,7 @@ export const createInstance = async (
           return
         }
         state.selectedTask = task
+        scrollToLatestTurn = state.focusMode && Boolean(task)
         syncWorkingTimer(state.selectedTask)
         if (state.selectedTask) {
           state.selectedModelId = state.selectedTask.modelId
@@ -941,7 +945,15 @@ export const createInstance = async (
     render(): readonly VirtualDomNode[] {
       return render(state)
     },
-    renderScrollPosition(): readonly [selector: string, scrollTop: number] {
+    renderScrollPosition():
+      | readonly []
+      | readonly [selector: string, scrollTop: number] {
+      if (state.focusMode) {
+        if (!scrollToLatestTurn) {
+          return []
+        }
+        scrollToLatestTurn = false
+      }
       return [messagesSelector, maxScrollTop]
     },
     renderTitle(): string {
