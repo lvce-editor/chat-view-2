@@ -1079,7 +1079,8 @@ test('starts login without awaiting a rerender queued behind the click event', a
     }
     return rerenderGate.promise
   })
-  const execute = jest.fn(async () => {
+  const execute = jest.fn(async (id: string) => {
+    expect(id).toBe('Layout.signIn')
     await signInGate.promise
     signInFinished = true
   })
