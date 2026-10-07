@@ -20,6 +20,10 @@ import {
   getFocusModeEnabled,
   toggleFocusMode,
 } from '../ChatFocusMode/ChatFocusMode.ts'
+import {
+  getChatTaskHash,
+  parseChatTaskHash,
+} from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
 import {
   createDefaultChatApi,
@@ -29,10 +33,6 @@ import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
-import {
-  getChatTaskHash,
-  parseChatTaskHash,
-} from '../ChatSessionUrl/ChatSessionUrl.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>

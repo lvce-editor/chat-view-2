@@ -9,10 +9,11 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   await Command.executeExtensionCommand('chat2.show')
 
   const firstTask = Locator('.ChatTaskButton').first()
+  const detailView = Locator('.ChatDetailView')
   await expect(firstTask).toBeVisible()
   // eslint-disable-next-line e2e/no-direct-click
   await firstTask.click()
-  await expect(Locator('.ChatDetailView')).toBeVisible()
+  await expect(detailView).toBeVisible()
 
   let href = (await Command.execute('Layout.getHref')) as string
   if (!href.includes('#chat-mock-task-1')) {
@@ -20,7 +21,7 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   }
 
   await Command.execute('Window.reload')
-  await expect(Locator('.ChatDetailView')).toBeVisible()
+  await expect(detailView).toBeVisible()
   href = (await Command.execute('Layout.getHref')) as string
   if (!href.includes('#chat-mock-task-1')) {
     throw new Error(`Expected restored chat URL fragment, received ${href}`)
@@ -28,7 +29,8 @@ export const test: Test = async ({ Command, expect, Locator }) => {
 
   // eslint-disable-next-line e2e/no-direct-click
   await Locator('.ChatNewTaskButton').click()
-  await expect(Locator('.ChatDetailView .ChatEmptyTitle')).toBeVisible()
+  const emptyTitle = Locator('.ChatDetailView .ChatEmptyTitle')
+  await expect(emptyTitle).toBeVisible()
   href = (await Command.execute('Layout.getHref')) as string
   if (href.includes('#chat-')) {
     throw new Error(`Expected new chat to clear URL fragment, received ${href}`)

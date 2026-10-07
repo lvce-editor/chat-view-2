@@ -4,6 +4,7 @@ import {
   registerCommand,
   registerView,
 } from '@lvce-editor/api'
+import { parseChatTaskHash } from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { view, viewId } from '../ChatView/ChatView.ts'
 import {
   newChatInActiveChatViewInstance,
@@ -11,7 +12,6 @@ import {
   toggleActiveChatViewFocusMode,
 } from '../ChatView/CreateInstance.ts'
 import { headlessChatCommands } from '../HeadlessChat/HeadlessChat.ts'
-import { parseChatTaskHash } from '../ChatSessionUrl/ChatSessionUrl.ts'
 
 const state = {
   activated: false,

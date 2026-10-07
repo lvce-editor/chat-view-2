@@ -9,12 +9,10 @@ export const getChatTaskHash = (id: string): string => {
 }
 
 export const parseChatTaskHash = (href: string): ChatTaskHash => {
-  let hash: string
-  try {
-    hash = new URL(href).hash
-  } catch {
+  if (!URL.canParse(href)) {
     return { type: 'none' }
   }
+  const { hash } = new URL(href)
   if (!hash.startsWith(chatTaskHashPrefix)) {
     return { type: 'none' }
   }
