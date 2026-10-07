@@ -26,6 +26,10 @@ import {
   isImageFile,
   loadImageAttachment,
 } from '../ChatImageAttachments/ChatImageAttachments.ts'
+import {
+  getChatTaskHash,
+  parseChatTaskHash,
+} from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
 import {
   createDefaultChatApi,
@@ -182,6 +186,26 @@ const getSavedState = (value: unknown): SavedState => {
   return value && typeof value === 'object' ? value : {}
 }
 
+const getHref = async (execute: ExecuteCommand): Promise<string> => {
+  try {
+    const href = await execute('Layout.getHref')
+    return typeof href === 'string' ? href : ''
+  } catch {
+    return ''
+  }
+}
+
+const setChatTaskHash = async (
+  execute: ExecuteCommand,
+  taskId?: string,
+): Promise<void> => {
+  try {
+    await execute('Layout.setHash', taskId ? getChatTaskHash(taskId) : '')
+  } catch {
+    // Older editor builds do not expose the hash command.
+  }
+}
+
 const activeInstances = new Set<ActiveChatViewInstance>()
 
 const getPreferredModelId = async (): Promise<string> => {
@@ -290,9 +314,20 @@ export const createInstance = async (
   const fontSize = await readFontSize(readPreference)
   const aiNativeTheme = await readAiNativeTheme(readPreference)
   const selectedModelId = getSelectedModelId(models, preferredModelId)
-  const selectedTask = saved.selectedTaskId
-    ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
-    : undefined
+  const href = await getHref(execute)
+  const chatHash = parseChatTaskHash(href)
+  const urlTask =
+    chatHash.type === 'task'
+      ? await api.getTask(chatHash.id).catch(() => undefined)
+      : undefined
+  const selectedTask =
+    urlTask ||
+    (saved.selectedTaskId
+      ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
+      : undefined)
+  if (chatHash.type === 'invalid') {
+    await setChatTaskHash(execute)
+  }
   const focusModeEnabled = await getFocusModeEnabled()
   const state: MutableChatViewState = {
     activityExpanded: false,
@@ -522,6 +557,7 @@ export const createInstance = async (
     selectedTaskRequest++
     resetCopyFeedback()
     state.selectedTask = undefined
+    await setChatTaskHash(execute)
     state.draft = ''
     state.composerImages = []
     state.activityExpanded = false
@@ -533,11 +569,15 @@ export const createInstance = async (
     }
   }
 
-  const setTask = (task: ChatTask): void => {
+  const setTask = async (task: ChatTask): Promise<void> => {
     if (archivedTaskIds.has(task.id)) {
       return
     }
+    const taskChanged = state.selectedTask?.id !== task.id
     state.selectedTask = task
+    if (taskChanged) {
+      await setChatTaskHash(execute, task.id)
+    }
     syncWorkingTimer(task)
     state.tasks = [
       task,
@@ -553,7 +593,7 @@ export const createInstance = async (
     if (disposed || request !== selectedTaskRequest) {
       return
     }
-    setTask(task)
+    await setTask(task)
     await context?.requestRerender()
   }
 
@@ -720,7 +760,7 @@ export const createInstance = async (
       }
       if (event.name === 'stop') {
         if (state.selectedTask?.status === 'running') {
-          setTask(setStatus(state.selectedTask, 'stopping'))
+          await setTask(setStatus(state.selectedTask, 'stopping'))
         }
         activeController?.abort()
         return
@@ -743,7 +783,7 @@ export const createInstance = async (
       }
       if (event.name === 'revert' && state.selectedTask) {
         try {
-          setTask(await api.revertTask(state.selectedTask))
+          await setTask(await api.revertTask(state.selectedTask))
           state.errorMessage = ''
         } catch (error) {
           state.errorMessage =
@@ -804,6 +844,9 @@ export const createInstance = async (
         syncWorkingTimer(state.selectedTask)
         if (state.selectedTask) {
           state.selectedModelId = state.selectedTask.modelId
+          await setChatTaskHash(execute, state.selectedTask.id)
+        } else {
+          await setChatTaskHash(execute)
         }
         state.draft = ''
         state.composerImages = []

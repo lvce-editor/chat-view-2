@@ -344,6 +344,107 @@ test('saves and restores the composer draft through view state', async () => {
   )
 })
 
+test('restores the URL task before the previously saved task', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/?workspace=project#chat-mock-task-2'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: 'mock-task-1' }),
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+  expect(execute).toHaveBeenCalledWith('Layout.getHref')
+})
+
+test('restores a copied chat URL when the view has no saved state', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/?workspace=project#chat-mock-task-2'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+  expect(execute).toHaveBeenCalledWith('Layout.getHref')
+})
+
+test('falls back to the saved task when the URL task no longer exists', async () => {
+  const api = createMockChatApi()
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/#chat-deleted-task'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: 'mock-task-1' }),
+    api,
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+  expect(execute).not.toHaveBeenCalledWith('Layout.setHash', '')
+})
+
+test('clears malformed chat fragments while restoring the saved task', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/#chat-%E0%A4%A'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: 'mock-task-1' }),
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+  expect(execute).toHaveBeenCalledWith('Layout.setHash', '')
+})
+
+test('syncs selected and cleared tasks to the URL fragment', async () => {
+  const execute = jest.fn(
+    async (_command: string, ..._args: readonly unknown[]) => undefined,
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  await dispatch(instance, {
+    name: 'task:mock-task-2',
+    type: 'click',
+  })
+  expect(execute).toHaveBeenLastCalledWith(
+    'Layout.setHash',
+    '#chat-mock-task-2',
+  )
+
+  await instance.newChat()
+  expect(execute).toHaveBeenLastCalledWith('Layout.setHash', '')
+})
+
 test('exposes and applies live component state without replacing the chat instance', async () => {
   const instance = await createTestInstance()
   expect(view).toEqual(
@@ -1206,6 +1307,9 @@ test('starts login without awaiting a rerender queued behind the click event', a
     return rerenderGate.promise
   })
   const execute = jest.fn(async (id: string) => {
+    if (id === 'Layout.getHref') {
+      return ''
+    }
     expect(id).toBe('Layout.signIn')
     await signInGate.promise
     signInFinished = true
@@ -1233,7 +1337,9 @@ test('starts login without awaiting a rerender queued behind the click event', a
     )
 
     await dispatch(instance, { name: 'login', type: 'click' })
-    expect(execute).toHaveBeenCalledTimes(1)
+    expect(
+      execute.mock.calls.flat().filter((id) => id === 'Layout.signIn'),
+    ).toHaveLength(1)
     expect(requestRerender).not.toHaveBeenCalled()
 
     signInGate.resolve()
