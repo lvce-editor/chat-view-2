@@ -143,6 +143,48 @@ test('renders a focused task list, model control, and composer', async () => {
   expect(modelIndex).toBeLessThan(submitIndex)
 })
 
+test('renders a Sessions sash and resizes the panel with bounded pointer movement', async () => {
+  const instance = await createTestInstance()
+  instance.setState({ ...instance.getState(), focusMode: true })
+  const sash = getNodesByClass(instance.render(), 'ChatSessionsSash')[0]
+
+  expect(sash).toEqual(
+    expect.objectContaining({
+      ariaLabel: 'Resize sessions panel',
+      ariaOrientation: 'vertical',
+      onPointerDown: 'handleSessionsSashPointerDown',
+      role: 'separator',
+    }),
+  )
+  expect(view.eventListeners).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        name: 'handleSessionsSashPointerDown',
+        trackPointerEvents: [
+          'handleSessionsSashPointerMove',
+          'handleSessionsSashPointerUp',
+        ],
+      }),
+    ]),
+  )
+
+  instance.handleSessionsSashPointerDown(400, 1000, 100, 100, 280)
+  instance.handleSessionsSashPointerMove(450)
+  expect(instance.getState().sessionsWidth).toBe(330)
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({ style: '--ChatSessionsWidth: 330px' }),
+  )
+  instance.handleSessionsSashPointerMove(2000)
+  expect(instance.getState().sessionsWidth).toBe(680)
+  instance.handleSessionsSashPointerUp()
+  instance.handleSessionsSashPointerMove(100)
+  expect(instance.getState().sessionsWidth).toBe(680)
+
+  instance.handleSessionsSashPointerDown(400, 1000, 100, 820, 280)
+  instance.handleSessionsSashPointerMove(450)
+  expect(instance.getState().sessionsWidth).toBe(230)
+})
+
 test('requests scrolling the messages to the bottom after every render', async () => {
   const instance = await createTestInstance()
 

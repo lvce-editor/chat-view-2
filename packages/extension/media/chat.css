@@ -938,11 +938,26 @@
 .ChatSessions {
   display: flex;
   flex-direction: column;
-  flex: 0 0 min(280px, 32%);
+  flex: 0 0
+    min(
+      var(--ChatSessionsWidth, min(280px, 32%)),
+      max(0px, calc(100% - min(320px, 50%)))
+    );
   min-width: 0;
   min-height: 0;
   background: #f5f5f5;
   border-right: 1px solid var(--ChatBorder);
+}
+.ChatSessionsSash {
+  z-index: 1;
+  flex: 0 0 4px;
+  margin-inline: -2px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.ChatSessionsSash:hover,
+.ChatSessionsSash:active {
+  background: var(--ChatBorder);
 }
 .ChatAiNativeLayout > .ChatDetailView {
   flex: 1;

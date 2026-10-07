@@ -568,6 +568,7 @@ export const render = (
     loginPending,
     loginRequired,
     selectedTask,
+    sessionsWidth,
     tasks,
   } = state
   if (loginRequired) {
@@ -629,13 +630,30 @@ export const render = (
       Dom.div(
         `ChatView ${getAiNativeLayoutClassName(aiNativeTheme)}`,
         [
-          Dom.div('ChatSessions', [
-            Dom.div('ChatTaskListHeader', [
-              Dom.heading(1, 'ChatTitle', 'Sessions'),
-              Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
-            ]),
-            renderTaskList(tasks, fontFamily, fontSize),
-          ]),
+          Dom.div(
+            'ChatSessions',
+            [
+              Dom.div('ChatTaskListHeader', [
+                Dom.heading(1, 'ChatTitle', 'Sessions'),
+                Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
+              ]),
+              renderTaskList(tasks, fontFamily, fontSize),
+            ],
+            {
+              ...(sessionsWidth !== undefined && {
+                style: `--ChatSessionsWidth: ${sessionsWidth}px`,
+              }),
+            },
+          ),
+          Dom.node(VirtualDomElements.Div, {
+            ariaLabel: 'Resize sessions panel',
+            ariaOrientation: 'vertical',
+            className: 'ChatSessionsSash',
+            name: 'sessions-sash',
+            onPointerDown: 'handleSessionsSashPointerDown',
+            role: 'separator',
+            tabIndex: -1,
+          }),
           conversation,
         ],
         { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
