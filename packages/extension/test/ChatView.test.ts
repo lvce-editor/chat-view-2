@@ -367,6 +367,8 @@ test('renders the experimental focus mode control when enabled', async () => {
       className: 'ChatView ChatAiNativeLayout',
     }),
   )
+  expect(getNodesByClass(focusedDom, 'ChatNewConversation')).toHaveLength(1)
+  expect(getNodesByClass(focusedDom, 'ChatNewConversationBody')).toHaveLength(1)
 })
 
 test('uses the configured task list font size', async () => {

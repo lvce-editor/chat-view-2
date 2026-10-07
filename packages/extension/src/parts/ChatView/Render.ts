@@ -502,18 +502,24 @@ export const render = (
   if (focusMode) {
     const conversation = selectedTask
       ? renderDetailView(state)
-      : Dom.div('ChatView ChatDetailView', [
+      : Dom.div('ChatView ChatDetailView ChatNewConversation', [
           Dom.div('ChatDetailHeader', [
             Dom.heading(1, 'ChatTitle', 'Chat'),
             ...renderFocusModeButton(state),
           ]),
-          Dom.div('ChatMessages', [
-            Dom.heading(2, 'ChatEmptyTitle', 'What would you like to work on?'),
+          Dom.div('ChatNewConversationBody', [
+            Dom.div('ChatMessages', [
+              Dom.heading(
+                2,
+                'ChatEmptyTitle',
+                'What would you like to work on?',
+              ),
+            ]),
+            ...(errorMessage
+              ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+              : []),
+            renderComposer(state),
           ]),
-          ...(errorMessage
-            ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-            : []),
-          renderComposer(state),
         ])
     return Dom.flatten(
       Dom.div('ChatView ChatAiNativeLayout', [

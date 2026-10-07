@@ -810,6 +810,19 @@
   flex: 1;
   min-width: 0;
 }
+.ChatNewConversationBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  overflow: auto;
+}
+.ChatNewConversationBody > .ChatMessages {
+  flex: 0 0 auto;
+  align-items: center;
+  overflow: visible;
+}
 .ChatAiNativeLayout .ChatBackButton {
   display: none;
 }
