@@ -132,6 +132,218 @@ const renderMessageTextWithoutBold = (
 
 const boldPattern = /\*\*([\s\S]+?)\*\*/gu
 
+const jsonStringPattern = /"(?:\\.|[^"\\])*"/y
+const jsonNumberPattern = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y
+const jsonLiteralPattern = /(?:true|false|null)\b/y
+const jsonKeySuffixPattern = /^\s*:/u
+const languageWhitespacePattern = /\s+/u
+
+const getFenceMarkerEnd = (
+  text: string,
+  lineStart: number,
+  minimumLength: number,
+): number | undefined => {
+  let index = lineStart
+  let indentation = 0
+  while (text[index] === ' ' && indentation < 4) {
+    index++
+    indentation++
+  }
+  if (indentation > 3) {
+    return undefined
+  }
+  const markerStart = index
+  while (text[index] === '`') {
+    index++
+  }
+  return index - markerStart >= minimumLength ? index : undefined
+}
+
+const isFenceLineEnd = (text: string, start: number): boolean => {
+  let index = start
+  while (text[index] === ' ' || text[index] === '\t') {
+    index++
+  }
+  return index === text.length || text[index] === '\n'
+}
+
+const findClosingFence = (
+  text: string,
+  start: number,
+  minimumLength: number,
+): { readonly end: number; readonly index: number } | undefined => {
+  let lineStart = start
+  while (lineStart <= text.length) {
+    const markerEnd = getFenceMarkerEnd(text, lineStart, minimumLength)
+    if (markerEnd !== undefined && isFenceLineEnd(text, markerEnd)) {
+      let end = markerEnd
+      while (text[end] === ' ' || text[end] === '\t') {
+        end++
+      }
+      return { end, index: lineStart - 1 }
+    }
+    const lineBreakIndex = text.indexOf('\n', lineStart)
+    if (lineBreakIndex === -1) {
+      return undefined
+    }
+    lineStart = lineBreakIndex + 1
+  }
+  return undefined
+}
+
+const findNextOpeningFence = (
+  text: string,
+  start: number,
+):
+  | {
+      readonly contentStart: number
+      readonly fenceLength: number
+      readonly index: number
+      readonly language: string
+    }
+  | undefined => {
+  const previousLineBreak = text.indexOf('\n', start - 1)
+  if (start > 0 && previousLineBreak === -1) {
+    return undefined
+  }
+  let lineStart = start === 0 ? 0 : previousLineBreak + 1
+  while (lineStart >= 0) {
+    const lineEnd = text.indexOf('\n', lineStart)
+    if (lineEnd === -1) {
+      return undefined
+    }
+    const markerEnd = getFenceMarkerEnd(text, lineStart, 3)
+    if (markerEnd !== undefined && markerEnd <= lineEnd) {
+      let markerStart = lineStart
+      while (text[markerStart] === ' ' && markerStart - lineStart < 3) {
+        markerStart++
+      }
+      const fenceLength = markerEnd - markerStart
+      const language = text
+        .slice(markerEnd, lineEnd)
+        .trim()
+        .split(languageWhitespacePattern, 1)[0]
+        .toLowerCase()
+      return {
+        contentStart: lineEnd + 1,
+        fenceLength,
+        index: lineStart,
+        language,
+      }
+    }
+    lineStart = lineEnd + 1
+  }
+  return undefined
+}
+
+const createJsonToken = (
+  text: string,
+  index: number,
+): { readonly className: string; readonly length: number } | undefined => {
+  const char = text[index]
+  if (char === '"') {
+    jsonStringPattern.lastIndex = index
+    const match = jsonStringPattern.exec(text)
+    if (match) {
+      const isKey = jsonKeySuffixPattern.test(
+        text.slice(index + match[0].length),
+      )
+      return {
+        className: isKey ? 'ChatCodeTokenKey' : 'ChatCodeTokenString',
+        length: match[0].length,
+      }
+    }
+    return undefined
+  }
+  if ('{}[],:'.includes(char)) {
+    return { className: 'ChatCodeTokenPunctuation', length: 1 }
+  }
+  jsonNumberPattern.lastIndex = index
+  const numberMatch = jsonNumberPattern.exec(text)
+  if (numberMatch) {
+    return { className: 'ChatCodeTokenNumber', length: numberMatch[0].length }
+  }
+  jsonLiteralPattern.lastIndex = index
+  const literalMatch = jsonLiteralPattern.exec(text)
+  if (literalMatch) {
+    return { className: 'ChatCodeTokenLiteral', length: literalMatch[0].length }
+  }
+  return undefined
+}
+
+const renderJsonCode = (text: string): readonly Dom.TreeNode[] => {
+  const children: Dom.TreeNode[] = []
+  let previousIndex = 0
+  let index = 0
+  while (index < text.length) {
+    const token = createJsonToken(text, index)
+    if (!token) {
+      index++
+      continue
+    }
+    if (index > previousIndex) {
+      children.push(Dom.textNode(text.slice(previousIndex, index)))
+    }
+    children.push(
+      Dom.node(VirtualDomElements.Span, { className: token.className }, [
+        Dom.textNode(text.slice(index, index + token.length)),
+      ]),
+    )
+    index += token.length
+    previousIndex = index
+  }
+  if (previousIndex < text.length) {
+    children.push(Dom.textNode(text.slice(previousIndex)))
+  }
+  return children
+}
+
+const renderCodeBlock = (text: string, language: string): Dom.TreeNode => {
+  const children =
+    language.toLowerCase() === 'json'
+      ? renderJsonCode(text)
+      : [Dom.textNode(text)]
+  return Dom.node(VirtualDomElements.Pre, { className: 'ChatCodeBlock' }, [
+    Dom.node(VirtualDomElements.Code, {}, children),
+  ])
+}
+
+const renderMessageTextWithCode = (text: string): readonly Dom.TreeNode[] => {
+  const children: Dom.TreeNode[] = []
+  let previousIndex = 0
+  while (previousIndex < text.length) {
+    const openingFence = findNextOpeningFence(text, previousIndex)
+    if (!openingFence) {
+      break
+    }
+    const closingFence = findClosingFence(
+      text,
+      openingFence.contentStart,
+      openingFence.fenceLength,
+    )
+    if (openingFence.index > previousIndex) {
+      children.push(
+        ...renderMessageText(text.slice(previousIndex, openingFence.index)),
+      )
+    }
+    const blockEnd = closingFence ? closingFence.index + 1 : text.length
+    children.push(
+      renderCodeBlock(
+        text.slice(openingFence.contentStart, blockEnd),
+        openingFence.language,
+      ),
+    )
+    previousIndex = closingFence ? closingFence.end : text.length
+    if (!closingFence) {
+      break
+    }
+  }
+  if (previousIndex < text.length) {
+    children.push(...renderMessageText(text.slice(previousIndex)))
+  }
+  return children
+}
+
 const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
   const children: Dom.TreeNode[] = []
   let previousIndex = 0
@@ -168,7 +380,7 @@ const renderMessage = (
     message.type === 'user-message' ? 'ChatMessageUser' : 'ChatMessageAssistant'
   const copied = message.id === copiedMessageId
   return Dom.div(`ChatMessage ${roleClass}`, [
-    Dom.div('ChatMessageText', renderMessageText(message.text)),
+    Dom.div('ChatMessageText', renderMessageTextWithCode(message.text)),
     ...(message.type === 'user-message' && message.attachments?.length
       ? [
           Dom.div(
@@ -206,7 +418,7 @@ const renderMessage = (
 
 const renderStreamingMessage = (text: string): Dom.TreeNode => {
   return Dom.div('ChatMessage ChatMessageAssistant ChatMessageStreaming', [
-    Dom.div('ChatMessageText', renderMessageText(text)),
+    Dom.div('ChatMessageText', renderMessageTextWithCode(text)),
   ])
 }
 

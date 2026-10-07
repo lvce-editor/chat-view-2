@@ -23,6 +23,11 @@
   );
   --ChatInputForeground: var(--InputForeground, var(--ChatForeground));
   --ChatFocusBorder: var(--FocusBorder, #3794ff);
+  --ChatCodeKey: #9cdcfe;
+  --ChatCodeString: #ce9178;
+  --ChatCodeNumber: #b5cea8;
+  --ChatCodeLiteral: #569cd6;
+  --ChatCodePunctuation: var(--ChatForeground);
   --ChatButtonBackground: var(--ButtonBackground, #0e639c);
   --ChatButtonForeground: var(--ButtonForeground, #ffffff);
   --ChatButtonHoverBackground: var(--ButtonHoverBackground, #1177bb);
@@ -531,6 +536,44 @@
   overflow-wrap: anywhere;
 }
 
+.ChatCodeBlock {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 8px 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  color: var(--ChatForeground);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--ChatForeground) 5%, transparent);
+  border-radius: 6px;
+}
+
+.ChatCodeBlock code {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.92em;
+}
+
+.ChatCodeTokenKey {
+  color: var(--ChatCodeKey);
+}
+
+.ChatCodeTokenString {
+  color: var(--ChatCodeString);
+}
+
+.ChatCodeTokenNumber {
+  color: var(--ChatCodeNumber);
+}
+
+.ChatCodeTokenLiteral {
+  color: var(--ChatCodeLiteral);
+}
+
+.ChatCodeTokenPunctuation {
+  color: var(--ChatCodePunctuation);
+}
+
 .ChatMessageLink {
   color: #4d94ff;
   text-decoration: underline;
@@ -866,6 +909,11 @@
   --ChatButtonForeground: #ffffff;
   --ChatButtonHoverBackground: #383a3d;
   --ChatErrorForeground: #b3261e;
+  --ChatCodeKey: #0451a5;
+  --ChatCodeString: #a31515;
+  --ChatCodeNumber: #098658;
+  --ChatCodeLiteral: #0000ff;
+  --ChatCodePunctuation: #202124;
   --ChatScrollbarThumb: #bbbbbb;
   --ChatScrollbarTrack: #ffffff;
   color-scheme: light;
@@ -884,6 +932,11 @@
   --ChatButtonForeground: #ffffff;
   --ChatButtonHoverBackground: #333333;
   --ChatErrorForeground: #b42318;
+  --ChatCodeKey: #0451a5;
+  --ChatCodeString: #a31515;
+  --ChatCodeNumber: #098658;
+  --ChatCodeLiteral: #0000ff;
+  --ChatCodePunctuation: #0d0d0d;
   --ChatFocusBorder: #10a37f;
   --ChatScrollbarThumb: #b4b4be;
   --ChatScrollbarTrack: #ffffff;
@@ -912,6 +965,11 @@
   --ChatButtonForeground: #ffffff;
   --ChatButtonHoverBackground: #c56849;
   --ChatErrorForeground: #a53d2e;
+  --ChatCodeKey: #0451a5;
+  --ChatCodeString: #a31515;
+  --ChatCodeNumber: #098658;
+  --ChatCodeLiteral: #0000ff;
+  --ChatCodePunctuation: #292723;
   --ChatFocusBorder: #d97757;
   --ChatScrollbarThumb: #c7c3ba;
   --ChatScrollbarTrack: #faf9f6;
