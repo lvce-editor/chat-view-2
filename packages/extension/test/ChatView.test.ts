@@ -358,6 +358,7 @@ test('renders the experimental focus mode control when enabled', async () => {
   const focusedDom = instance.render()
   expect(focusedDom).toContainEqual(
     expect.objectContaining({
+      ariaLabel: 'Return to IDE layout',
       className: 'ChatFocusModeButton',
       title: 'Return to IDE layout',
     }),
@@ -367,6 +368,26 @@ test('renders the experimental focus mode control when enabled', async () => {
       className: 'ChatView ChatAiNativeLayout',
     }),
   )
+})
+
+test('rerenders after toggling focus mode from the view control', async () => {
+  const requestRerender = jest.fn(async () => {})
+  const context = {
+    ...createViewContext(undefined),
+    requestRerender,
+  }
+  const instance = await createInstance(
+    context,
+    createMockChatApi(),
+    async (key) => key === 'chat2.experimentalFocusMode',
+  )
+
+  await dispatch(instance, {
+    name: 'toggle-focus-mode',
+    type: 'click',
+  })
+
+  expect(requestRerender).toHaveBeenCalledTimes(1)
 })
 
 test('uses the configured task list font size', async () => {

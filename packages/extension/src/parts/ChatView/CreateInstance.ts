@@ -518,7 +518,7 @@ export const createInstance = async (
         return
       }
       if (event.name === 'toggle-focus-mode') {
-        await handleToggleFocusMode()
+        await handleToggleFocusMode(true)
         return
       }
       if (event.name === 'stop') {
