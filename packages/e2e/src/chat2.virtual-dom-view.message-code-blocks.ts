@@ -17,7 +17,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const string = Locator('.ChatMessageUser .ChatCodeTokenString')
   const number = Locator('.ChatMessageUser .ChatCodeTokenNumber')
   await expect(codeBlock).toHaveCount(1)
-  await expect(key).toHaveText('"jsonrpc"')
+  await expect(key.first()).toHaveText('"jsonrpc"')
   await expect(string).toHaveText('"2.0"')
   await expect(number).toHaveText('1')
   await expect(codeBlock).toHaveCSS('white-space', 'pre-wrap')
