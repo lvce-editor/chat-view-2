@@ -828,6 +828,117 @@ test('renders message urls as external links and preserves punctuation', async (
   expect(getText(dom)).toContain('Inspect \nhttps://example.com/docs?q=chat\n.')
 })
 
+test('renders Markdown tables in messages while keeping malformed streaming text literal', async () => {
+  const timestamp = '2026-09-10T12:00:00.000Z'
+  const countries = [
+    'India',
+    'China',
+    'United States',
+    'Indonesia',
+    'Pakistan',
+    'Nigeria',
+    'Brazil',
+    'Bangladesh',
+    'Russia',
+    'Ethiopia',
+    'Mexico',
+    'Japan',
+    'Egypt',
+    'Philippines',
+    'Democratic Republic of the Congo',
+    'Vietnam',
+    'Iran',
+    'Turkey',
+    'Germany',
+    'Thailand',
+  ]
+  const table = [
+    '| Country | Population |',
+    '| :--- | ---: |',
+    ...countries.map((country, index) => {
+      const countryText = index === 0 ? '**India**' : country
+      const population =
+        index === 1 ? 'https://example.com' : `${index + 1} million`
+      return `| ${countryText} | ${population} |`
+    }),
+  ].join('\n')
+  const task: ChatTask = {
+    createdAt: timestamp,
+    events: [
+      createEvent({ text: 'Show the country table', type: 'user-message' }),
+      createEvent({
+        text: `Before the table.\n\n${table}\n\nMalformed:\n| Only | Header |\n| --- | --- |\n\nAfter the table with <img src=x onerror=alert(1)>`,
+        type: 'assistant-message',
+      }),
+    ],
+    id: 'table-task',
+    modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+    status: 'running',
+    streamingText: '| Partial | Header |\n| --- | :---: |\n| Streaming | row |',
+    title: 'Show the country table',
+    updatedAt: timestamp,
+  }
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: task.id }),
+    {
+      ...createMockChatApi(),
+      async getTask() {
+        return task
+      },
+    },
+  )
+  try {
+    const dom = instance.render() as readonly any[]
+    const tableNodes = getNodesByClass(dom, 'ChatMessageTable')
+    expect(tableNodes).toHaveLength(2)
+    expect(getNodesByClass(dom, 'ChatMessageTableContainer')).toHaveLength(2)
+    expect(getNodesByClass(dom, 'ChatMessageStreaming')).toHaveLength(1)
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Th),
+    ).toHaveLength(4)
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Td),
+    ).toHaveLength(42)
+    expect(dom).toContainEqual(
+      expect.objectContaining({
+        className: 'ChatMessageTableCell ChatMessageTableCell-left',
+        scope: 'col',
+        type: VirtualDomElements.Th,
+      }),
+    )
+    expect(dom).toContainEqual(
+      expect.objectContaining({
+        className: 'ChatMessageTableCell ChatMessageTableCell-right',
+        type: VirtualDomElements.Td,
+      }),
+    )
+    expect(dom).toContainEqual(
+      expect.objectContaining({
+        className: 'ChatMessageTableCell ChatMessageTableCell-center',
+        type: VirtualDomElements.Th,
+      }),
+    )
+    expect(getNodesByClass(dom, 'ChatMessageLink')).toHaveLength(1)
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Strong),
+    ).toHaveLength(1)
+    expect(getText(dom)).toContain('Before the table.')
+    expect(getText(dom)).toContain(
+      'After the table with <img src=x onerror=alert(1)>',
+    )
+    expect(getText(dom)).toContain(
+      'Malformed:\n| Only | Header |\n| --- | --- |',
+    )
+    expect(getText(dom)).toContain('Streaming')
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Img),
+    ).toHaveLength(0)
+    expect(getNodesByClass(dom, 'ChatMessageTable')).toHaveLength(2)
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('renders fenced JSON as safe highlighted code in messages and streaming text', async () => {
   const timestamp = '2026-09-10T12:00:00.000Z'
   const task: ChatTask = {
