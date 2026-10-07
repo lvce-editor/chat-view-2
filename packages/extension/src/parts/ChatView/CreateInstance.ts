@@ -113,6 +113,9 @@ const copyFeedbackDuration = 2000
 const messagesSelector = '.ChatMessages'
 const maxScrollTop = 9_999_999
 const workingTimerInterval = 1000
+const defaultWindowTitle = 'Lvce Editor'
+const defaultChatTitle = 'Chat 2'
+const pathSeparatorRegex = /[\\/]/
 const toImageFile = async (value: unknown): Promise<File | undefined> => {
   if (!value || typeof value !== 'object') {
     return undefined
@@ -301,6 +304,41 @@ export const createInstance = async (
         ? getWorkingSeconds(selectedTask)
         : 0,
   }
+  let selectedTaskRequest = 0
+  let windowTitleQueue = Promise.resolve()
+  let windowTitleActive = false
+  const getWorkspaceTitle = async (): Promise<string> => {
+    try {
+      const workspacePath = await execute('Workspace.getPath')
+      if (typeof workspacePath !== 'string' || !workspacePath) {
+        return defaultWindowTitle
+      }
+      return (
+        workspacePath.split(pathSeparatorRegex).at(-1) || defaultWindowTitle
+      )
+    } catch {
+      return defaultWindowTitle
+    }
+  }
+  const syncWindowTitle = (): Promise<void> => {
+    if (state.focusMode) {
+      windowTitleActive = true
+    } else if (!windowTitleActive) {
+      return Promise.resolve()
+    }
+    const title = state.focusMode
+      ? state.selectedTask?.title || defaultChatTitle
+      : undefined
+    windowTitleQueue = windowTitleQueue
+      .catch(() => {})
+      .then(async () => {
+        await execute('WindowTitle.set', title || (await getWorkspaceTitle()))
+      })
+    if (!state.focusMode) {
+      windowTitleActive = false
+    }
+    return windowTitleQueue
+  }
   currentState = state
   let activeController: AbortController | undefined
   let authStatePoll: ReturnType<typeof setInterval> | undefined
@@ -464,6 +502,7 @@ export const createInstance = async (
   }
 
   const newChat = async (requestRerender = false): Promise<void> => {
+    selectedTaskRequest++
     resetCopyFeedback()
     state.selectedTask = undefined
     state.draft = ''
@@ -471,6 +510,7 @@ export const createInstance = async (
     state.activityExpanded = false
     state.changesExpanded = false
     syncWorkingTimer(undefined)
+    void syncWindowTitle().catch(() => {})
     if (requestRerender) {
       await context?.requestRerender()
     }
@@ -486,10 +526,14 @@ export const createInstance = async (
       task,
       ...state.tasks.filter((item) => item.id !== task.id),
     ].slice(0, 20)
+    void syncWindowTitle().catch(() => {})
   }
 
-  const updateTask = async (task: ChatTask): Promise<void> => {
-    if (disposed) {
+  const updateTask = async (
+    task: ChatTask,
+    request = selectedTaskRequest,
+  ): Promise<void> => {
+    if (disposed || request !== selectedTaskRequest) {
       return
     }
     setTask(task)
@@ -523,9 +567,10 @@ export const createInstance = async (
       return
     }
     activeController = new AbortController()
+    const request = selectedTaskRequest
     const options = {
       attachments,
-      onUpdate: updateTask,
+      onUpdate: (task: ChatTask): Promise<void> => updateTask(task, request),
       signal: activeController.signal,
     }
     const selectedTask = state.selectedTask
@@ -549,6 +594,7 @@ export const createInstance = async (
   ): Promise<void> => {
     state.focusMode = await getFocusMode()
     state.focusMode = await toggleFocusMode(state)
+    await syncWindowTitle()
     if (requestRerender) {
       await context?.requestRerender()
     }
@@ -576,6 +622,9 @@ export const createInstance = async (
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       disposed = true
+      if (state.focusMode) {
+        void syncWindowTitle().catch(() => {})
+      }
       currentState = undefined
       activeController?.abort()
       if (authStatePoll !== undefined) {
@@ -728,8 +777,13 @@ export const createInstance = async (
         return
       }
       if (event.name?.startsWith('task:')) {
+        const request = ++selectedTaskRequest
         resetCopyFeedback()
-        state.selectedTask = await api.getTask(event.name.slice(5))
+        const task = await api.getTask(event.name.slice(5))
+        if (disposed || request !== selectedTaskRequest) {
+          return
+        }
+        state.selectedTask = task
         syncWorkingTimer(state.selectedTask)
         if (state.selectedTask) {
           state.selectedModelId = state.selectedTask.modelId
@@ -738,6 +792,7 @@ export const createInstance = async (
         state.composerImages = []
         state.activityExpanded = false
         state.changesExpanded = false
+        void syncWindowTitle().catch(() => {})
       }
     },
     async handleImageDrop(dropId: unknown): Promise<void> {
@@ -805,6 +860,7 @@ export const createInstance = async (
     toggleFocusMode: handleToggleFocusMode,
   }
   syncWorkingTimer(selectedTask)
+  void syncWindowTitle().catch(() => {})
   if (backendConfiguration?.baseUrl) {
     authStatePoll = setInterval(() => {
       void syncAuthState()
