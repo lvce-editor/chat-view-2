@@ -27,6 +27,27 @@ const getNodesByClass = (
   return dom.filter((node) => node.className?.split(' ').includes(className))
 }
 
+const getPathByClass = (
+  dom: readonly any[],
+  className: string,
+): readonly number[] | undefined => {
+  let index = 0
+  const visit = (path: readonly number[]): readonly number[] | undefined => {
+    const node = dom[index++]
+    if (node.className?.split(' ').includes(className)) {
+      return path
+    }
+    for (let childIndex = 0; childIndex < node.childCount; childIndex++) {
+      const childPath = visit([...path, childIndex])
+      if (childPath) {
+        return childPath
+      }
+    }
+    return undefined
+  }
+  return visit([])
+}
+
 const dispatch = async (
   instance: Awaited<ReturnType<typeof createInstance>>,
   event: ViewEvent,
@@ -37,8 +58,22 @@ const dispatch = async (
 const createTestInstance = async (
   delayMs = 0,
   readPreference?: (key: string) => Promise<unknown>,
+  imageTransferHost?: {
+    readonly discardDrop: (dropId: number) => Promise<void>
+    readonly getClipboardFiles: (
+      fileIds: readonly number[],
+    ) => Promise<readonly File[]>
+    readonly getDroppedFiles: (dropId: number) => Promise<readonly File[]>
+  },
 ) => {
-  return createInstance(undefined, createMockChatApi(delayMs), readPreference)
+  return createInstance(
+    undefined,
+    createMockChatApi(delayMs),
+    readPreference,
+    undefined,
+    undefined,
+    imageTransferHost,
+  )
 }
 
 const createViewContext = (state: unknown): ViewContext => ({
@@ -108,10 +143,181 @@ test('renders a focused task list, model control, and composer', async () => {
   expect(modelIndex).toBeLessThan(submitIndex)
 })
 
+test('renders a Sessions sash and resizes the panel with bounded pointer movement', async () => {
+  const instance = await createTestInstance()
+  instance.setState({ ...instance.getState(), focusMode: true })
+  const sash = getNodesByClass(instance.render(), 'ChatSessionsSash')[0]
+
+  expect(sash).toEqual(
+    expect.objectContaining({
+      ariaLabel: 'Resize sessions panel',
+      ariaOrientation: 'vertical',
+      onPointerDown: 'handleSessionsSashPointerDown',
+      role: 'separator',
+    }),
+  )
+  expect(view.eventListeners).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        name: 'handleSessionsSashPointerDown',
+        trackPointerEvents: [
+          'handleSessionsSashPointerMove',
+          'handleSessionsSashPointerUp',
+        ],
+      }),
+    ]),
+  )
+
+  instance.handleSessionsSashPointerDown(400, 1000, 100, 100, 280)
+  instance.handleSessionsSashPointerMove(450)
+  expect(instance.getState().sessionsWidth).toBe(330)
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({ style: '--ChatSessionsWidth: 330px' }),
+  )
+  instance.handleSessionsSashPointerMove(2000)
+  expect(instance.getState().sessionsWidth).toBe(680)
+  instance.handleSessionsSashPointerUp()
+  instance.handleSessionsSashPointerMove(100)
+  expect(instance.getState().sessionsWidth).toBe(680)
+
+  instance.handleSessionsSashPointerDown(400, 1000, 100, 820, 280)
+  instance.handleSessionsSashPointerMove(450)
+  expect(instance.getState().sessionsWidth).toBe(230)
+})
+
 test('requests scrolling the messages to the bottom after every render', async () => {
   const instance = await createTestInstance()
 
   expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+})
+
+test('shows loading feedback and blocks submission until images finish loading', async () => {
+  const instance = await createTestInstance()
+  instance.setState({
+    ...instance.getState(),
+    composerImages: [{ id: 'image-1', name: 'sample.png', status: 'loading' }],
+    draft: 'Describe this',
+  })
+
+  expect(
+    getNodesByClass(instance.render(), 'ChatComposerImage-loading'),
+  ).toHaveLength(1)
+  expect(getText(instance.render())).toContain('Loading image…')
+  await instance.submit()
+
+  expect(instance.getState().draft).toBe('Describe this')
+  expect(instance.getState().selectedTask).toBeUndefined()
+})
+
+test('submits image attachments and keeps a small preview in the message history', async () => {
+  const instance = await createTestInstance()
+  const attachment = {
+    dataUrl: 'data:image/png;base64,aGVsbG8=',
+    mimeType: 'image/png',
+    name: 'sample.png',
+  }
+  instance.setState({
+    ...instance.getState(),
+    composerImages: [
+      { attachment, id: 'image-1', name: 'sample.png', status: 'ready' },
+    ],
+    draft: 'Describe this',
+  })
+
+  await instance.submit()
+
+  expect(instance.getState().selectedTask?.events).toContainEqual(
+    expect.objectContaining({
+      attachments: [attachment],
+      text: 'Describe this',
+      type: 'user-message',
+    }),
+  )
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      alt: 'sample.png',
+      className: 'ChatMessageImage',
+      src: attachment.dataUrl,
+    }),
+  )
+})
+
+test('loads pasted image files once and submits the decoded image bytes', async () => {
+  const imageBytes = Promise.withResolvers<ArrayBuffer>()
+  const file = {
+    arrayBuffer: () => imageBytes.promise,
+    name: 'pasted.png',
+    type: 'image/png',
+  } as File
+  const imageTransferHost = {
+    async discardDrop() {},
+    async getClipboardFiles() {
+      return [file]
+    },
+    async getDroppedFiles() {
+      return []
+    },
+  }
+  const instance = await createTestInstance(0, undefined, imageTransferHost)
+  instance.setState({ ...instance.getState(), draft: 'Read the pasted image' })
+
+  const loading = instance.handleImagePaste([1])
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(instance.getState().composerImages[0]?.status).toBe('loading')
+  await instance.submit()
+  expect(instance.getState().selectedTask).toBeUndefined()
+
+  imageBytes.resolve(new TextEncoder().encode('hello').buffer)
+  await loading
+  expect(instance.getState().composerImages[0]?.status).toBe('ready')
+  await instance.submit()
+
+  expect(
+    instance
+      .getState()
+      .selectedTask?.events.find((event) => event.type === 'user-message'),
+  ).toEqual(
+    expect.objectContaining({
+      attachments: [
+        {
+          dataUrl: 'data:image/png;base64,aGVsbG8=',
+          mimeType: 'image/png',
+          name: 'pasted.png',
+        },
+      ],
+    }),
+  )
+})
+
+test('reads dropped image data and releases its drop session', async () => {
+  const file = {
+    arrayBuffer: async () => new TextEncoder().encode('drop').buffer,
+    name: 'dropped.png',
+    type: 'image/png',
+  } as File
+  const discardDrop = jest.fn(async (_dropId: number) => {})
+  const getDroppedFiles = jest.fn(async (_dropId: number) => [file])
+  const instance = await createTestInstance(0, undefined, {
+    discardDrop,
+    async getClipboardFiles() {
+      return []
+    },
+    getDroppedFiles,
+  })
+
+  await instance.handleImageDrop(42)
+
+  expect(getDroppedFiles).toHaveBeenCalledWith(42)
+  expect(discardDrop).toHaveBeenCalledWith(42)
+  expect(instance.getState().composerImages[0]).toEqual(
+    expect.objectContaining({
+      attachment: expect.objectContaining({
+        dataUrl: 'data:image/png;base64,ZHJvcA==',
+        mimeType: 'image/png',
+      }),
+      status: 'ready',
+    }),
+  )
 })
 
 test('saves and restores the composer draft through view state', async () => {
@@ -438,17 +644,33 @@ test('renders the experimental focus mode control when enabled', async () => {
 
   state.focusMode = true
   const focusedDom = instance.render()
-  expect(focusedDom).toContainEqual(
-    expect.objectContaining({
-      className: 'ChatFocusModeButton',
-      title: 'Return to IDE layout',
-    }),
-  )
   expect(focusedDom[0]).toEqual(
     expect.objectContaining({
       className: 'ChatView ChatAiNativeLayout',
     }),
   )
+  expect(getNodesByClass(focusedDom, 'ChatConversationBody')).toHaveLength(1)
+  expect(getNodesByClass(focusedDom, 'ChatEmptyTitle')).toHaveLength(1)
+  expect(getNodesByClass(focusedDom, 'ChatFocusModeButton')).toHaveLength(0)
+  expect(getNodesByClass(focusedDom, 'ChatNewTaskButton')).toHaveLength(1)
+})
+
+test('keeps the AI-native composer in place after the first message', async () => {
+  const instance = await createTestInstance()
+  const state = instance.getState() as { focusMode: boolean }
+  state.focusMode = true
+  const emptyPath = getPathByClass(instance.render(), 'ChatComposer')
+
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'A centered first message',
+  })
+  await instance.submit()
+
+  const submittedPath = getPathByClass(instance.render(), 'ChatComposer')
+  expect(submittedPath).toEqual(emptyPath)
+  expect(instance.getContext()['chat2.composerFocus']).toBe(true)
 })
 
 test('uses the configured task list font size', async () => {
@@ -585,6 +807,57 @@ test('renders message urls as external links and preserves punctuation', async (
     type: VirtualDomElements.A,
   })
   expect(getText(dom)).toContain('Inspect \nhttps://example.com/docs?q=chat\n.')
+})
+
+test('renders fenced JSON as safe highlighted code in messages and streaming text', async () => {
+  const timestamp = '2026-09-10T12:00:00.000Z'
+  const task: ChatTask = {
+    createdAt: timestamp,
+    events: [
+      createEvent({ text: 'Show an example', type: 'user-message' }),
+      createEvent({
+        text: 'Before **bold**\n```json\n{"jsonrpc":"2.0","method":"add","params":[2,3],"id":1}\n```\nAfter https://example.com\n```js\nconst sample = \'<img src=x onerror=alert(1)>\'\n```\n```\nplain code\n```',
+        type: 'assistant-message',
+      }),
+    ],
+    id: 'code-block-task',
+    modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+    status: 'completed',
+    streamingText: 'Partial\n```json\n{"ok":true',
+    title: 'Show an example',
+    updatedAt: timestamp,
+  }
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: task.id }),
+    {
+      ...createMockChatApi(),
+      async getTask() {
+        return task
+      },
+    },
+  )
+  try {
+    const dom = instance.render() as readonly any[]
+    expect(getNodesByClass(dom, 'ChatCodeBlock')).toHaveLength(4)
+    expect(getNodesByClass(dom, 'ChatCodeTokenKey')).toHaveLength(5)
+    expect(getNodesByClass(dom, 'ChatCodeTokenString')).toHaveLength(2)
+    expect(getNodesByClass(dom, 'ChatCodeTokenNumber')).toHaveLength(3)
+    expect(getNodesByClass(dom, 'ChatCodeTokenLiteral')).toHaveLength(1)
+    expect(getNodesByClass(dom, 'ChatMessageLink')).toHaveLength(1)
+    expect(getText(dom)).toContain('"jsonrpc"')
+    expect(getText(dom)).toContain('"ok"')
+    expect(getText(dom)).toContain('<img src=x onerror=alert(1)>')
+    expect(getText(dom)).toContain('plain code')
+    expect(getText(dom)).not.toContain('```')
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Img),
+    ).toHaveLength(0)
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Strong),
+    ).toHaveLength(1)
+  } finally {
+    instance.dispose?.()
+  }
 })
 
 test('expands the changed-file fixture for review', async () => {
@@ -772,6 +1045,43 @@ test('opens a task, expands activity, and returns to the task list', async () =>
   expect(instance.getState().selectedTask).toBeUndefined()
 })
 
+test('keeps the latest task selected when an older task refresh finishes later', async () => {
+  const baseApi = createMockChatApi()
+  const getTask = baseApi.getTask.bind(baseApi)
+  const firstTask = await getTask('mock-task-1')
+  const secondTask = await getTask('mock-task-2')
+  if (!firstTask || !secondTask) {
+    throw new Error('Expected mock tasks to be available')
+  }
+  const firstTaskRefresh = Promise.withResolvers<ChatTask>()
+  const secondTaskRefresh = Promise.withResolvers<ChatTask>()
+  const api = {
+    ...baseApi,
+    getTask: jest.fn((id: string) => {
+      if (id === firstTask.id) {
+        return firstTaskRefresh.promise
+      }
+      return secondTaskRefresh.promise
+    }),
+  }
+  const instance = await createInstance(undefined, api)
+
+  const firstSelection = dispatch(instance, {
+    name: `task:${firstTask.id}`,
+    type: 'click',
+  })
+  const secondSelection = dispatch(instance, {
+    name: `task:${secondTask.id}`,
+    type: 'click',
+  })
+  secondTaskRefresh.resolve(secondTask)
+  await secondSelection
+  firstTaskRefresh.resolve(firstTask)
+  await firstSelection
+
+  expect(instance.getState().selectedTask?.id).toBe(secondTask.id)
+})
+
 test('opens a new chat from the active task', async () => {
   const instance = await createTestInstance()
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
@@ -864,6 +1174,7 @@ test('renders only the login screen and replaces it after login, then hides chat
   })
   const api = createMockChatApi()
   const listModels = jest.fn(api.listModels)
+  const loginFinished = Promise.withResolvers<void>()
   const host = {
     async createApi() {
       return { ...api, listModels }
@@ -873,7 +1184,12 @@ test('renders only the login screen and replaces it after login, then hides chat
     },
   }
   const instance = await createInstance(
-    createViewContext(undefined),
+    {
+      ...createViewContext(undefined),
+      async requestRerender() {
+        loginFinished.resolve()
+      },
+    },
     undefined,
     undefined,
     execute,
@@ -888,6 +1204,7 @@ test('renders only the login screen and replaces it after login, then hides chat
     expect(getText(dom)).toContain('Login')
     expect(listModels).not.toHaveBeenCalled()
     await dispatch(instance, { name: 'login', type: 'click' })
+    await loginFinished.promise
     expect(execute).toHaveBeenCalledWith('Layout.signIn')
     expect(
       getNodesByClass(instance.render(), 'ChatComposerInput'),
@@ -919,8 +1236,14 @@ test('keeps login available after a failed or cancelled login', async () => {
   const execute = jest.fn(async () => {
     throw new Error('Login cancelled')
   })
+  const loginFinished = Promise.withResolvers<void>()
   const instance = await createInstance(
-    createViewContext(undefined),
+    {
+      ...createViewContext(undefined),
+      async requestRerender() {
+        loginFinished.resolve()
+      },
+    },
     undefined,
     undefined,
     execute,
@@ -935,6 +1258,7 @@ test('keeps login available after a failed or cancelled login', async () => {
   )
   try {
     await dispatch(instance, { name: 'login', type: 'click' })
+    await loginFinished.promise
     expect(getText(instance.render())).toContain('Login cancelled')
     expect(instance.getState().loginPending).toBe(false)
     expect(instance.getState().loginRequired).toBe(true)
@@ -943,6 +1267,71 @@ test('keeps login available after a failed or cancelled login', async () => {
     ).toHaveLength(0)
   } finally {
     instance.dispose?.()
+  }
+})
+
+test('starts login without awaiting a rerender queued behind the click event', async () => {
+  const configuration: BackendConfiguration = {
+    accessToken: '',
+    baseUrl: 'https://backend.example.com',
+    loginRequired: true,
+    supportsStreaming: true,
+  }
+  const signInGate = Promise.withResolvers<void>()
+  const rerenderGate = Promise.withResolvers<void>()
+  const rerenderStarted = Promise.withResolvers<void>()
+  let signInFinished = false
+  const requestRerender = jest.fn(() => {
+    if (signInFinished) {
+      rerenderStarted.resolve()
+    }
+    return rerenderGate.promise
+  })
+  const execute = jest.fn(async (id: string) => {
+    if (id === 'Layout.getHref') {
+      return ''
+    }
+    expect(id).toBe('Layout.signIn')
+    await signInGate.promise
+    signInFinished = true
+  })
+  const instance = await createInstance(
+    { ...createViewContext(undefined), requestRerender },
+    undefined,
+    undefined,
+    execute,
+    {
+      async createApi() {
+        return createMockChatApi()
+      },
+      async resolveConfiguration() {
+        return configuration
+      },
+    },
+  )
+  try {
+    await dispatch(instance, { name: 'login', type: 'click' })
+    expect(execute).toHaveBeenCalledWith('Layout.signIn')
+    expect(instance.getState().loginPending).toBe(true)
+    expect(getNodesByClass(instance.render(), 'ChatLoginButton')[0]).toEqual(
+      expect.objectContaining({ disabled: true }),
+    )
+
+    await dispatch(instance, { name: 'login', type: 'click' })
+    expect(
+      execute.mock.calls.flat().filter((id) => id === 'Layout.signIn'),
+    ).toHaveLength(1)
+    expect(requestRerender).not.toHaveBeenCalled()
+
+    signInGate.resolve()
+    await rerenderStarted.promise
+    expect(instance.getState().loginPending).toBe(false)
+    expect(requestRerender).toHaveBeenCalledTimes(1)
+    rerenderGate.resolve()
+  } finally {
+    instance.dispose?.()
+    signInGate.resolve()
+    rerenderGate.resolve()
   }
 })
 
@@ -1033,6 +1422,7 @@ test.each(['models', 'request'])(
     jest.useFakeTimers()
     let rejectAuthentication: (() => void) | undefined
     let signedIn = false
+    let loginStarted = false
     const configuration: BackendConfiguration = {
       accessToken: 'rejected-token',
       baseUrl: 'https://backend.example.com',
@@ -1040,8 +1430,16 @@ test.each(['models', 'request'])(
     }
     const resolveConfiguration = jest.fn(async () => configuration)
     const api = createMockChatApi(0)
+    const loginFinished = Promise.withResolvers<void>()
     const instance = await createInstance(
-      createViewContext(undefined),
+      {
+        ...createViewContext(undefined),
+        async requestRerender() {
+          if (loginStarted) {
+            loginFinished.resolve()
+          }
+        },
+      },
       undefined,
       undefined,
       async () => {
@@ -1074,7 +1472,9 @@ test.each(['models', 'request'])(
       ).toHaveLength(1)
       await jest.advanceTimersByTimeAsync(2000)
       expect(resolveConfiguration).toHaveBeenCalledTimes(1)
+      loginStarted = true
       await dispatch(instance, { name: 'login', type: 'click' })
+      await loginFinished.promise
       expect(instance.getState().loginRequired).toBe(false)
       expect(
         getNodesByClass(instance.render(), 'ChatComposerInput'),
@@ -1093,6 +1493,13 @@ test('AI-native view keeps sessions visible while changing the active conversati
   expect(getNodesByClass(instance.render(), 'ChatSessions')).toHaveLength(1)
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
   expect(getNodesByClass(instance.render(), 'ChatTaskButton')).toHaveLength(20)
+  expect(
+    getNodesByClass(instance.render(), 'ChatFocusModeButton'),
+  ).toHaveLength(0)
+  expect(getNodesByClass(instance.render(), 'ChatNewTaskButton')).toHaveLength(
+    1,
+  )
+  expect(getNodesByClass(instance.render(), 'ChatDetailHeader')).toHaveLength(1)
   expect(getNodesByClass(instance.render(), 'ChatMessages')).toHaveLength(1)
   expect(getText(instance.render())).toContain('Add worker memory usage')
   await dispatch(instance, { name: 'new-task', type: 'click' })

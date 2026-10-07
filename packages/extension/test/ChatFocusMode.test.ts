@@ -4,8 +4,10 @@ import { toggleFocusMode } from '../src/parts/ChatFocusMode/ChatFocusMode.ts'
 
 const createState = (): ChatViewState => ({
   activityExpanded: false,
+  aiNativeTheme: 'default',
   changesExpanded: false,
   composerFocused: false,
+  composerImages: [],
   copiedMessageId: '',
   draft: '',
   errorMessage: '',

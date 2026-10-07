@@ -6,13 +6,23 @@
   "description": "A focused, low-overhead coding agent for Lvce Editor",
   "repository": "https://github.com/lvce-editor/chat-view-2",
   "browser": "dist/chatMain.js",
-  "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"],
+  "contentSecurityPolicy": [
+    "default-src 'none'",
+    "script-src 'self'",
+    "img-src data:"
+  ],
   "isolated": true,
   "categories": ["Other"],
   "configuration": {
     "chat2.backendUrl": {
       "type": "string",
       "default": ""
+    },
+    "chat2.aiNativeTheme": {
+      "type": "string",
+      "enum": ["default", "openai", "claude"],
+      "default": "default",
+      "description": "Color and typography preset for the AI-native Chat 2 layout."
     },
     "chat2.experimentalFocusMode": {
       "type": "boolean",

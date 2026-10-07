@@ -23,6 +23,11 @@
   );
   --ChatInputForeground: var(--InputForeground, var(--ChatForeground));
   --ChatFocusBorder: var(--FocusBorder, #3794ff);
+  --ChatCodeKey: #9cdcfe;
+  --ChatCodeString: #ce9178;
+  --ChatCodeNumber: #b5cea8;
+  --ChatCodeLiteral: #569cd6;
+  --ChatCodePunctuation: var(--ChatForeground);
   --ChatButtonBackground: var(--ButtonBackground, #0e639c);
   --ChatButtonForeground: var(--ButtonForeground, #ffffff);
   --ChatButtonHoverBackground: var(--ButtonHoverBackground, #1177bb);
@@ -274,6 +279,77 @@
   white-space: nowrap;
 }
 
+.ChatComposerImages,
+.ChatMessageImages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+}
+
+.ChatComposerImage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 112px;
+  max-height: 112px;
+  overflow: hidden;
+  border: 1px solid var(--ChatBorder);
+  border-radius: 6px;
+}
+
+.ChatComposerImagePreview,
+.ChatMessageImage {
+  display: block;
+  max-width: 100%;
+  max-height: 104px;
+  object-fit: cover;
+}
+
+.ChatMessageImage {
+  max-width: 160px;
+  border-radius: 6px;
+}
+
+.ChatComposerImageStatus {
+  padding: 8px;
+  font-size: 11px;
+}
+
+.ChatComposerImage-loading .ChatComposerImageStatus::before {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 5px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  content: '';
+  animation: ChatImageSpinner 0.8s linear infinite;
+}
+
+.ChatComposerImageRemove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ChatBackground);
+  color: var(--ChatForeground);
+  cursor: pointer;
+}
+
+@keyframes ChatImageSpinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .ChatComposerControls,
 .ChatChangesActions,
 .ChatChangesHeader {
@@ -416,6 +492,12 @@
   scrollbar-width: thin;
 }
 
+.ChatMessagesContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
 .ChatMessages::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -452,6 +534,44 @@
   user-select: text;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.ChatCodeBlock {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 8px 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  color: var(--ChatForeground);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: color-mix(in srgb, var(--ChatForeground) 5%, transparent);
+  border-radius: 6px;
+}
+
+.ChatCodeBlock code {
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 0.92em;
+}
+
+.ChatCodeTokenKey {
+  color: var(--ChatCodeKey);
+}
+
+.ChatCodeTokenString {
+  color: var(--ChatCodeString);
+}
+
+.ChatCodeTokenNumber {
+  color: var(--ChatCodeNumber);
+}
+
+.ChatCodeTokenLiteral {
+  color: var(--ChatCodeLiteral);
+}
+
+.ChatCodeTokenPunctuation {
+  color: var(--ChatCodePunctuation);
 }
 
 .ChatMessageLink {
@@ -789,9 +909,85 @@
   --ChatButtonForeground: #ffffff;
   --ChatButtonHoverBackground: #383a3d;
   --ChatErrorForeground: #b3261e;
+  --ChatCodeKey: #0451a5;
+  --ChatCodeString: #a31515;
+  --ChatCodeNumber: #098658;
+  --ChatCodeLiteral: #0000ff;
+  --ChatCodePunctuation: #202124;
   --ChatScrollbarThumb: #bbbbbb;
   --ChatScrollbarTrack: #ffffff;
   color-scheme: light;
+}
+.ChatAiNativeLayoutTheme-openai,
+.ChatAiNativeLayoutTheme-openai .ChatView,
+.ChatLoggedOut.ChatFocusMode.ChatAiNativeLayoutTheme-openai {
+  --ChatBackground: #ffffff;
+  --ChatForeground: #0d0d0d;
+  --ChatMutedForeground: #6e6e80;
+  --ChatBorder: #e5e5e5;
+  --ChatHoverBackground: #f5f5f5;
+  --ChatInputBackground: #f4f4f4;
+  --ChatInputForeground: #0d0d0d;
+  --ChatButtonBackground: #0d0d0d;
+  --ChatButtonForeground: #ffffff;
+  --ChatButtonHoverBackground: #333333;
+  --ChatErrorForeground: #b42318;
+  --ChatCodeKey: #0451a5;
+  --ChatCodeString: #a31515;
+  --ChatCodeNumber: #098658;
+  --ChatCodeLiteral: #0000ff;
+  --ChatCodePunctuation: #0d0d0d;
+  --ChatFocusBorder: #10a37f;
+  --ChatScrollbarThumb: #b4b4be;
+  --ChatScrollbarTrack: #ffffff;
+  color-scheme: light;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+.ChatAiNativeLayoutTheme-openai .ChatSessions {
+  background: #f7f7f8;
+}
+.ChatAiNativeLayoutTheme-claude,
+.ChatAiNativeLayoutTheme-claude .ChatView,
+.ChatLoggedOut.ChatFocusMode.ChatAiNativeLayoutTheme-claude {
+  --ChatBackground: #faf9f6;
+  --ChatForeground: #292723;
+  --ChatMutedForeground: #77736c;
+  --ChatBorder: #e8e5df;
+  --ChatHoverBackground: #f0eee9;
+  --ChatInputBackground: #f2f0eb;
+  --ChatInputForeground: #292723;
+  --ChatButtonBackground: #d97757;
+  --ChatButtonForeground: #ffffff;
+  --ChatButtonHoverBackground: #c56849;
+  --ChatErrorForeground: #a53d2e;
+  --ChatCodeKey: #0451a5;
+  --ChatCodeString: #a31515;
+  --ChatCodeNumber: #098658;
+  --ChatCodeLiteral: #0000ff;
+  --ChatCodePunctuation: #292723;
+  --ChatFocusBorder: #d97757;
+  --ChatScrollbarThumb: #c7c3ba;
+  --ChatScrollbarTrack: #faf9f6;
+  color-scheme: light;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+}
+.ChatAiNativeLayoutTheme-claude .ChatSessions {
+  background: #f4f2ed;
+}
+.ChatAiNativeLayoutTheme-claude .ChatMessagesContent,
+.ChatAiNativeLayoutTheme-claude .ChatEmptyTitle,
+.ChatAiNativeLayoutTheme-claude .ChatEmptyText {
+  font-family: Georgia, 'Times New Roman', serif;
 }
 .ChatAiNativeLayout {
   flex-direction: row;
@@ -800,23 +996,86 @@
 .ChatSessions {
   display: flex;
   flex-direction: column;
-  flex: 0 0 min(280px, 32%);
+  flex: 0 0
+    min(
+      var(--ChatSessionsWidth, min(280px, 32%)),
+      max(0px, calc(100% - min(320px, 50%)))
+    );
   min-width: 0;
   min-height: 0;
   background: #f5f5f5;
   border-right: 1px solid var(--ChatBorder);
 }
+.ChatSessionsSash {
+  z-index: 1;
+  flex: 0 0 4px;
+  margin-inline: -2px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.ChatSessionsSash:hover,
+.ChatSessionsSash:active {
+  background: var(--ChatBorder);
+}
 .ChatAiNativeLayout > .ChatDetailView {
   flex: 1;
   min-width: 0;
 }
+.ChatConversationBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: 0;
+  overflow: hidden;
+}
+.ChatConversationBody:has(.ChatEmptyTitle) {
+  justify-content: center;
+  overflow: auto;
+}
+.ChatConversationBody:has(.ChatEmptyTitle) > .ChatMessages {
+  flex: 0 0 auto;
+  align-items: center;
+  overflow: visible;
+}
 .ChatAiNativeLayout .ChatBackButton {
   display: none;
 }
-.ChatAiNativeLayout .ChatDetailView > * {
+.ChatAiNativeLayout
+  .ChatDetailView
+  > :not(.ChatMessages, .ChatConversationBody) {
   width: min(100%, 960px);
   margin-inline: auto;
   box-sizing: border-box;
+}
+.ChatAiNativeLayout .ChatDetailView > .ChatMessages,
+.ChatAiNativeLayout .ChatConversationBody > .ChatMessages {
+  width: 100%;
+  padding-inline: 0;
+}
+.ChatAiNativeLayout .ChatDetailView > .ChatConversationBody {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+.ChatAiNativeLayout .ChatConversationBody > :not(.ChatMessages) {
+  width: min(100%, 960px);
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+.ChatAiNativeLayout .ChatMessages {
+  gap: 0;
+}
+.ChatAiNativeLayout .ChatMessagesContent {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 960px;
+  min-height: 100%;
+  padding-inline: 18px;
+  margin-inline: auto;
 }
 
 .AiNativeLayout .ActivityBarLayout {

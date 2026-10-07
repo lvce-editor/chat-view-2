@@ -10,6 +10,40 @@ export const viewId = 'chat2.views.chat'
 export const view: View<ActiveChatViewInstance, ChatViewState> = {
   create: createInstance,
   displayName: 'Chat 2',
+  eventListeners: [
+    {
+      name: 'handleSessionsSashPointerDown',
+      params: [
+        'handleSessionsSashPointerDown',
+        'event.clientX',
+        'event.currentTarget.parentElement.clientWidth',
+        'event.currentTarget.parentElement.offsetLeft',
+        'event.currentTarget.previousElementSibling.offsetLeft',
+        'event.currentTarget.previousElementSibling.offsetWidth',
+      ],
+      trackPointerEvents: [
+        'handleSessionsSashPointerMove',
+        'handleSessionsSashPointerUp',
+      ],
+    },
+    {
+      name: 'handleSessionsSashPointerMove',
+      params: ['handleSessionsSashPointerMove', 'event.clientX'],
+    },
+    {
+      name: 'handleSessionsSashPointerUp',
+      params: ['handleSessionsSashPointerUp'],
+    },
+    {
+      name: 'handleImagePaste',
+      params: ['handleImagePaste', 'event.clipboardData.files2'],
+    },
+    {
+      name: 'handleImageDrop',
+      params: ['handleImageDrop', 'event.dropId'],
+      preventDefault: true,
+    },
+  ],
   getComponentState: (instance) => instance.getState(),
   icon: 'comment-discussion',
   id: viewId,

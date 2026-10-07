@@ -8,8 +8,10 @@ import {
   type ViewEvent,
   type VirtualDomViewInstance,
 } from '@lvce-editor/api'
+import { DragAndDropWorker, RendererWorker } from '@lvce-editor/rpc-registry'
 import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
+import type { ChatComposerImage } from './ChatViewState.ts'
 import type { ReadPreference } from './FontSize.ts'
 import {
   type BackendConfiguration,
@@ -21,6 +23,10 @@ import {
   toggleFocusMode,
 } from '../ChatFocusMode/ChatFocusMode.ts'
 import {
+  isImageFile,
+  loadImageAttachment,
+} from '../ChatImageAttachments/ChatImageAttachments.ts'
+import {
   getChatTaskHash,
   parseChatTaskHash,
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
@@ -29,6 +35,8 @@ import {
   createDefaultChatApi,
   type DefaultChatApiOptions,
 } from '../DefaultChatApi/DefaultChatApi.ts'
+import { initializeImageTransfer } from '../InitializeImageTransfer/InitializeImageTransfer.ts'
+import { readAiNativeTheme } from './AiNativeTheme.ts'
 import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
@@ -38,6 +46,17 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getState: () => Readonly<ChatViewState>
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
+  readonly handleImageDrop: (dropId: unknown) => Promise<void>
+  readonly handleImagePaste: (fileIds: unknown) => Promise<void>
+  readonly handleSessionsSashPointerDown: (
+    clientX: number,
+    containerWidth: number,
+    containerLeft: number,
+    sessionsLeft: number,
+    sessionsWidth: number,
+  ) => void
+  readonly handleSessionsSashPointerMove: (clientX: number) => void
+  readonly handleSessionsSashPointerUp: () => void
   readonly newChat: (requestRerender?: boolean) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderScrollPosition: () => readonly [
@@ -65,9 +84,43 @@ type ExecuteCommand = (
   ...args: readonly unknown[]
 ) => Promise<unknown>
 
+interface SessionsSashDrag {
+  readonly containerWidth: number
+  readonly isRight: boolean
+  readonly startPointerX: number
+  readonly startWidth: number
+}
+
 interface DefaultChatApiHost {
   readonly createApi: (options: DefaultChatApiOptions) => Promise<ChatApi>
   readonly resolveConfiguration: () => Promise<BackendConfiguration>
+}
+
+interface ImageTransferHost {
+  readonly discardDrop: (dropId: number) => Promise<void>
+  readonly getClipboardFiles: (
+    fileIds: readonly number[],
+  ) => Promise<readonly File[]>
+  readonly getDroppedFiles: (dropId: number) => Promise<readonly File[]>
+}
+
+const defaultImageTransferHost: ImageTransferHost = {
+  async discardDrop(dropId) {
+    await initializeImageTransfer()
+    await DragAndDropWorker.discardDrop(dropId)
+  },
+  async getClipboardFiles(fileIds) {
+    await initializeImageTransfer()
+    const items = await RendererWorker.getFileHandles(fileIds)
+    const files = await Promise.all(
+      items.map((item) => toImageFile(item.value)),
+    )
+    return files.filter((file): file is File => Boolean(file))
+  },
+  async getDroppedFiles(dropId) {
+    await initializeImageTransfer()
+    return DragAndDropWorker.getDroppedFilesByDropId(dropId)
+  },
 }
 
 const defaultChatApiHost: DefaultChatApiHost = {
@@ -80,6 +133,26 @@ const copyFeedbackDuration = 2000
 const messagesSelector = '.ChatMessages'
 const maxScrollTop = 9_999_999
 const workingTimerInterval = 1000
+const defaultWindowTitle = 'Lvce Editor'
+const defaultChatTitle = 'Chat 2'
+const pathSeparatorRegex = /[\\/]/
+const toImageFile = async (value: unknown): Promise<File | undefined> => {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  if ('arrayBuffer' in value && typeof value.arrayBuffer === 'function') {
+    return value as File
+  }
+  if (
+    'kind' in value &&
+    value.kind === 'file' &&
+    'getFile' in value &&
+    typeof value.getFile === 'function'
+  ) {
+    return (value as FileSystemFileHandle).getFile()
+  }
+  return undefined
+}
 
 const isWorking = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'
@@ -198,6 +271,7 @@ export const createInstance = async (
   readPreference?: ReadPreference,
   execute: ExecuteCommand = executeCommand,
   defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
+  imageTransferHost: ImageTransferHost = defaultImageTransferHost,
 ): Promise<ActiveChatViewInstance> => {
   let authenticationRejected = false
   let currentState: MutableChatViewState | undefined
@@ -238,6 +312,7 @@ export const createInstance = async (
     saved.selectedModelId || (await getPreferredModelId())
   const fontFamily = await readFontFamily(readPreference)
   const fontSize = await readFontSize(readPreference)
+  const aiNativeTheme = await readAiNativeTheme(readPreference)
   const selectedModelId = getSelectedModelId(models, preferredModelId)
   const href = await getHref(execute)
   const chatHash = parseChatTaskHash(href)
@@ -256,8 +331,10 @@ export const createInstance = async (
   const focusModeEnabled = await getFocusModeEnabled()
   const state: MutableChatViewState = {
     activityExpanded: false,
+    aiNativeTheme,
     changesExpanded: false,
     composerFocused: false,
+    composerImages: [],
     copiedMessageId: '',
     draft: typeof saved.draft === 'string' ? saved.draft : '',
     errorMessage,
@@ -278,14 +355,89 @@ export const createInstance = async (
         ? getWorkingSeconds(selectedTask)
         : 0,
   }
+  let selectedTaskRequest = 0
+  let windowTitleQueue = Promise.resolve()
+  let windowTitleActive = false
+  const getWorkspaceTitle = async (): Promise<string> => {
+    try {
+      const workspacePath = await execute('Workspace.getPath')
+      if (typeof workspacePath !== 'string' || !workspacePath) {
+        return defaultWindowTitle
+      }
+      return (
+        workspacePath.split(pathSeparatorRegex).at(-1) || defaultWindowTitle
+      )
+    } catch {
+      return defaultWindowTitle
+    }
+  }
+  const syncWindowTitle = (): Promise<void> => {
+    if (state.focusMode) {
+      windowTitleActive = true
+    } else if (!windowTitleActive) {
+      return Promise.resolve()
+    }
+    const title = state.focusMode
+      ? state.selectedTask?.title || defaultChatTitle
+      : undefined
+    windowTitleQueue = windowTitleQueue
+      .catch(() => {})
+      .then(async () => {
+        await execute('WindowTitle.set', title || (await getWorkspaceTitle()))
+      })
+    if (!state.focusMode) {
+      windowTitleActive = false
+    }
+    return windowTitleQueue
+  }
   currentState = state
   let activeController: AbortController | undefined
   let authStatePoll: ReturnType<typeof setInterval> | undefined
   let authStateSyncing = false
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
   let disposed = false
+  let sessionsSashDrag: SessionsSashDrag | undefined
   let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
+
+  const addImageFiles = async (files: readonly File[]): Promise<void> => {
+    const imageFiles = files.filter(isImageFile)
+    if (imageFiles.length === 0) {
+      return
+    }
+    const loadingImages = imageFiles.map(
+      (file): ChatComposerImage => ({
+        id: `chat-image-${crypto.randomUUID()}`,
+        name: file.name,
+        status: 'loading',
+      }),
+    )
+    state.composerImages = [...state.composerImages, ...loadingImages]
+    await context?.requestRerender()
+    await Promise.all(
+      imageFiles.map(async (file, index) => {
+        const loadingImage = loadingImages[index]
+        if (!loadingImage) {
+          return
+        }
+        try {
+          const attachment = await loadImageAttachment(file)
+          state.composerImages = state.composerImages.map((image) =>
+            image.id === loadingImage.id
+              ? { ...image, attachment, status: 'ready' }
+              : image,
+          )
+        } catch {
+          state.composerImages = state.composerImages.map((image) =>
+            image.id === loadingImage.id
+              ? { ...image, status: 'error' }
+              : image,
+          )
+        }
+        await context?.requestRerender()
+      }),
+    )
+  }
 
   const stopWorkingTimer = (): void => {
     if (workingTimer === undefined) {
@@ -334,7 +486,10 @@ export const createInstance = async (
     }, copyFeedbackDuration)
   }
 
-  const syncAuthState = async (retryLogin = false): Promise<void> => {
+  const syncAuthState = async (
+    retryLogin = false,
+    requestRerender = true,
+  ): Promise<void> => {
     if (
       !backendConfiguration ||
       (state.loginRequired && !retryLogin) ||
@@ -383,11 +538,15 @@ export const createInstance = async (
       if (nextModels.length > 0) {
         state.errorMessage = ''
       }
-      await context?.requestRerender()
+      if (requestRerender) {
+        await context?.requestRerender()
+      }
     } catch (error) {
       if (!disposed) {
         state.errorMessage = getModelLoadingError(error)
-        await context?.requestRerender()
+        if (requestRerender) {
+          await context?.requestRerender()
+        }
       }
     } finally {
       authStateSyncing = false
@@ -395,13 +554,16 @@ export const createInstance = async (
   }
 
   const newChat = async (requestRerender = false): Promise<void> => {
+    selectedTaskRequest++
     resetCopyFeedback()
     state.selectedTask = undefined
     await setChatTaskHash(execute)
     state.draft = ''
+    state.composerImages = []
     state.activityExpanded = false
     state.changesExpanded = false
     syncWorkingTimer(undefined)
+    void syncWindowTitle().catch(() => {})
     if (requestRerender) {
       await context?.requestRerender()
     }
@@ -421,10 +583,14 @@ export const createInstance = async (
       task,
       ...state.tasks.filter((item) => item.id !== task.id),
     ].slice(0, 20)
+    void syncWindowTitle().catch(() => {})
   }
 
-  const updateTask = async (task: ChatTask): Promise<void> => {
-    if (disposed) {
+  const updateTask = async (
+    task: ChatTask,
+    request = selectedTaskRequest,
+  ): Promise<void> => {
+    if (disposed || request !== selectedTaskRequest) {
       return
     }
     setTask(task)
@@ -433,24 +599,35 @@ export const createInstance = async (
 
   const submit = async (requestRerender = false): Promise<void> => {
     const message = state.draft.trim()
-    if (state.loginRequired || !message || !state.selectedModelId) {
+    const attachments = state.composerImages.flatMap((image) =>
+      image.status === 'ready' && image.attachment ? [image.attachment] : [],
+    )
+    if (
+      state.loginRequired ||
+      (!message && attachments.length === 0) ||
+      state.composerImages.some((image) => image.status !== 'ready') ||
+      !state.selectedModelId
+    ) {
       return
     }
     if (activeController && state.selectedTask?.status !== 'running') {
       return
     }
     state.draft = ''
+    state.composerImages = []
     state.modelPickerOpen = false
     if (state.selectedTask?.status === 'running') {
-      await api.steer(state.selectedTask.id, message)
+      await api.steer(state.selectedTask.id, message, attachments)
       if (requestRerender) {
         await context?.requestRerender()
       }
       return
     }
     activeController = new AbortController()
+    const request = selectedTaskRequest
     const options = {
-      onUpdate: updateTask,
+      attachments,
+      onUpdate: (task: ChatTask): Promise<void> => updateTask(task, request),
       signal: activeController.signal,
     }
     const selectedTask = state.selectedTask
@@ -474,14 +651,37 @@ export const createInstance = async (
   ): Promise<void> => {
     state.focusMode = await getFocusMode()
     state.focusMode = await toggleFocusMode(state)
+    await syncWindowTitle()
     if (requestRerender) {
       await context?.requestRerender()
+    }
+  }
+
+  const completeLogin = async (): Promise<void> => {
+    try {
+      await execute('Layout.signIn')
+      await syncAuthState(true, false)
+    } catch (error) {
+      state.errorMessage =
+        error instanceof Error ? error.message : String(error)
+    } finally {
+      state.loginPending = false
+      if (!disposed) {
+        try {
+          await context?.requestRerender()
+        } catch {
+          // The event response already renders the pending state.
+        }
+      }
     }
   }
 
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       disposed = true
+      if (state.focusMode) {
+        void syncWindowTitle().catch(() => {})
+      }
       currentState = undefined
       activeController?.abort()
       if (authStatePoll !== undefined) {
@@ -509,19 +709,9 @@ export const createInstance = async (
         }
         state.loginPending = true
         state.errorMessage = ''
-        await context?.requestRerender()
-        try {
-          await execute('Layout.signIn')
-          await syncAuthState(true)
-        } catch (error) {
-          state.errorMessage =
-            error instanceof Error ? error.message : String(error)
-        } finally {
-          state.loginPending = false
-          if (!disposed) {
-            await context?.requestRerender()
-          }
-        }
+        // The host serializes view commands. Finish the event first so a
+        // rerender requested after sign-in can run without queuing behind it.
+        void completeLogin()
         return
       }
       if (state.loginRequired) {
@@ -530,6 +720,13 @@ export const createInstance = async (
       if (event.type === 'input' && event.name === 'composer') {
         state.composerFocused = true
         state.draft = getEventString(event)
+        return
+      }
+      if (event.type === 'click' && event.name?.startsWith('remove-image:')) {
+        const imageId = event.name.slice('remove-image:'.length)
+        state.composerImages = state.composerImages.filter(
+          (image) => image.id !== imageId,
+        )
         return
       }
       if (event.type === 'focus' && event.name === 'composer') {
@@ -637,8 +834,13 @@ export const createInstance = async (
         return
       }
       if (event.name?.startsWith('task:')) {
+        const request = ++selectedTaskRequest
         resetCopyFeedback()
-        state.selectedTask = await api.getTask(event.name.slice(5))
+        const task = await api.getTask(event.name.slice(5))
+        if (disposed || request !== selectedTaskRequest) {
+          return
+        }
+        state.selectedTask = task
         syncWorkingTimer(state.selectedTask)
         if (state.selectedTask) {
           state.selectedModelId = state.selectedTask.modelId
@@ -647,9 +849,87 @@ export const createInstance = async (
           void setChatTaskHash(execute)
         }
         state.draft = ''
+        state.composerImages = []
         state.activityExpanded = false
         state.changesExpanded = false
+        void syncWindowTitle().catch(() => {})
       }
+    },
+    async handleImageDrop(dropId: unknown): Promise<void> {
+      if (typeof dropId !== 'number') {
+        return
+      }
+      try {
+        const files = await imageTransferHost.getDroppedFiles(dropId)
+        await addImageFiles(files)
+      } catch (error) {
+        state.errorMessage =
+          error instanceof Error ? error.message : String(error)
+        await context?.requestRerender()
+      } finally {
+        await imageTransferHost.discardDrop(dropId).catch(() => {})
+      }
+    },
+    async handleImagePaste(fileIds: unknown): Promise<void> {
+      if (
+        !Array.isArray(fileIds) ||
+        fileIds.some((id) => typeof id !== 'number')
+      ) {
+        return
+      }
+      try {
+        const files = await imageTransferHost.getClipboardFiles(fileIds)
+        await addImageFiles(files)
+      } catch (error) {
+        state.errorMessage =
+          error instanceof Error ? error.message : String(error)
+        await context?.requestRerender()
+      }
+    },
+    handleSessionsSashPointerDown(
+      clientX: number,
+      containerWidth: number,
+      containerLeft: number,
+      sessionsLeft: number,
+      sessionsWidth: number,
+    ): void {
+      if (
+        !Number.isFinite(clientX) ||
+        !Number.isFinite(containerWidth) ||
+        containerWidth <= 0 ||
+        !Number.isFinite(containerLeft) ||
+        !Number.isFinite(sessionsLeft) ||
+        !Number.isFinite(sessionsWidth)
+      ) {
+        return
+      }
+      sessionsSashDrag = {
+        containerWidth,
+        isRight: sessionsLeft - containerLeft > containerWidth / 2,
+        startPointerX: clientX,
+        startWidth: sessionsWidth,
+      }
+    },
+    handleSessionsSashPointerMove(clientX: number): void {
+      const drag = sessionsSashDrag
+      if (!drag || !Number.isFinite(clientX)) {
+        return
+      }
+      const minimumWidth = Math.min(160, drag.containerWidth / 2)
+      const maximumWidth = Math.max(
+        minimumWidth,
+        drag.containerWidth - Math.min(320, drag.containerWidth / 2),
+      )
+      const pointerDelta = clientX - drag.startPointerX
+      const width =
+        drag.startWidth + (drag.isRight ? -pointerDelta : pointerDelta)
+      state.sessionsWidth = Math.max(
+        minimumWidth,
+        Math.min(maximumWidth, width),
+      )
+    },
+    handleSessionsSashPointerUp(): void {
+      sessionsSashDrag = undefined
     },
     newChat,
     render(): readonly VirtualDomNode[] {
@@ -676,6 +956,7 @@ export const createInstance = async (
       }
       Object.assign(state, {
         ...newState,
+        composerImages: newState.composerImages || [],
         selectedTask: newState.selectedTask,
       })
       syncWorkingTimer(state.selectedTask)
@@ -684,6 +965,7 @@ export const createInstance = async (
     toggleFocusMode: handleToggleFocusMode,
   }
   syncWorkingTimer(selectedTask)
+  void syncWindowTitle().catch(() => {})
   if (backendConfiguration?.baseUrl) {
     authStatePoll = setInterval(() => {
       void syncAuthState()

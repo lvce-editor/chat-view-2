@@ -124,6 +124,46 @@ whats json`,
   )
 })
 
+test('sends image attachments with their MIME-aware data URLs', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      id: 'response-image',
+      output: [],
+      status: 'completed',
+    }),
+  )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+  const dataUrl = 'data:image/png;base64,aGVsbG8='
+
+  await backend.runStep({
+    input: [
+      {
+        attachments: [{ dataUrl, mimeType: 'image/png', name: 'sample.png' }],
+        content: 'What is in this image?',
+        role: 'user',
+      },
+    ],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+
+  const requestBody = fetchMock.mock.calls[0]?.[1]?.body
+  if (typeof requestBody !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  const request = JSON.parse(requestBody) as {
+    input: readonly { content: readonly Readonly<Record<string, unknown>>[] }[]
+  }
+  expect(request.input[0]?.content).toEqual([
+    { text: 'What is in this image?', type: 'input_text' },
+    { detail: 'auto', image_url: dataUrl, type: 'input_image' },
+  ])
+})
+
 test('uses the backend message when loading models is unauthorized', async () => {
   const fetchMock = jest
     .fn<typeof fetch>()

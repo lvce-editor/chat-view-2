@@ -132,6 +132,218 @@ const renderMessageTextWithoutBold = (
 
 const boldPattern = /\*\*([\s\S]+?)\*\*/gu
 
+const jsonStringPattern = /"(?:\\.|[^"\\])*"/y
+const jsonNumberPattern = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y
+const jsonLiteralPattern = /(?:true|false|null)\b/y
+const jsonKeySuffixPattern = /^\s*:/u
+const languageWhitespacePattern = /\s+/u
+
+const getFenceMarkerEnd = (
+  text: string,
+  lineStart: number,
+  minimumLength: number,
+): number | undefined => {
+  let index = lineStart
+  let indentation = 0
+  while (text[index] === ' ' && indentation < 4) {
+    index++
+    indentation++
+  }
+  if (indentation > 3) {
+    return undefined
+  }
+  const markerStart = index
+  while (text[index] === '`') {
+    index++
+  }
+  return index - markerStart >= minimumLength ? index : undefined
+}
+
+const isFenceLineEnd = (text: string, start: number): boolean => {
+  let index = start
+  while (text[index] === ' ' || text[index] === '\t') {
+    index++
+  }
+  return index === text.length || text[index] === '\n'
+}
+
+const findClosingFence = (
+  text: string,
+  start: number,
+  minimumLength: number,
+): { readonly end: number; readonly index: number } | undefined => {
+  let lineStart = start
+  while (lineStart <= text.length) {
+    const markerEnd = getFenceMarkerEnd(text, lineStart, minimumLength)
+    if (markerEnd !== undefined && isFenceLineEnd(text, markerEnd)) {
+      let end = markerEnd
+      while (text[end] === ' ' || text[end] === '\t') {
+        end++
+      }
+      return { end, index: lineStart - 1 }
+    }
+    const lineBreakIndex = text.indexOf('\n', lineStart)
+    if (lineBreakIndex === -1) {
+      return undefined
+    }
+    lineStart = lineBreakIndex + 1
+  }
+  return undefined
+}
+
+const findNextOpeningFence = (
+  text: string,
+  start: number,
+):
+  | {
+      readonly contentStart: number
+      readonly fenceLength: number
+      readonly index: number
+      readonly language: string
+    }
+  | undefined => {
+  const previousLineBreak = text.indexOf('\n', start - 1)
+  if (start > 0 && previousLineBreak === -1) {
+    return undefined
+  }
+  let lineStart = start === 0 ? 0 : previousLineBreak + 1
+  while (lineStart >= 0) {
+    const lineEnd = text.indexOf('\n', lineStart)
+    if (lineEnd === -1) {
+      return undefined
+    }
+    const markerEnd = getFenceMarkerEnd(text, lineStart, 3)
+    if (markerEnd !== undefined && markerEnd <= lineEnd) {
+      let markerStart = lineStart
+      while (text[markerStart] === ' ' && markerStart - lineStart < 3) {
+        markerStart++
+      }
+      const fenceLength = markerEnd - markerStart
+      const language = text
+        .slice(markerEnd, lineEnd)
+        .trim()
+        .split(languageWhitespacePattern, 1)[0]
+        .toLowerCase()
+      return {
+        contentStart: lineEnd + 1,
+        fenceLength,
+        index: lineStart,
+        language,
+      }
+    }
+    lineStart = lineEnd + 1
+  }
+  return undefined
+}
+
+const createJsonToken = (
+  text: string,
+  index: number,
+): { readonly className: string; readonly length: number } | undefined => {
+  const char = text[index]
+  if (char === '"') {
+    jsonStringPattern.lastIndex = index
+    const match = jsonStringPattern.exec(text)
+    if (match) {
+      const isKey = jsonKeySuffixPattern.test(
+        text.slice(index + match[0].length),
+      )
+      return {
+        className: isKey ? 'ChatCodeTokenKey' : 'ChatCodeTokenString',
+        length: match[0].length,
+      }
+    }
+    return undefined
+  }
+  if ('{}[],:'.includes(char)) {
+    return { className: 'ChatCodeTokenPunctuation', length: 1 }
+  }
+  jsonNumberPattern.lastIndex = index
+  const numberMatch = jsonNumberPattern.exec(text)
+  if (numberMatch) {
+    return { className: 'ChatCodeTokenNumber', length: numberMatch[0].length }
+  }
+  jsonLiteralPattern.lastIndex = index
+  const literalMatch = jsonLiteralPattern.exec(text)
+  if (literalMatch) {
+    return { className: 'ChatCodeTokenLiteral', length: literalMatch[0].length }
+  }
+  return undefined
+}
+
+const renderJsonCode = (text: string): readonly Dom.TreeNode[] => {
+  const children: Dom.TreeNode[] = []
+  let previousIndex = 0
+  let index = 0
+  while (index < text.length) {
+    const token = createJsonToken(text, index)
+    if (!token) {
+      index++
+      continue
+    }
+    if (index > previousIndex) {
+      children.push(Dom.textNode(text.slice(previousIndex, index)))
+    }
+    children.push(
+      Dom.node(VirtualDomElements.Span, { className: token.className }, [
+        Dom.textNode(text.slice(index, index + token.length)),
+      ]),
+    )
+    index += token.length
+    previousIndex = index
+  }
+  if (previousIndex < text.length) {
+    children.push(Dom.textNode(text.slice(previousIndex)))
+  }
+  return children
+}
+
+const renderCodeBlock = (text: string, language: string): Dom.TreeNode => {
+  const children =
+    language.toLowerCase() === 'json'
+      ? renderJsonCode(text)
+      : [Dom.textNode(text)]
+  return Dom.node(VirtualDomElements.Pre, { className: 'ChatCodeBlock' }, [
+    Dom.node(VirtualDomElements.Code, {}, children),
+  ])
+}
+
+const renderMessageTextWithCode = (text: string): readonly Dom.TreeNode[] => {
+  const children: Dom.TreeNode[] = []
+  let previousIndex = 0
+  while (previousIndex < text.length) {
+    const openingFence = findNextOpeningFence(text, previousIndex)
+    if (!openingFence) {
+      break
+    }
+    const closingFence = findClosingFence(
+      text,
+      openingFence.contentStart,
+      openingFence.fenceLength,
+    )
+    if (openingFence.index > previousIndex) {
+      children.push(
+        ...renderMessageText(text.slice(previousIndex, openingFence.index)),
+      )
+    }
+    const blockEnd = closingFence ? closingFence.index + 1 : text.length
+    children.push(
+      renderCodeBlock(
+        text.slice(openingFence.contentStart, blockEnd),
+        openingFence.language,
+      ),
+    )
+    previousIndex = closingFence ? closingFence.end : text.length
+    if (!closingFence) {
+      break
+    }
+  }
+  if (previousIndex < text.length) {
+    children.push(...renderMessageText(text.slice(previousIndex)))
+  }
+  return children
+}
+
 const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
   const children: Dom.TreeNode[] = []
   let previousIndex = 0
@@ -168,7 +380,21 @@ const renderMessage = (
     message.type === 'user-message' ? 'ChatMessageUser' : 'ChatMessageAssistant'
   const copied = message.id === copiedMessageId
   return Dom.div(`ChatMessage ${roleClass}`, [
-    Dom.div('ChatMessageText', renderMessageText(message.text)),
+    Dom.div('ChatMessageText', renderMessageTextWithCode(message.text)),
+    ...(message.type === 'user-message' && message.attachments?.length
+      ? [
+          Dom.div(
+            'ChatMessageImages',
+            message.attachments.map((attachment) =>
+              Dom.node(VirtualDomElements.Img, {
+                alt: attachment.name,
+                className: 'ChatMessageImage',
+                src: attachment.dataUrl,
+              }),
+            ),
+          ),
+        ]
+      : []),
     ...(message.type === 'user-message'
       ? [
           Dom.div('ChatMessageMetadata', [
@@ -192,7 +418,7 @@ const renderMessage = (
 
 const renderStreamingMessage = (text: string): Dom.TreeNode => {
   return Dom.div('ChatMessage ChatMessageAssistant ChatMessageStreaming', [
-    Dom.div('ChatMessageText', renderMessageText(text)),
+    Dom.div('ChatMessageText', renderMessageTextWithCode(text)),
   ])
 }
 
@@ -232,7 +458,13 @@ const getSelectedModelLabel = (state: Readonly<ChatViewState>): string => {
 }
 
 const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const { draft, modelPickerOpen, selectedModelId, selectedTask } = state
+  const {
+    composerImages,
+    draft,
+    modelPickerOpen,
+    selectedModelId,
+    selectedTask,
+  } = state
   const running = isRunning(selectedTask)
   const placeholder = running
     ? 'Steer the current task'
@@ -242,7 +474,43 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   return Dom.div('ChatComposerArea', [
     renderModelPicker(state),
     Dom.form('composer', 'ChatComposer', [
-      Dom.div('ChatComposerInputContainer', [Dom.textArea(draft, placeholder)]),
+      ...(composerImages.length > 0
+        ? [
+            Dom.div(
+              'ChatComposerImages',
+              composerImages.map((image) =>
+                Dom.div(`ChatComposerImage ChatComposerImage-${image.status}`, [
+                  ...(image.status === 'ready' && image.attachment
+                    ? [
+                        Dom.node(VirtualDomElements.Img, {
+                          alt: image.name,
+                          className: 'ChatComposerImagePreview',
+                          src: image.attachment.dataUrl,
+                        }),
+                      ]
+                    : [
+                        Dom.div('ChatComposerImageStatus', [
+                          Dom.textNode(
+                            image.status === 'loading'
+                              ? 'Loading image…'
+                              : 'Could not load image',
+                          ),
+                        ]),
+                      ]),
+                  Dom.button(
+                    `remove-image:${image.id}`,
+                    '×',
+                    'ChatComposerImageRemove',
+                    { ariaLabel: `Remove ${image.name}` },
+                  ),
+                ]),
+              ),
+            ),
+          ]
+        : []),
+      Dom.div('ChatComposerInputContainer', [
+        Dom.textArea(draft, placeholder, { onPaste: 'handleImagePaste' }),
+      ]),
       Dom.div('ChatComposerControls', [
         Dom.div('ChatComposerSpacer', []),
         Dom.button(
@@ -258,7 +526,10 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
             })
           : Dom.button('submit', '↑', 'ChatSubmitButton', {
               ariaLabel: 'Send message',
-              disabled: !draft.trim() || !selectedModelId,
+              disabled:
+                (!draft.trim() && composerImages.length === 0) ||
+                composerImages.some((image) => image.status !== 'ready') ||
+                !selectedModelId,
               title: 'Send message',
             }),
       ]),
@@ -270,7 +541,7 @@ const renderFocusModeButton = (
   state: Readonly<ChatViewState>,
 ): readonly Dom.TreeNode[] => {
   const { focusMode, focusModeEnabled } = state
-  if (!focusModeEnabled) {
+  if (!focusModeEnabled || focusMode) {
     return []
   }
   return [
@@ -296,25 +567,43 @@ const getRootClassName = (
   return `ChatView ${viewClassName}${focusMode ? ' ChatFocusMode' : ''}`
 }
 
+const getAiNativeLayoutClassName = (
+  theme: ChatViewState['aiNativeTheme'],
+): string => {
+  return theme === 'default'
+    ? 'ChatAiNativeLayout'
+    : `ChatAiNativeLayout ChatAiNativeLayoutTheme-${theme}`
+}
+
+const getAiNativeThemeClassName = (
+  theme: ChatViewState['aiNativeTheme'],
+): string => {
+  return theme === 'default' ? '' : ` ChatAiNativeLayoutTheme-${theme}`
+}
+
 const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   const { errorMessage, fontFamily, fontSize, tasks } = state
-  return Dom.div(getRootClassName(state, 'ChatListView'), [
-    Dom.div('ChatTaskListHeader', [
-      Dom.heading(1, 'ChatTitle', 'Tasks'),
-      Dom.div('ChatHeaderSpacer', []),
-      ...renderFocusModeButton(state),
-      Dom.div('ChatTaskCount', [
-        Dom.textNode(
-          `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`,
-        ),
+  return Dom.div(
+    getRootClassName(state, 'ChatListView'),
+    [
+      Dom.div('ChatTaskListHeader', [
+        Dom.heading(1, 'ChatTitle', 'Tasks'),
+        Dom.div('ChatHeaderSpacer', []),
+        ...renderFocusModeButton(state),
+        Dom.div('ChatTaskCount', [
+          Dom.textNode(
+            `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`,
+          ),
+        ]),
       ]),
-    ]),
-    ...(errorMessage
-      ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-      : []),
-    renderTaskList(tasks, fontFamily, fontSize),
-    renderComposer(state),
-  ])
+      ...(errorMessage
+        ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+        : []),
+      renderTaskList(tasks, fontFamily, fontSize),
+      renderComposer(state),
+    ],
+    { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+  )
 }
 
 const getLatestActivities = (
@@ -436,42 +725,54 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 }
 
 const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const { copiedMessageId, errorMessage, selectedTask: task } = state
+  const { copiedMessageId, errorMessage, focusMode, selectedTask: task } = state
   if (!task) {
     return renderListView(state)
   }
   const summary = summarizeTask(task)
-  return Dom.div(getRootClassName(state, 'ChatDetailView'), [
-    Dom.div('ChatDetailHeader', [
-      Dom.button('back', 'Back', 'ChatBackButton'),
-      Dom.heading(1, 'ChatDetailTitle', task.title),
-      ...renderFocusModeButton(state),
-      Dom.button('new-task', 'New', 'ChatNewTaskButton'),
-    ]),
-    Dom.div('ChatMessages', [
-      ...summary.messages.map((message) =>
-        renderMessage(message, copiedMessageId),
-      ),
-      ...(task.streamingText
-        ? [renderStreamingMessage(task.streamingText)]
-        : []),
-      renderActivity(state),
-      ...(summary.errorMessage
-        ? [Dom.div('ChatErrorBanner', [Dom.textNode(summary.errorMessage)])]
-        : []),
-      ...(errorMessage
-        ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-        : []),
-    ]),
-    renderChanges(state),
-    renderComposer(state),
+  const header = Dom.div('ChatDetailHeader', [
+    Dom.button('back', 'Back', 'ChatBackButton'),
+    Dom.heading(1, 'ChatDetailTitle', task.title),
+    ...renderFocusModeButton(state),
+    ...(focusMode ? [] : [Dom.button('new-task', 'New', 'ChatNewTaskButton')]),
   ])
+  const messageContent = [
+    ...summary.messages.map((message) =>
+      renderMessage(message, copiedMessageId),
+    ),
+    ...(task.streamingText ? [renderStreamingMessage(task.streamingText)] : []),
+    renderActivity(state),
+    ...(summary.errorMessage
+      ? [Dom.div('ChatErrorBanner', [Dom.textNode(summary.errorMessage)])]
+      : []),
+    ...(errorMessage
+      ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+      : []),
+  ]
+  const messages = Dom.div('ChatMessages', [
+    Dom.div('ChatMessagesContent', messageContent),
+  ])
+  const changes = renderChanges(state)
+  const composer = renderComposer(state)
+  if (focusMode) {
+    return Dom.div(
+      getRootClassName(state, 'ChatDetailView'),
+      [header, Dom.div('ChatConversationBody', [messages, changes, composer])],
+      { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+    )
+  }
+  return Dom.div(
+    getRootClassName(state, 'ChatDetailView'),
+    [header, messages, changes, composer],
+    { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+  )
 }
 
 export const render = (
   state: Readonly<ChatViewState>,
 ): readonly VirtualDomNode[] => {
   const {
+    aiNativeTheme,
     errorMessage,
     focusMode,
     fontFamily,
@@ -479,53 +780,96 @@ export const render = (
     loginPending,
     loginRequired,
     selectedTask,
+    sessionsWidth,
     tasks,
   } = state
   if (loginRequired) {
     return Dom.flatten(
-      Dom.div(getRootClassName(state, 'ChatLoggedOut'), [
-        ...renderFocusModeButton(state),
-        Dom.node(VirtualDomElements.P, { className: 'ChatLoginDescription' }, [
-          Dom.textNode(
-            'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
+      Dom.div(
+        `${getRootClassName(state, 'ChatLoggedOut')}${focusMode ? getAiNativeThemeClassName(aiNativeTheme) : ''}`,
+        [
+          ...renderFocusModeButton(state),
+          Dom.node(
+            VirtualDomElements.P,
+            { className: 'ChatLoginDescription' },
+            [
+              Dom.textNode(
+                'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
+              ),
+            ],
           ),
-        ]),
-        Dom.button('login', 'Login', 'ChatLoginButton', {
-          disabled: loginPending,
-        }),
-        ...(errorMessage && !loginPending
-          ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
-          : []),
-      ]),
+          Dom.button('login', 'Login', 'ChatLoginButton', {
+            disabled: loginPending,
+          }),
+          ...(errorMessage && !loginPending
+            ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
+            : []),
+        ],
+        { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+      ),
     )
   }
   if (focusMode) {
     const conversation = selectedTask
       ? renderDetailView(state)
-      : Dom.div('ChatView ChatDetailView', [
-          Dom.div('ChatDetailHeader', [
-            Dom.heading(1, 'ChatTitle', 'Chat'),
-            ...renderFocusModeButton(state),
-          ]),
-          Dom.div('ChatMessages', [
-            Dom.heading(2, 'ChatEmptyTitle', 'What would you like to work on?'),
-          ]),
-          ...(errorMessage
-            ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-            : []),
-          renderComposer(state),
-        ])
+      : Dom.div(
+          'ChatView ChatDetailView',
+          [
+            Dom.div('ChatDetailHeader', [
+              Dom.heading(1, 'ChatTitle', 'Chat'),
+              ...renderFocusModeButton(state),
+            ]),
+            Dom.div('ChatConversationBody', [
+              Dom.div('ChatMessages', [
+                Dom.div('ChatMessagesContent', [
+                  Dom.heading(
+                    2,
+                    'ChatEmptyTitle',
+                    'What would you like to work on?',
+                  ),
+                  ...(errorMessage
+                    ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+                    : []),
+                ]),
+              ]),
+              renderChanges(state),
+              renderComposer(state),
+            ]),
+          ],
+          { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+        )
     return Dom.flatten(
-      Dom.div('ChatView ChatAiNativeLayout', [
-        Dom.div('ChatSessions', [
-          Dom.div('ChatTaskListHeader', [
-            Dom.heading(1, 'ChatTitle', 'Sessions'),
-            Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
-          ]),
-          renderTaskList(tasks, fontFamily, fontSize),
-        ]),
-        conversation,
-      ]),
+      Dom.div(
+        `ChatView ${getAiNativeLayoutClassName(aiNativeTheme)}`,
+        [
+          Dom.div(
+            'ChatSessions',
+            [
+              Dom.div('ChatTaskListHeader', [
+                Dom.heading(1, 'ChatTitle', 'Sessions'),
+                Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
+              ]),
+              renderTaskList(tasks, fontFamily, fontSize),
+            ],
+            {
+              ...(sessionsWidth !== undefined && {
+                style: `--ChatSessionsWidth: ${sessionsWidth}px`,
+              }),
+            },
+          ),
+          Dom.node(VirtualDomElements.Div, {
+            ariaLabel: 'Resize sessions panel',
+            ariaOrientation: 'vertical',
+            className: 'ChatSessionsSash',
+            name: 'sessions-sash',
+            onPointerDown: 'handleSessionsSashPointerDown',
+            role: 'separator',
+            tabIndex: -1,
+          }),
+          conversation,
+        ],
+        { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+      ),
     )
   }
   return Dom.flatten(
