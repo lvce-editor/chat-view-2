@@ -39,6 +39,10 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
       params: ['handleImagePaste', 'event.clipboardData.files2'],
     },
     {
+      name: 'handleKeyDown',
+      params: ['handleKeyDown', 'event.key'],
+    },
+    {
       name: 'handleImageDrop',
       params: ['handleImageDrop', 'event.dropId'],
       preventDefault: true,

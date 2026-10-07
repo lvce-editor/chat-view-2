@@ -33,6 +33,7 @@ export const div = (
   options: Readonly<{
     onDragOver?: string
     onDrop?: string
+    onKeyDown?: string
     style?: string
   }> = {},
 ): TreeNode => {
@@ -43,6 +44,7 @@ export const div = (
       ...(options.style && { style: options.style }),
       ...(options.onDragOver && { onDragOver: options.onDragOver }),
       ...(options.onDrop && { onDrop: options.onDrop }),
+      ...(options.onKeyDown && { onKeyDown: options.onKeyDown }),
     },
     children,
   )
