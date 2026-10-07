@@ -569,14 +569,14 @@ export const createInstance = async (
     }
   }
 
-  const setTask = (task: ChatTask): void => {
+  const setTask = async (task: ChatTask): Promise<void> => {
     if (archivedTaskIds.has(task.id)) {
       return
     }
     const taskChanged = state.selectedTask?.id !== task.id
     state.selectedTask = task
     if (taskChanged) {
-      void setChatTaskHash(execute, task.id)
+      await setChatTaskHash(execute, task.id)
     }
     syncWorkingTimer(task)
     state.tasks = [
@@ -593,7 +593,7 @@ export const createInstance = async (
     if (disposed || request !== selectedTaskRequest) {
       return
     }
-    setTask(task)
+    await setTask(task)
     await context?.requestRerender()
   }
 
@@ -760,7 +760,7 @@ export const createInstance = async (
       }
       if (event.name === 'stop') {
         if (state.selectedTask?.status === 'running') {
-          setTask(setStatus(state.selectedTask, 'stopping'))
+          await setTask(setStatus(state.selectedTask, 'stopping'))
         }
         activeController?.abort()
         return
@@ -783,7 +783,7 @@ export const createInstance = async (
       }
       if (event.name === 'revert' && state.selectedTask) {
         try {
-          setTask(await api.revertTask(state.selectedTask))
+          await setTask(await api.revertTask(state.selectedTask))
           state.errorMessage = ''
         } catch (error) {
           state.errorMessage =
@@ -844,9 +844,9 @@ export const createInstance = async (
         syncWorkingTimer(state.selectedTask)
         if (state.selectedTask) {
           state.selectedModelId = state.selectedTask.modelId
-          void setChatTaskHash(execute, state.selectedTask.id)
+          await setChatTaskHash(execute, state.selectedTask.id)
         } else {
-          void setChatTaskHash(execute)
+          await setChatTaskHash(execute)
         }
         state.draft = ''
         state.composerImages = []
