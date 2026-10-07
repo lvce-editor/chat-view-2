@@ -29,6 +29,10 @@ import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
+import {
+  getChatTaskHash,
+  parseChatTaskHash,
+} from '../ChatSessionUrl/ChatSessionUrl.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
@@ -107,6 +111,26 @@ const getEventString = (event: Readonly<ViewEvent>): string => {
 
 const getSavedState = (value: unknown): SavedState => {
   return value && typeof value === 'object' ? value : {}
+}
+
+const getHref = async (execute: ExecuteCommand): Promise<string> => {
+  try {
+    const href = await execute('Layout.getHref')
+    return typeof href === 'string' ? href : ''
+  } catch {
+    return ''
+  }
+}
+
+const setChatTaskHash = async (
+  execute: ExecuteCommand,
+  taskId?: string,
+): Promise<void> => {
+  try {
+    await execute('Layout.setHash', taskId ? getChatTaskHash(taskId) : '')
+  } catch {
+    // Older editor builds do not expose the hash command.
+  }
 }
 
 const activeInstances = new Set<ActiveChatViewInstance>()
@@ -215,9 +239,20 @@ export const createInstance = async (
   const fontFamily = await readFontFamily(readPreference)
   const fontSize = await readFontSize(readPreference)
   const selectedModelId = getSelectedModelId(models, preferredModelId)
-  const selectedTask = saved.selectedTaskId
-    ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
-    : undefined
+  const href = await getHref(execute)
+  const chatHash = parseChatTaskHash(href)
+  const urlTask =
+    chatHash.type === 'task'
+      ? await api.getTask(chatHash.id).catch(() => undefined)
+      : undefined
+  const selectedTask =
+    urlTask ||
+    (saved.selectedTaskId
+      ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
+      : undefined)
+  if (chatHash.type === 'invalid') {
+    await setChatTaskHash(execute)
+  }
   const focusModeEnabled = await getFocusModeEnabled()
   const state: MutableChatViewState = {
     activityExpanded: false,
@@ -362,6 +397,7 @@ export const createInstance = async (
   const newChat = async (requestRerender = false): Promise<void> => {
     resetCopyFeedback()
     state.selectedTask = undefined
+    await setChatTaskHash(execute)
     state.draft = ''
     state.activityExpanded = false
     state.changesExpanded = false
@@ -375,7 +411,11 @@ export const createInstance = async (
     if (archivedTaskIds.has(task.id)) {
       return
     }
+    const taskChanged = state.selectedTask?.id !== task.id
     state.selectedTask = task
+    if (taskChanged) {
+      void setChatTaskHash(execute, task.id)
+    }
     syncWorkingTimer(task)
     state.tasks = [
       task,
@@ -602,6 +642,9 @@ export const createInstance = async (
         syncWorkingTimer(state.selectedTask)
         if (state.selectedTask) {
           state.selectedModelId = state.selectedTask.modelId
+          void setChatTaskHash(execute, state.selectedTask.id)
+        } else {
+          void setChatTaskHash(execute)
         }
         state.draft = ''
         state.activityExpanded = false

@@ -138,6 +138,47 @@ test('saves and restores the composer draft through view state', async () => {
   )
 })
 
+test('restores the URL task before the previously saved task', async () => {
+  const execute = jest.fn(async (command: string) => {
+    return command === 'Layout.getHref'
+      ? 'https://example.com/static/?workspace=project#chat-mock-task-2'
+      : undefined
+  })
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: 'mock-task-1' }),
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+  expect(execute).toHaveBeenCalledWith('Layout.getHref')
+})
+
+test('syncs selected and cleared tasks to the URL fragment', async () => {
+  const execute = jest.fn(
+    async (_command: string, ..._args: readonly unknown[]) => undefined,
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  await dispatch(instance, {
+    name: 'task:mock-task-2',
+    type: 'click',
+  })
+  expect(execute).toHaveBeenLastCalledWith(
+    'Layout.setHash',
+    '#chat-mock-task-2',
+  )
+
+  await instance.newChat()
+  expect(execute).toHaveBeenLastCalledWith('Layout.setHash', '')
+})
+
 test('exposes and applies live component state without replacing the chat instance', async () => {
   const instance = await createTestInstance()
   expect(view).toEqual(

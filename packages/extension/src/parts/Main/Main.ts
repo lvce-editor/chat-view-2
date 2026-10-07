@@ -11,6 +11,7 @@ import {
   toggleActiveChatViewFocusMode,
 } from '../ChatView/CreateInstance.ts'
 import { headlessChatCommands } from '../HeadlessChat/HeadlessChat.ts'
+import { parseChatTaskHash } from '../ChatSessionUrl/ChatSessionUrl.ts'
 
 const state = {
   activated: false,
@@ -23,6 +24,14 @@ export const activate = async (): Promise<void> => {
   state.activated = true
   await activateExtensionApi()
   registerView(view)
+  try {
+    const href = await executeCommand('Layout.getHref')
+    if (typeof href === 'string' && parseChatTaskHash(href).type === 'task') {
+      await executeCommand('SideBar.show', viewId, true)
+    }
+  } catch {
+    // The editor may not expose URL commands while the extension is activating.
+  }
   registerCommand({
     async execute(modelId?: unknown) {
       return headlessChatCommands.createSession(modelId)
