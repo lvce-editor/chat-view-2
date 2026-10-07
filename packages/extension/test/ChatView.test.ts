@@ -27,6 +27,27 @@ const getNodesByClass = (
   return dom.filter((node) => node.className?.split(' ').includes(className))
 }
 
+const getPathByClass = (
+  dom: readonly any[],
+  className: string,
+): readonly number[] | undefined => {
+  let index = 0
+  const visit = (path: readonly number[]): readonly number[] | undefined => {
+    const node = dom[index++]
+    if (node.className?.split(' ').includes(className)) {
+      return path
+    }
+    for (let childIndex = 0; childIndex < node.childCount; childIndex++) {
+      const childPath = visit([...path, childIndex])
+      if (childPath) {
+        return childPath
+      }
+    }
+    return undefined
+  }
+  return visit([])
+}
+
 const dispatch = async (
   instance: Awaited<ReturnType<typeof createInstance>>,
   event: ViewEvent,
@@ -367,8 +388,26 @@ test('renders the experimental focus mode control when enabled', async () => {
       className: 'ChatView ChatAiNativeLayout',
     }),
   )
-  expect(getNodesByClass(focusedDom, 'ChatNewConversation')).toHaveLength(1)
-  expect(getNodesByClass(focusedDom, 'ChatNewConversationBody')).toHaveLength(1)
+  expect(getNodesByClass(focusedDom, 'ChatConversationBody')).toHaveLength(1)
+  expect(getNodesByClass(focusedDom, 'ChatEmptyTitle')).toHaveLength(1)
+})
+
+test('keeps the AI-native composer in place after the first message', async () => {
+  const instance = await createTestInstance()
+  const state = instance.getState() as { focusMode: boolean }
+  state.focusMode = true
+  const emptyPath = getPathByClass(instance.render(), 'ChatComposer')
+
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'A centered first message',
+  })
+  await instance.submit()
+
+  const submittedPath = getPathByClass(instance.render(), 'ChatComposer')
+  expect(submittedPath).toEqual(emptyPath)
+  expect(instance.getContext()['chat2.composerFocus']).toBe(true)
 })
 
 test('uses the configured task list font size', async () => {

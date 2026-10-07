@@ -436,35 +436,43 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 }
 
 const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const { copiedMessageId, errorMessage, selectedTask: task } = state
+  const { copiedMessageId, errorMessage, focusMode, selectedTask: task } = state
   if (!task) {
     return renderListView(state)
   }
   const summary = summarizeTask(task)
+  const header = Dom.div('ChatDetailHeader', [
+    Dom.button('back', 'Back', 'ChatBackButton'),
+    Dom.heading(1, 'ChatDetailTitle', task.title),
+    ...renderFocusModeButton(state),
+    Dom.button('new-task', 'New', 'ChatNewTaskButton'),
+  ])
+  const messages = Dom.div('ChatMessages', [
+    ...summary.messages.map((message) =>
+      renderMessage(message, copiedMessageId),
+    ),
+    ...(task.streamingText ? [renderStreamingMessage(task.streamingText)] : []),
+    renderActivity(state),
+    ...(summary.errorMessage
+      ? [Dom.div('ChatErrorBanner', [Dom.textNode(summary.errorMessage)])]
+      : []),
+    ...(errorMessage
+      ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+      : []),
+  ])
+  const changes = renderChanges(state)
+  const composer = renderComposer(state)
+  if (focusMode) {
+    return Dom.div(getRootClassName(state, 'ChatDetailView'), [
+      header,
+      Dom.div('ChatConversationBody', [messages, changes, composer]),
+    ])
+  }
   return Dom.div(getRootClassName(state, 'ChatDetailView'), [
-    Dom.div('ChatDetailHeader', [
-      Dom.button('back', 'Back', 'ChatBackButton'),
-      Dom.heading(1, 'ChatDetailTitle', task.title),
-      ...renderFocusModeButton(state),
-      Dom.button('new-task', 'New', 'ChatNewTaskButton'),
-    ]),
-    Dom.div('ChatMessages', [
-      ...summary.messages.map((message) =>
-        renderMessage(message, copiedMessageId),
-      ),
-      ...(task.streamingText
-        ? [renderStreamingMessage(task.streamingText)]
-        : []),
-      renderActivity(state),
-      ...(summary.errorMessage
-        ? [Dom.div('ChatErrorBanner', [Dom.textNode(summary.errorMessage)])]
-        : []),
-      ...(errorMessage
-        ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-        : []),
-    ]),
-    renderChanges(state),
-    renderComposer(state),
+    header,
+    messages,
+    changes,
+    composer,
   ])
 }
 
@@ -502,22 +510,23 @@ export const render = (
   if (focusMode) {
     const conversation = selectedTask
       ? renderDetailView(state)
-      : Dom.div('ChatView ChatDetailView ChatNewConversation', [
+      : Dom.div('ChatView ChatDetailView', [
           Dom.div('ChatDetailHeader', [
             Dom.heading(1, 'ChatTitle', 'Chat'),
             ...renderFocusModeButton(state),
           ]),
-          Dom.div('ChatNewConversationBody', [
+          Dom.div('ChatConversationBody', [
             Dom.div('ChatMessages', [
               Dom.heading(
                 2,
                 'ChatEmptyTitle',
                 'What would you like to work on?',
               ),
+              ...(errorMessage
+                ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+                : []),
             ]),
-            ...(errorMessage
-              ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-              : []),
+            renderChanges(state),
             renderComposer(state),
           ]),
         ])
