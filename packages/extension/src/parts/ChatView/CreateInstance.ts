@@ -32,6 +32,7 @@ import {
   type DefaultChatApiOptions,
 } from '../DefaultChatApi/DefaultChatApi.ts'
 import { initializeImageTransfer } from '../InitializeImageTransfer/InitializeImageTransfer.ts'
+import { readAiNativeTheme } from './AiNativeTheme.ts'
 import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
@@ -268,6 +269,7 @@ export const createInstance = async (
     saved.selectedModelId || (await getPreferredModelId())
   const fontFamily = await readFontFamily(readPreference)
   const fontSize = await readFontSize(readPreference)
+  const aiNativeTheme = await readAiNativeTheme(readPreference)
   const selectedModelId = getSelectedModelId(models, preferredModelId)
   const selectedTask = saved.selectedTaskId
     ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
@@ -275,6 +277,7 @@ export const createInstance = async (
   const focusModeEnabled = await getFocusModeEnabled()
   const state: MutableChatViewState = {
     activityExpanded: false,
+    aiNativeTheme,
     changesExpanded: false,
     composerFocused: false,
     composerImages: [],

@@ -18,6 +18,12 @@
       "type": "string",
       "default": ""
     },
+    "chat2.aiNativeTheme": {
+      "type": "string",
+      "enum": ["default", "openai", "claude"],
+      "default": "default",
+      "description": "Color and typography preset for the AI-native Chat 2 layout."
+    },
     "chat2.experimentalFocusMode": {
       "type": "boolean",
       "default": true,
