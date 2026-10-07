@@ -727,6 +727,57 @@ test('renders message urls as external links and preserves punctuation', async (
   expect(getText(dom)).toContain('Inspect \nhttps://example.com/docs?q=chat\n.')
 })
 
+test('renders fenced JSON as safe highlighted code in messages and streaming text', async () => {
+  const timestamp = '2026-09-10T12:00:00.000Z'
+  const task: ChatTask = {
+    createdAt: timestamp,
+    events: [
+      createEvent({ text: 'Show an example', type: 'user-message' }),
+      createEvent({
+        text: 'Before **bold**\n```json\n{"jsonrpc":"2.0","method":"add","params":[2,3],"id":1}\n```\nAfter https://example.com\n```js\nconst sample = \'<img src=x onerror=alert(1)>\'\n```\n```\nplain code\n```',
+        type: 'assistant-message',
+      }),
+    ],
+    id: 'code-block-task',
+    modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+    status: 'completed',
+    streamingText: 'Partial\n```json\n{"ok":true',
+    title: 'Show an example',
+    updatedAt: timestamp,
+  }
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: task.id }),
+    {
+      ...createMockChatApi(),
+      async getTask() {
+        return task
+      },
+    },
+  )
+  try {
+    const dom = instance.render() as readonly any[]
+    expect(getNodesByClass(dom, 'ChatCodeBlock')).toHaveLength(4)
+    expect(getNodesByClass(dom, 'ChatCodeTokenKey')).toHaveLength(5)
+    expect(getNodesByClass(dom, 'ChatCodeTokenString')).toHaveLength(2)
+    expect(getNodesByClass(dom, 'ChatCodeTokenNumber')).toHaveLength(3)
+    expect(getNodesByClass(dom, 'ChatCodeTokenLiteral')).toHaveLength(1)
+    expect(getNodesByClass(dom, 'ChatMessageLink')).toHaveLength(1)
+    expect(getText(dom)).toContain('"jsonrpc"')
+    expect(getText(dom)).toContain('"ok"')
+    expect(getText(dom)).toContain('<img src=x onerror=alert(1)>')
+    expect(getText(dom)).toContain('plain code')
+    expect(getText(dom)).not.toContain('```')
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Img),
+    ).toHaveLength(0)
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Strong),
+    ).toHaveLength(1)
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('expands the changed-file fixture for review', async () => {
   const instance = await createTestInstance()
   await dispatch(instance, {
