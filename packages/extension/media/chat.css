@@ -810,6 +810,23 @@
   flex: 1;
   min-width: 0;
 }
+.ChatConversationBody {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: 0;
+  overflow: hidden;
+}
+.ChatConversationBody:has(.ChatEmptyTitle) {
+  justify-content: center;
+  overflow: auto;
+}
+.ChatConversationBody:has(.ChatEmptyTitle) > .ChatMessages {
+  flex: 0 0 auto;
+  align-items: center;
+  overflow: visible;
+}
 .ChatAiNativeLayout .ChatBackButton {
   display: none;
 }
