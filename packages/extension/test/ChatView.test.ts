@@ -870,6 +870,43 @@ test('opens a task, expands activity, and returns to the task list', async () =>
   expect(instance.getState().selectedTask).toBeUndefined()
 })
 
+test('keeps the latest task selected when an older task refresh finishes later', async () => {
+  const baseApi = createMockChatApi()
+  const getTask = baseApi.getTask.bind(baseApi)
+  const firstTask = await getTask('mock-task-1')
+  const secondTask = await getTask('mock-task-2')
+  if (!firstTask || !secondTask) {
+    throw new Error('Expected mock tasks to be available')
+  }
+  const firstTaskRefresh = Promise.withResolvers<ChatTask>()
+  const secondTaskRefresh = Promise.withResolvers<ChatTask>()
+  const api = {
+    ...baseApi,
+    getTask: jest.fn((id: string) => {
+      if (id === firstTask.id) {
+        return firstTaskRefresh.promise
+      }
+      return secondTaskRefresh.promise
+    }),
+  }
+  const instance = await createInstance(undefined, api)
+
+  const firstSelection = dispatch(instance, {
+    name: `task:${firstTask.id}`,
+    type: 'click',
+  })
+  const secondSelection = dispatch(instance, {
+    name: `task:${secondTask.id}`,
+    type: 'click',
+  })
+  secondTaskRefresh.resolve(secondTask)
+  await secondSelection
+  firstTaskRefresh.resolve(firstTask)
+  await firstSelection
+
+  expect(instance.getState().selectedTask?.id).toBe(secondTask.id)
+})
+
 test('opens a new chat from the active task', async () => {
   const instance = await createTestInstance()
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
