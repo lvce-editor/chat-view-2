@@ -568,6 +568,7 @@ export const render = (
     loginPending,
     loginRequired,
     selectedTask,
+    sessionsWidth,
     tasks,
   } = state
   if (loginRequired) {
@@ -639,8 +640,8 @@ export const render = (
               renderTaskList(tasks, fontFamily, fontSize),
             ],
             {
-              ...(state.sessionsWidth !== undefined && {
-                style: `--ChatSessionsWidth: ${state.sessionsWidth}px`,
+              ...(sessionsWidth !== undefined && {
+                style: `--ChatSessionsWidth: ${sessionsWidth}px`,
               }),
             },
           ),
