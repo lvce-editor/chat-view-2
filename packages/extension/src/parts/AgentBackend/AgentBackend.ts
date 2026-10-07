@@ -4,9 +4,10 @@ import type {
   AgentToolDefinition,
   AgentToolModelOutput,
 } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
-import type { ChatModel } from '../ChatApi/ChatApi.ts'
+import type { ChatImageAttachment, ChatModel } from '../ChatApi/ChatApi.ts'
 
 export interface AgentInputMessage {
+  readonly attachments?: readonly ChatImageAttachment[]
   readonly content: string
   readonly role: 'user'
 }

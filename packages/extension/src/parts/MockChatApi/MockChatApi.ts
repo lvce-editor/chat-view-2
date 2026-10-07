@@ -251,7 +251,13 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
       )
       const initial: ChatTask = {
         ...task,
-        events: [createEvent({ text: message, type: 'user-message' })],
+        events: [
+          createEvent({
+            ...(options?.attachments && { attachments: options.attachments }),
+            text: message,
+            type: 'user-message',
+          }),
+        ],
         status: 'idle',
       }
       tasks = [initial, ...tasks].slice(0, 20)
@@ -289,7 +295,11 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
     async sendMessage(task, message, options) {
       const updated = appendEvent(
         task,
-        createEvent({ text: message, type: 'user-message' }),
+        createEvent({
+          ...(options?.attachments && { attachments: options.attachments }),
+          text: message,
+          type: 'user-message',
+        }),
       )
       return run(updated, options)
     },

@@ -8,8 +8,10 @@ import {
   type ViewEvent,
   type VirtualDomViewInstance,
 } from '@lvce-editor/api'
+import { DragAndDropWorker, RendererWorker } from '@lvce-editor/rpc-registry'
 import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
+import type { ChatComposerImage } from './ChatViewState.ts'
 import type { ReadPreference } from './FontSize.ts'
 import {
   type BackendConfiguration,
@@ -20,11 +22,16 @@ import {
   getFocusModeEnabled,
   toggleFocusMode,
 } from '../ChatFocusMode/ChatFocusMode.ts'
+import {
+  isImageFile,
+  loadImageAttachment,
+} from '../ChatImageAttachments/ChatImageAttachments.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
 import {
   createDefaultChatApi,
   type DefaultChatApiOptions,
 } from '../DefaultChatApi/DefaultChatApi.ts'
+import { initializeImageTransfer } from '../InitializeImageTransfer/InitializeImageTransfer.ts'
 import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
@@ -34,6 +41,8 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getState: () => Readonly<ChatViewState>
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
+  readonly handleImageDrop: (dropId: unknown) => Promise<void>
+  readonly handleImagePaste: (fileIds: unknown) => Promise<void>
   readonly newChat: (requestRerender?: boolean) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderScrollPosition: () => readonly [
@@ -66,6 +75,33 @@ interface DefaultChatApiHost {
   readonly resolveConfiguration: () => Promise<BackendConfiguration>
 }
 
+interface ImageTransferHost {
+  readonly discardDrop: (dropId: number) => Promise<void>
+  readonly getClipboardFiles: (
+    fileIds: readonly number[],
+  ) => Promise<readonly File[]>
+  readonly getDroppedFiles: (dropId: number) => Promise<readonly File[]>
+}
+
+const defaultImageTransferHost: ImageTransferHost = {
+  async discardDrop(dropId) {
+    await initializeImageTransfer()
+    await DragAndDropWorker.discardDrop(dropId)
+  },
+  async getClipboardFiles(fileIds) {
+    await initializeImageTransfer()
+    const items = await RendererWorker.getFileHandles(fileIds)
+    const files = await Promise.all(
+      items.map((item) => toImageFile(item.value)),
+    )
+    return files.filter((file): file is File => Boolean(file))
+  },
+  async getDroppedFiles(dropId) {
+    await initializeImageTransfer()
+    return DragAndDropWorker.getDroppedFilesByDropId(dropId)
+  },
+}
+
 const defaultChatApiHost: DefaultChatApiHost = {
   createApi: createDefaultChatApi,
   resolveConfiguration: resolveBackendConfiguration,
@@ -76,6 +112,23 @@ const copyFeedbackDuration = 2000
 const messagesSelector = '.ChatMessages'
 const maxScrollTop = 9_999_999
 const workingTimerInterval = 1000
+const toImageFile = async (value: unknown): Promise<File | undefined> => {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  if ('arrayBuffer' in value && typeof value.arrayBuffer === 'function') {
+    return value as File
+  }
+  if (
+    'kind' in value &&
+    value.kind === 'file' &&
+    'getFile' in value &&
+    typeof value.getFile === 'function'
+  ) {
+    return (value as FileSystemFileHandle).getFile()
+  }
+  return undefined
+}
 
 const isWorking = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'
@@ -174,6 +227,7 @@ export const createInstance = async (
   readPreference?: ReadPreference,
   execute: ExecuteCommand = executeCommand,
   defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
+  imageTransferHost: ImageTransferHost = defaultImageTransferHost,
 ): Promise<ActiveChatViewInstance> => {
   let authenticationRejected = false
   let currentState: MutableChatViewState | undefined
@@ -223,6 +277,7 @@ export const createInstance = async (
     activityExpanded: false,
     changesExpanded: false,
     composerFocused: false,
+    composerImages: [],
     copiedMessageId: '',
     draft: typeof saved.draft === 'string' ? saved.draft : '',
     errorMessage,
@@ -251,6 +306,45 @@ export const createInstance = async (
   let disposed = false
   let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
+
+  const addImageFiles = async (files: readonly File[]): Promise<void> => {
+    const imageFiles = files.filter(isImageFile)
+    if (imageFiles.length === 0) {
+      return
+    }
+    const loadingImages = imageFiles.map(
+      (file): ChatComposerImage => ({
+        id: `chat-image-${crypto.randomUUID()}`,
+        name: file.name,
+        status: 'loading',
+      }),
+    )
+    state.composerImages = [...state.composerImages, ...loadingImages]
+    await context?.requestRerender()
+    await Promise.all(
+      imageFiles.map(async (file, index) => {
+        const loadingImage = loadingImages[index]
+        if (!loadingImage) {
+          return
+        }
+        try {
+          const attachment = await loadImageAttachment(file)
+          state.composerImages = state.composerImages.map((image) =>
+            image.id === loadingImage.id
+              ? { ...image, attachment, status: 'ready' }
+              : image,
+          )
+        } catch {
+          state.composerImages = state.composerImages.map((image) =>
+            image.id === loadingImage.id
+              ? { ...image, status: 'error' }
+              : image,
+          )
+        }
+        await context?.requestRerender()
+      }),
+    )
+  }
 
   const stopWorkingTimer = (): void => {
     if (workingTimer === undefined) {
@@ -363,6 +457,7 @@ export const createInstance = async (
     resetCopyFeedback()
     state.selectedTask = undefined
     state.draft = ''
+    state.composerImages = []
     state.activityExpanded = false
     state.changesExpanded = false
     syncWorkingTimer(undefined)
@@ -393,16 +488,25 @@ export const createInstance = async (
 
   const submit = async (requestRerender = false): Promise<void> => {
     const message = state.draft.trim()
-    if (state.loginRequired || !message || !state.selectedModelId) {
+    const attachments = state.composerImages.flatMap((image) =>
+      image.status === 'ready' && image.attachment ? [image.attachment] : [],
+    )
+    if (
+      state.loginRequired ||
+      (!message && attachments.length === 0) ||
+      state.composerImages.some((image) => image.status !== 'ready') ||
+      !state.selectedModelId
+    ) {
       return
     }
     if (activeController && state.selectedTask?.status !== 'running') {
       return
     }
     state.draft = ''
+    state.composerImages = []
     state.modelPickerOpen = false
     if (state.selectedTask?.status === 'running') {
-      await api.steer(state.selectedTask.id, message)
+      await api.steer(state.selectedTask.id, message, attachments)
       if (requestRerender) {
         await context?.requestRerender()
       }
@@ -410,6 +514,7 @@ export const createInstance = async (
     }
     activeController = new AbortController()
     const options = {
+      attachments,
       onUpdate: updateTask,
       signal: activeController.signal,
     }
@@ -490,6 +595,13 @@ export const createInstance = async (
       if (event.type === 'input' && event.name === 'composer') {
         state.composerFocused = true
         state.draft = getEventString(event)
+        return
+      }
+      if (event.type === 'click' && event.name?.startsWith('remove-image:')) {
+        const imageId = event.name.slice('remove-image:'.length)
+        state.composerImages = state.composerImages.filter(
+          (image) => image.id !== imageId,
+        )
         return
       }
       if (event.type === 'focus' && event.name === 'composer') {
@@ -604,8 +716,40 @@ export const createInstance = async (
           state.selectedModelId = state.selectedTask.modelId
         }
         state.draft = ''
+        state.composerImages = []
         state.activityExpanded = false
         state.changesExpanded = false
+      }
+    },
+    async handleImageDrop(dropId: unknown): Promise<void> {
+      if (typeof dropId !== 'number') {
+        return
+      }
+      try {
+        const files = await imageTransferHost.getDroppedFiles(dropId)
+        await addImageFiles(files)
+      } catch (error) {
+        state.errorMessage =
+          error instanceof Error ? error.message : String(error)
+        await context?.requestRerender()
+      } finally {
+        await imageTransferHost.discardDrop(dropId).catch(() => {})
+      }
+    },
+    async handleImagePaste(fileIds: unknown): Promise<void> {
+      if (
+        !Array.isArray(fileIds) ||
+        fileIds.some((id) => typeof id !== 'number')
+      ) {
+        return
+      }
+      try {
+        const files = await imageTransferHost.getClipboardFiles(fileIds)
+        await addImageFiles(files)
+      } catch (error) {
+        state.errorMessage =
+          error instanceof Error ? error.message : String(error)
+        await context?.requestRerender()
       }
     },
     newChat,
@@ -633,6 +777,7 @@ export const createInstance = async (
       }
       Object.assign(state, {
         ...newState,
+        composerImages: newState.composerImages || [],
         selectedTask: newState.selectedTask,
       })
       syncWorkingTimer(state.selectedTask)

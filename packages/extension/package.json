@@ -29,12 +29,12 @@
   },
   "dependencies": {
     "@babel/standalone": "7.29.9",
-    "@lvce-editor/chat-tool-worker": "0.0.0-dev"
+    "@lvce-editor/chat-tool-worker": "0.0.0-dev",
+    "@lvce-editor/rpc": "6.21.0",
+    "@lvce-editor/rpc-registry": "9.65.1"
   },
   "devDependencies": {
     "@lvce-editor/api": "9.40.0",
-    "@lvce-editor/rpc": "6.21.0",
-    "@lvce-editor/rpc-registry": "9.65.1",
     "@lvce-editor/virtual-dom-worker": "11.20.1",
     "jest": "^30.5.1",
     "ts-jest": "^29.4.12"
