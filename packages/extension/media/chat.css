@@ -1038,7 +1038,7 @@
     );
   min-width: 0;
   min-height: 0;
-  background: #f5f5f5;
+  background: #fafafa;
   border-right: 1px solid var(--ChatBorder);
 }
 .ChatSessionsSash {
