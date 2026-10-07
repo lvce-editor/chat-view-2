@@ -487,6 +487,12 @@
   scrollbar-width: thin;
 }
 
+.ChatMessagesContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
 .ChatMessages::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -901,10 +907,41 @@
 .ChatAiNativeLayout .ChatBackButton {
   display: none;
 }
-.ChatAiNativeLayout .ChatDetailView > * {
+.ChatAiNativeLayout
+  .ChatDetailView
+  > :not(.ChatMessages, .ChatConversationBody) {
   width: min(100%, 960px);
   margin-inline: auto;
   box-sizing: border-box;
+}
+.ChatAiNativeLayout .ChatDetailView > .ChatMessages,
+.ChatAiNativeLayout .ChatConversationBody > .ChatMessages {
+  width: 100%;
+  padding-inline: 0;
+}
+.ChatAiNativeLayout .ChatDetailView > .ChatConversationBody {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+}
+.ChatAiNativeLayout .ChatConversationBody > :not(.ChatMessages) {
+  width: min(100%, 960px);
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+.ChatAiNativeLayout .ChatMessages {
+  gap: 0;
+}
+.ChatAiNativeLayout .ChatMessagesContent {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  max-width: 960px;
+  min-height: 100%;
+  padding-inline: 18px;
+  margin-inline: auto;
 }
 
 .AiNativeLayout .ActivityBarLayout {
