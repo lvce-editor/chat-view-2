@@ -39,13 +39,14 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await composerInput.type('Center the new chat composer')
   await expect(composerInput).toHaveValue('Center the new chat composer')
   await Command.executeExtensionCommand('chat2.submit')
+  await expect(browserTabTitle).toHaveText('Center the new chat composer')
   const userMessage = Locator('.ChatMessageUser')
   await expect(userMessage).toContainText('Center the new chat composer')
   await expect(emptyTitle).toHaveCount(0)
   const detailComposer = Locator('.ChatDetailView .ChatComposer')
   await expect(detailComposer).toBeVisible()
   await expect(newConversationBody).toHaveCSS('justify-content', 'flex-start')
-  const task = Locator('.ChatTaskButton').nth(1)
+  const task = Locator('.ChatTaskButton').nth(2)
   // eslint-disable-next-line e2e/no-direct-click
   await task.click()
   await expect(browserTabTitle).toHaveText('Fix quickpick beforeinput crash')
@@ -64,7 +65,9 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
   await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
   await expect(focusMode).toHaveCount(0)
-  await expect(browserTabTitle).not.toHaveText('Chat 2')
+  await expect(browserTabTitle).toHaveText(
+    'chat2.virtual-dom-view.focus-mode.html',
+  )
   const main = Locator('.Main')
   await expect(main).toBeVisible()
   await QuickPick.open()
