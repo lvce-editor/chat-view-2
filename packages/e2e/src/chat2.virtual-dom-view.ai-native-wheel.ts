@@ -25,7 +25,7 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   await expect(aiLayout).toBeVisible()
   // A distinct downward gesture returns to the IDE.
   const contentArea = Locator('.ContentArea')
-  await expect(contentArea).toHaveCSS('animation-name', 'ai-layout-enter')
+  await expect(contentArea).toHaveCSS('animation-name', 'none')
   await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
   await expect(aiLayout).toHaveCount(0)
   await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')

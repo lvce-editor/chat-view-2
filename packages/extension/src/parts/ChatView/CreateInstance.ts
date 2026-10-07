@@ -64,6 +64,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
     scrollTop: number,
   ]
   readonly renderTitle: () => string
+  readonly renderWorkbenchLayout: () => 'ide' | 'ai-native' | undefined
   readonly setState: (state: unknown) => void
   readonly submit: (requestRerender?: boolean) => Promise<void>
   readonly toggleFocusMode: (requestRerender?: boolean) => Promise<void>
@@ -273,6 +274,7 @@ export const createInstance = async (
   defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
   imageTransferHost: ImageTransferHost = defaultImageTransferHost,
 ): Promise<ActiveChatViewInstance> => {
+  let pendingWorkbenchLayout: 'ide' | 'ai-native' | undefined
   let authenticationRejected = false
   let currentState: MutableChatViewState | undefined
   const onLoginRequired = (): void => {
@@ -649,8 +651,12 @@ export const createInstance = async (
   const handleToggleFocusMode = async (
     requestRerender = false,
   ): Promise<void> => {
-    state.focusMode = await getFocusMode()
-    state.focusMode = await toggleFocusMode(state)
+    if (!state.focusModeEnabled) {
+      return
+    }
+    state.focusMode = await getFocusMode(execute)
+    state.focusMode = toggleFocusMode(state)
+    pendingWorkbenchLayout = state.focusMode ? 'ai-native' : 'ide'
     await syncWindowTitle()
     if (requestRerender) {
       await context?.requestRerender()
@@ -942,6 +948,11 @@ export const createInstance = async (
       return state.selectedTask
         ? `Chat 2: ${state.selectedTask.title}`
         : 'Chat 2'
+    },
+    renderWorkbenchLayout() {
+      const layout = pendingWorkbenchLayout
+      pendingWorkbenchLayout = undefined
+      return layout
     },
     saveState(): unknown {
       return {

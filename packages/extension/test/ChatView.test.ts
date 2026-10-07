@@ -1526,3 +1526,40 @@ test('AI-native view keeps sessions visible while changing the active conversati
   expect(getNodesByClass(instance.render(), 'ChatComposer')).toHaveLength(1)
   instance.dispose?.()
 })
+
+test('focus toggles return matching view markup and layout metadata without committing layout early', async () => {
+  let workbenchFocusMode = false
+  const execute = jest.fn(async (id: string) => {
+    return id === 'Layout.getSideBarFocusMode' ? workbenchFocusMode : undefined
+  })
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+  const state = instance.getState() as { focusModeEnabled: boolean }
+  state.focusModeEnabled = true
+  expect(instance.renderWorkbenchLayout()).toBeUndefined()
+
+  await dispatch(instance, { name: 'toggle-focus-mode', type: 'click' })
+  expect(instance.renderWorkbenchLayout()).toBe('ai-native')
+  expect(instance.renderWorkbenchLayout()).toBeUndefined()
+  expect(getNodesByClass(instance.render(), 'ChatAiNativeLayout')).toHaveLength(
+    1,
+  )
+  workbenchFocusMode = true
+  await instance.toggleFocusMode()
+  expect(instance.renderWorkbenchLayout()).toBe('ide')
+  expect(getNodesByClass(instance.render(), 'ChatAiNativeLayout')).toHaveLength(
+    0,
+  )
+  expect(
+    execute.mock.calls.some(
+      (args: readonly [string]) =>
+        args[0] === 'Layout.enterAiNativeLayout' ||
+        args[0] === 'Layout.leaveSideBarFocusMode',
+    ),
+  ).toBe(false)
+  instance.dispose?.()
+})
