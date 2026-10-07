@@ -1,4 +1,4 @@
-import { expect, jest, test } from '@jest/globals'
+import { expect, test } from '@jest/globals'
 import type { ChatViewState } from '../src/parts/ChatView/ChatViewState.ts'
 import { toggleFocusMode } from '../src/parts/ChatFocusMode/ChatFocusMode.ts'
 
@@ -26,28 +26,21 @@ const createState = (): ChatViewState => ({
 })
 
 test('enters and leaves side bar focus mode', async () => {
-  const execute = jest.fn<() => Promise<unknown>>().mockResolvedValue(undefined)
   let state = createState()
 
-  state = { ...state, focusMode: await toggleFocusMode(state, execute) }
-  state = { ...state, focusMode: await toggleFocusMode(state, execute) }
+  state = { ...state, focusMode: toggleFocusMode(state) }
+  state = { ...state, focusMode: toggleFocusMode(state) }
 
-  expect(execute.mock.calls).toEqual([
-    ['Layout.enterAiNativeLayout'],
-    ['Layout.leaveSideBarFocusMode'],
-  ])
   expect(state.focusMode).toBe(false)
 })
 
 test('does nothing while experimental focus mode is disabled', async () => {
-  const execute = jest.fn<() => Promise<unknown>>().mockResolvedValue(undefined)
   const state = {
     ...createState(),
     focusModeEnabled: false,
   }
 
-  const focusMode = await toggleFocusMode(state, execute)
+  const focusMode = toggleFocusMode(state)
 
-  expect(execute).not.toHaveBeenCalled()
   expect(focusMode).toBe(false)
 })
