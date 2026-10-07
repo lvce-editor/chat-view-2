@@ -536,6 +536,41 @@
   overflow-wrap: anywhere;
 }
 
+.ChatMessageTableContainer {
+  max-width: 100%;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+
+.ChatMessageTable {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.ChatMessageTable th,
+.ChatMessageTable td {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--ChatForeground) 20%, transparent);
+  vertical-align: top;
+}
+
+.ChatMessageTable th {
+  font-weight: 600;
+}
+
+.ChatMessageTableCell-left {
+  text-align: left;
+}
+
+.ChatMessageTableCell-center {
+  text-align: center;
+}
+
+.ChatMessageTableCell-right {
+  text-align: right;
+}
+
 .ChatCodeBlock {
   box-sizing: border-box;
   max-width: 100%;

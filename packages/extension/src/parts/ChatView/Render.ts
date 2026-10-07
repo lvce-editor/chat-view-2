@@ -1,5 +1,6 @@
 /* eslint-disable sonarjs/no-nested-conditional, unicorn/max-nested-calls, unicorn/prefer-iterator-to-array */
 import {
+  mergeClassNames,
   VirtualDomElements,
   type VirtualDomNode,
 } from '@lvce-editor/virtual-dom-worker'
@@ -131,6 +132,98 @@ const renderMessageTextWithoutBold = (
 }
 
 const boldPattern = /\*\*([\s\S]+?)\*\*/gu
+
+type MarkdownTableRow = {
+  readonly cells: readonly string[]
+}
+
+const parseMarkdownTableRow = (line: string): MarkdownTableRow | undefined => {
+  const cells: string[] = []
+  let cell = ''
+  const trimmedLine = line.trim()
+  for (let index = 0; index < trimmedLine.length; index++) {
+    const char = trimmedLine[index]
+    if (char === '\\' && trimmedLine[index + 1] === '|') {
+      cell += '|'
+      index++
+    } else if (char === '|') {
+      cells.push(cell.trim())
+      cell = ''
+    } else {
+      cell += char
+    }
+  }
+  cells.push(cell.trim())
+  if (cells.length < 2) {
+    return undefined
+  }
+  if (line.trim().startsWith('|') && cells[0] === '') {
+    cells.shift()
+  }
+  if (line.trim().endsWith('|') && cells.at(-1) === '') {
+    cells.pop()
+  }
+  return cells.length > 1 ? { cells } : undefined
+}
+
+const getTableAlignment = (cell: string): string => {
+  const left = cell.startsWith(':')
+  const right = cell.endsWith(':')
+  if (left && right) {
+    return 'center'
+  }
+  return right ? 'right' : 'left'
+}
+
+const tableDelimiterPattern = /^:?-{3,}:?$/u
+
+const isTableDelimiter = (cell: string): boolean =>
+  tableDelimiterPattern.test(cell)
+
+const renderTableCell = (
+  cell: string,
+  type: number,
+  alignment: string,
+): Dom.TreeNode => {
+  return Dom.node(
+    type,
+    {
+      className: mergeClassNames(
+        'ChatMessageTableCell',
+        `ChatMessageTableCell-${alignment}`,
+      ),
+      ...(type === VirtualDomElements.Th && { scope: 'col' }),
+    },
+    renderMessageInlineText(cell),
+  )
+}
+
+const renderMarkdownTable = (
+  header: MarkdownTableRow,
+  rows: readonly MarkdownTableRow[],
+  alignments: readonly string[],
+): Dom.TreeNode => {
+  const renderRow = (row: MarkdownTableRow, type: number): Dom.TreeNode =>
+    Dom.node(
+      VirtualDomElements.Tr,
+      {},
+      row.cells.map((cell, index) =>
+        renderTableCell(cell, type, alignments[index]),
+      ),
+    )
+  return Dom.div('ChatMessageTableContainer', [
+    Dom.node(VirtualDomElements.Table, { className: 'ChatMessageTable' }, [
+      Dom.node(VirtualDomElements.THead, {}, [
+        renderRow(header, VirtualDomElements.Th),
+      ]),
+      Dom.node(
+        VirtualDomElements.TBody,
+        {},
+        rows.map((row) => renderRow(row, VirtualDomElements.Td)),
+      ),
+    ]),
+  ])
+}
 
 const jsonStringPattern = /"(?:\\.|[^"\\])*"/y
 const jsonNumberPattern = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y
@@ -344,7 +437,7 @@ const renderMessageTextWithCode = (text: string): readonly Dom.TreeNode[] => {
   return children
 }
 
-const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
+const renderMessageInlineText = (text: string): readonly Dom.TreeNode[] => {
   const children: Dom.TreeNode[] = []
   let previousIndex = 0
   for (const match of text.matchAll(boldPattern)) {
@@ -365,6 +458,89 @@ const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
   }
   if (previousIndex < text.length) {
     children.push(...renderMessageTextWithoutBold(text.slice(previousIndex)))
+  }
+  return children
+}
+
+const getMarkdownTableAtLine = (
+  lines: readonly string[],
+  lineStarts: readonly number[],
+  lineIndex: number,
+):
+  | {
+      readonly alignments: readonly string[]
+      readonly endIndex: number
+      readonly header: MarkdownTableRow
+      readonly rows: readonly MarkdownTableRow[]
+    }
+  | undefined => {
+  const header = parseMarkdownTableRow(lines[lineIndex])
+  const delimiter = parseMarkdownTableRow(lines[lineIndex + 1])
+  if (
+    !header ||
+    !delimiter ||
+    delimiter.cells.length !== header.cells.length ||
+    !delimiter.cells.every(isTableDelimiter)
+  ) {
+    return undefined
+  }
+  const rows: MarkdownTableRow[] = []
+  let endIndex = lineIndex + 2
+  for (; endIndex < lines.length; endIndex++) {
+    const row = parseMarkdownTableRow(lines[endIndex])
+    if (!row || row.cells.length !== header.cells.length) {
+      break
+    }
+    rows.push(row)
+  }
+  if (rows.length === 0) {
+    return undefined
+  }
+  return {
+    alignments: delimiter.cells.map(getTableAlignment),
+    endIndex,
+    header,
+    rows,
+  }
+}
+
+const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
+  const lines = text.split('\n')
+  const lineStarts: number[] = []
+  let offset = 0
+  for (const line of lines) {
+    lineStarts.push(offset)
+    offset += line.length + 1
+  }
+  const children: Dom.TreeNode[] = []
+  let previousOffset = 0
+  let lineIndex = 0
+  while (lineIndex < lines.length - 1) {
+    const table = getMarkdownTableAtLine(lines, lineStarts, lineIndex)
+    if (!table) {
+      lineIndex++
+      continue
+    }
+    if (lineStarts[lineIndex] > previousOffset) {
+      children.push(
+        ...renderMessageInlineText(
+          text.slice(previousOffset, lineStarts[lineIndex]),
+        ),
+      )
+    }
+    children.push(
+      renderMarkdownTable(table.header, table.rows, table.alignments),
+    )
+    const afterTableLine = lines[table.endIndex - 1]
+    previousOffset = lineStarts[table.endIndex - 1] + afterTableLine.length
+    if (previousOffset < text.length) {
+      previousOffset++
+      children.push(Dom.textNode('\n'))
+    }
+    lineIndex = table.endIndex
+  }
+  if (previousOffset < text.length) {
+    children.push(...renderMessageInlineText(text.slice(previousOffset)))
   }
   return children
 }
