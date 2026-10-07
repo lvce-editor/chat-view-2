@@ -447,7 +447,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     ...renderFocusModeButton(state),
     Dom.button('new-task', 'New', 'ChatNewTaskButton'),
   ])
-  const messages = Dom.div('ChatMessages', [
+  const messageContent = [
     ...summary.messages.map((message) =>
       renderMessage(message, copiedMessageId),
     ),
@@ -459,6 +459,9 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     ...(errorMessage
       ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
       : []),
+  ]
+  const messages = Dom.div('ChatMessages', [
+    Dom.div('ChatMessagesContent', messageContent),
   ])
   const changes = renderChanges(state)
   const composer = renderComposer(state)
@@ -517,14 +520,16 @@ export const render = (
           ]),
           Dom.div('ChatConversationBody', [
             Dom.div('ChatMessages', [
-              Dom.heading(
-                2,
-                'ChatEmptyTitle',
-                'What would you like to work on?',
-              ),
-              ...(errorMessage
-                ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-                : []),
+              Dom.div('ChatMessagesContent', [
+                Dom.heading(
+                  2,
+                  'ChatEmptyTitle',
+                  'What would you like to work on?',
+                ),
+                ...(errorMessage
+                  ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+                  : []),
+              ]),
             ]),
             renderChanges(state),
             renderComposer(state),
