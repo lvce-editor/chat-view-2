@@ -329,7 +329,7 @@ const renderFocusModeButton = (
   state: Readonly<ChatViewState>,
 ): readonly Dom.TreeNode[] => {
   const { focusMode, focusModeEnabled } = state
-  if (!focusModeEnabled) {
+  if (!focusModeEnabled || focusMode) {
     return []
   }
   return [
@@ -522,7 +522,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     Dom.button('back', 'Back', 'ChatBackButton'),
     Dom.heading(1, 'ChatDetailTitle', task.title),
     ...renderFocusModeButton(state),
-    Dom.button('new-task', 'New', 'ChatNewTaskButton'),
+    ...(focusMode ? [] : [Dom.button('new-task', 'New', 'ChatNewTaskButton')]),
   ])
   const messageContent = [
     ...summary.messages.map((message) =>

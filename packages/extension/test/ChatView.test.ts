@@ -520,12 +520,6 @@ test('renders the experimental focus mode control when enabled', async () => {
 
   state.focusMode = true
   const focusedDom = instance.render()
-  expect(focusedDom).toContainEqual(
-    expect.objectContaining({
-      className: 'ChatFocusModeButton',
-      title: 'Return to IDE layout',
-    }),
-  )
   expect(focusedDom[0]).toEqual(
     expect.objectContaining({
       className: 'ChatView ChatAiNativeLayout',
@@ -533,6 +527,8 @@ test('renders the experimental focus mode control when enabled', async () => {
   )
   expect(getNodesByClass(focusedDom, 'ChatConversationBody')).toHaveLength(1)
   expect(getNodesByClass(focusedDom, 'ChatEmptyTitle')).toHaveLength(1)
+  expect(getNodesByClass(focusedDom, 'ChatFocusModeButton')).toHaveLength(0)
+  expect(getNodesByClass(focusedDom, 'ChatNewTaskButton')).toHaveLength(1)
 })
 
 test('keeps the AI-native composer in place after the first message', async () => {
@@ -1280,6 +1276,13 @@ test('AI-native view keeps sessions visible while changing the active conversati
   expect(getNodesByClass(instance.render(), 'ChatSessions')).toHaveLength(1)
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
   expect(getNodesByClass(instance.render(), 'ChatTaskButton')).toHaveLength(20)
+  expect(
+    getNodesByClass(instance.render(), 'ChatFocusModeButton'),
+  ).toHaveLength(0)
+  expect(getNodesByClass(instance.render(), 'ChatNewTaskButton')).toHaveLength(
+    1,
+  )
+  expect(getNodesByClass(instance.render(), 'ChatDetailHeader')).toHaveLength(1)
   expect(getNodesByClass(instance.render(), 'ChatMessages')).toHaveLength(1)
   expect(getText(instance.render())).toContain('Add worker memory usage')
   await dispatch(instance, { name: 'new-task', type: 'click' })
