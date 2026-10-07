@@ -34,6 +34,24 @@ export const test: Test = async ({ Command, expect, Locator }) => {
         await expect(chat).toHaveCount(0)
         await expect(contentArea).toHaveCSS('animation-name', 'none')
         await expect(main).toBeVisible()
+
+        await Locator('.ActivityBarLayout').dispatchEvent('wheel', {
+          bubbles: true,
+          deltaY: -100,
+        } as unknown as string)
+        await expect(workbench).toHaveCount(1)
+        await expect(chat).toBeVisible()
+        await expect(chat).toHaveCSS(
+          'background-color',
+          theme === 'claude' ? 'rgb(250, 249, 246)' : 'rgb(255, 255, 255)',
+        )
+        await Locator('.ActivityBarLayout').dispatchEvent('wheel', {
+          bubbles: true,
+          deltaY: 100,
+        } as unknown as string)
+        await expect(workbench).toHaveCount(0)
+        await expect(chat).toHaveCount(0)
+        await expect(main).toBeVisible()
       }
     }
     // Recreate the view so the next theme is read from preferences.
