@@ -63,6 +63,11 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(browserTabTitle).toHaveText('Chat 2')
   await expect(emptyTitle).toBeVisible()
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
+  await expect(composerInput).toBeFocused()
+  await composerInput.type('Type immediately after starting a new chat')
+  await expect(composerInput).toHaveValue(
+    'Type immediately after starting a new chat',
+  )
   await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
   await expect(focusMode).toHaveCount(0)
   await expect(browserTabTitle).toHaveText(
