@@ -3,6 +3,7 @@ import type {
   ChatModel,
   ChatTask,
 } from '../ChatApi/ChatApi.ts'
+import type { AiNativeTheme } from './AiNativeTheme.ts'
 
 export interface ChatComposerImage {
   readonly attachment?: ChatImageAttachment
@@ -13,6 +14,7 @@ export interface ChatComposerImage {
 
 export interface ChatViewState {
   readonly activityExpanded: boolean
+  readonly aiNativeTheme: AiNativeTheme
   readonly changesExpanded: boolean
   readonly composerFocused: boolean
   readonly composerImages: readonly ChatComposerImage[]

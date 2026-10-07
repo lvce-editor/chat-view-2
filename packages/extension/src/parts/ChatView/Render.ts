@@ -355,6 +355,20 @@ const getRootClassName = (
   return `ChatView ${viewClassName}${focusMode ? ' ChatFocusMode' : ''}`
 }
 
+const getAiNativeLayoutClassName = (
+  theme: ChatViewState['aiNativeTheme'],
+): string => {
+  return theme === 'default'
+    ? 'ChatAiNativeLayout'
+    : `ChatAiNativeLayout ChatAiNativeLayoutTheme-${theme}`
+}
+
+const getAiNativeThemeClassName = (
+  theme: ChatViewState['aiNativeTheme'],
+): string => {
+  return theme === 'default' ? '' : ` ChatAiNativeLayoutTheme-${theme}`
+}
+
 const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   const { errorMessage, fontFamily, fontSize, tasks } = state
   return Dom.div(
@@ -546,6 +560,7 @@ export const render = (
   state: Readonly<ChatViewState>,
 ): readonly VirtualDomNode[] => {
   const {
+    aiNativeTheme,
     errorMessage,
     focusMode,
     fontFamily,
@@ -558,7 +573,7 @@ export const render = (
   if (loginRequired) {
     return Dom.flatten(
       Dom.div(
-        getRootClassName(state, 'ChatLoggedOut'),
+        `${getRootClassName(state, 'ChatLoggedOut')}${focusMode ? getAiNativeThemeClassName(aiNativeTheme) : ''}`,
         [
           ...renderFocusModeButton(state),
           Dom.node(
@@ -612,7 +627,7 @@ export const render = (
         )
     return Dom.flatten(
       Dom.div(
-        'ChatView ChatAiNativeLayout',
+        `ChatView ${getAiNativeLayoutClassName(aiNativeTheme)}`,
         [
           Dom.div('ChatSessions', [
             Dom.div('ChatTaskListHeader', [

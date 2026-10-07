@@ -109,6 +109,18 @@ test('makes AI-native layout switching available by default', async () => {
   expect(manifest.activation).toContain('onCommand:chat2.toggleAiNativeLayout')
 })
 
+test('contributes selectable AI-native theme presets', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.configuration['chat2.aiNativeTheme']).toEqual({
+    default: 'default',
+    description: 'Color and typography preset for the AI-native Chat 2 layout.',
+    enum: ['default', 'openai', 'claude'],
+    type: 'string',
+  })
+})
+
 test('keeps backend streaming disabled by default', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
@@ -130,6 +142,7 @@ test('contributes every preference read by Chat 2', async () => {
   ).toEqual(
     [
       'chat2.backendUrl',
+      'chat2.aiNativeTheme',
       'chat2.experimentalFocusMode',
       'chat2.fontFamily',
       'chat2.fontSize',
