@@ -912,10 +912,14 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     ...renderFocusModeButton(state),
     ...(focusMode ? [] : [Dom.button('new-task', 'New', 'ChatNewTaskButton')]),
   ])
-  const messageContent = [
-    ...summary.messages.map((message) =>
-      renderMessage(message, copiedMessageId),
-    ),
+  const renderedMessages = summary.messages.map((message) =>
+    renderMessage(message, copiedMessageId),
+  )
+  const lastUserMessageIndex = summary.messages.findLastIndex(
+    (message) => message.type === 'user-message',
+  )
+  const latestTurnContent = [
+    ...renderedMessages.slice(lastUserMessageIndex),
     ...(task.streamingText ? [renderStreamingMessage(task.streamingText)] : []),
     renderActivity(state),
     ...(summary.errorMessage
@@ -925,6 +929,25 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
       : []),
   ]
+  const messageContent =
+    focusMode && lastUserMessageIndex !== -1
+      ? [
+          ...renderedMessages.slice(0, lastUserMessageIndex),
+          Dom.div('ChatTurnLatest', latestTurnContent),
+        ]
+      : [
+          ...renderedMessages,
+          ...(task.streamingText
+            ? [renderStreamingMessage(task.streamingText)]
+            : []),
+          renderActivity(state),
+          ...(summary.errorMessage
+            ? [Dom.div('ChatErrorBanner', [Dom.textNode(summary.errorMessage)])]
+            : []),
+          ...(errorMessage
+            ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+            : []),
+        ]
   const messages = Dom.div('ChatMessages', [
     Dom.div('ChatMessagesContent', messageContent),
   ])

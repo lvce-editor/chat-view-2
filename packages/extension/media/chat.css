@@ -1112,6 +1112,13 @@
   padding-inline: 18px;
   margin-inline: auto;
 }
+.ChatAiNativeLayout .ChatTurnLatest {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 100%;
+}
 
 .AiNativeLayout .ActivityBarLayout {
   --ActivityBarActiveBackground: #e6e6e6;
