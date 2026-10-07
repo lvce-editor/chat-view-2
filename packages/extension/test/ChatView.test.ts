@@ -640,11 +640,29 @@ test('stops an active task', async () => {
   const { promise, resolve } = Promise.withResolvers<void>()
   setTimeout(resolve, 0)
   await promise
+  const runningDom = instance.render() as readonly any[]
+  expect(runningDom).toContainEqual(
+    expect.objectContaining({
+      ariaLabel: 'Stop task',
+      className: 'ChatSubmitButton',
+      name: 'stop',
+      title: 'Stop task',
+    }),
+  )
+  expect(runningDom.some((node) => node.name === 'submit')).toBe(false)
   await dispatch(instance, { name: 'stop', type: 'click' })
   await running
 
   expect(instance.getState().selectedTask?.status).toBe('completed')
   expect(getText(instance.render() as readonly any[])).toContain('Stopped.')
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      ariaLabel: 'Send message',
+      className: 'ChatSubmitButton',
+      name: 'submit',
+      title: 'Send message',
+    }),
+  )
 })
 
 test('does not submit an empty message', async () => {
