@@ -143,6 +143,10 @@ export const isChatViewState = (value: unknown): value is ChatViewState => {
     return false
   }
   return (
+    (value.sessionsWidth === undefined ||
+      (typeof value.sessionsWidth === 'number' &&
+        Number.isFinite(value.sessionsWidth) &&
+        value.sessionsWidth > 0)) &&
     Array.isArray(value.models) &&
     value.models.every(isChatModel) &&
     (value.selectedTask === undefined || isChatTask(value.selectedTask)) &&

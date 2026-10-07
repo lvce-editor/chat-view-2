@@ -12,6 +12,29 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
   displayName: 'Chat 2',
   eventListeners: [
     {
+      name: 'handleSessionsSashPointerDown',
+      params: [
+        'handleSessionsSashPointerDown',
+        'event.clientX',
+        'event.currentTarget.parentElement.clientWidth',
+        'event.currentTarget.parentElement.offsetLeft',
+        'event.currentTarget.previousElementSibling.offsetLeft',
+        'event.currentTarget.previousElementSibling.offsetWidth',
+      ],
+      trackPointerEvents: [
+        'handleSessionsSashPointerMove',
+        'handleSessionsSashPointerUp',
+      ],
+    },
+    {
+      name: 'handleSessionsSashPointerMove',
+      params: ['handleSessionsSashPointerMove', 'event.clientX'],
+    },
+    {
+      name: 'handleSessionsSashPointerUp',
+      params: ['handleSessionsSashPointerUp'],
+    },
+    {
       name: 'handleImagePaste',
       params: ['handleImagePaste', 'event.clipboardData.files2'],
     },

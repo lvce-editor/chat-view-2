@@ -8,6 +8,7 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   const chat = Locator('.ChatAiNativeLayout')
   const activityBar = Locator('.ActivityBar')
   const sessions = Locator('.ChatSessions')
+  let expectedSessionsWidth = 280
   for (const side of ['Right', 'Left']) {
     await Command.execute(`Layout.moveSideBar${side}`)
     await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
@@ -17,6 +18,27 @@ export const test: Test = async ({ Command, expect, Locator }) => {
       side === 'Right' ? 'row-reverse' : 'row',
     )
     await expect(sessions).toBeVisible()
+    const sash = Locator('.ChatSessionsSash')
+    await expect(sash).toHaveAttribute('role', 'separator')
+    await sash.dispatchEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      clientX: 400,
+      pointerId: 1,
+    } as unknown as string)
+    await sash.dispatchEvent('pointermove', {
+      bubbles: true,
+      clientX: 450,
+      pointerId: 1,
+    } as unknown as string)
+    expectedSessionsWidth += side === 'Right' ? -50 : 50
+    await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
+    await sash.dispatchEvent('pointerup', {
+      bubbles: true,
+      button: 0,
+      clientX: 450,
+      pointerId: 1,
+    } as unknown as string)
     const task = Locator('.ChatTaskButton').first()
     // eslint-disable-next-line e2e/no-direct-click
     await task.click()

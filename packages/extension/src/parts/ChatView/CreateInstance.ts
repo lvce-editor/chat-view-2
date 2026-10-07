@@ -41,6 +41,15 @@ import { render } from './Render.ts'
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getState: () => Readonly<ChatViewState>
+  readonly handleSessionsSashPointerDown: (
+    clientX: number,
+    containerWidth: number,
+    containerLeft: number,
+    sessionsLeft: number,
+    sessionsWidth: number,
+  ) => void
+  readonly handleSessionsSashPointerMove: (clientX: number) => void
+  readonly handleSessionsSashPointerUp: () => void
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly handleImageDrop: (dropId: unknown) => Promise<void>
   readonly handleImagePaste: (fileIds: unknown) => Promise<void>
@@ -70,6 +79,13 @@ type ExecuteCommand = (
   id: string,
   ...args: readonly unknown[]
 ) => Promise<unknown>
+
+interface SessionsSashDrag {
+  readonly containerWidth: number
+  readonly isRight: boolean
+  readonly startPointerX: number
+  readonly startWidth: number
+}
 
 interface DefaultChatApiHost {
   readonly createApi: (options: DefaultChatApiOptions) => Promise<ChatApi>
@@ -307,6 +323,7 @@ export const createInstance = async (
   let authStateSyncing = false
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
   let disposed = false
+  let sessionsSashDrag: SessionsSashDrag | undefined
   let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
 
@@ -595,6 +612,51 @@ export const createInstance = async (
     },
     getState(): Readonly<ChatViewState> {
       return state
+    },
+    handleSessionsSashPointerDown(
+      clientX: number,
+      containerWidth: number,
+      containerLeft: number,
+      sessionsLeft: number,
+      sessionsWidth: number,
+    ): void {
+      if (
+        !Number.isFinite(clientX) ||
+        !Number.isFinite(containerWidth) ||
+        containerWidth <= 0 ||
+        !Number.isFinite(containerLeft) ||
+        !Number.isFinite(sessionsLeft) ||
+        !Number.isFinite(sessionsWidth)
+      ) {
+        return
+      }
+      sessionsSashDrag = {
+        containerWidth,
+        isRight: sessionsLeft - containerLeft > containerWidth / 2,
+        startPointerX: clientX,
+        startWidth: sessionsWidth,
+      }
+    },
+    handleSessionsSashPointerMove(clientX: number): void {
+      const drag = sessionsSashDrag
+      if (!drag || !Number.isFinite(clientX)) {
+        return
+      }
+      const minimumWidth = Math.min(160, drag.containerWidth / 2)
+      const maximumWidth = Math.max(
+        minimumWidth,
+        drag.containerWidth - Math.min(320, drag.containerWidth / 2),
+      )
+      const pointerDelta = clientX - drag.startPointerX
+      const width =
+        drag.startWidth + (drag.isRight ? -pointerDelta : pointerDelta)
+      state.sessionsWidth = Math.max(
+        minimumWidth,
+        Math.min(maximumWidth, width),
+      )
+    },
+    handleSessionsSashPointerUp(): void {
+      sessionsSashDrag = undefined
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'click' && event.name === 'login') {
