@@ -205,7 +205,7 @@
   width: 16px;
   height: 16px;
   background: currentColor;
-  mask: url('/icons/archive.svg') center / 16px no-repeat;
+  mask: url('./icons/archive.svg') center / 16px no-repeat;
   pointer-events: none;
 }
 
