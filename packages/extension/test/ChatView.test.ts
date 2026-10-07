@@ -139,11 +139,13 @@ test('saves and restores the composer draft through view state', async () => {
 })
 
 test('restores the URL task before the previously saved task', async () => {
-  const execute = jest.fn(async (command: string) => {
-    return command === 'Layout.getHref'
-      ? 'https://example.com/static/?workspace=project#chat-mock-task-2'
-      : undefined
-  })
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/?workspace=project#chat-mock-task-2'
+        : undefined
+    },
+  )
   const instance = await createInstance(
     createViewContext({ selectedTaskId: 'mock-task-1' }),
     createMockChatApi(),
@@ -153,6 +155,45 @@ test('restores the URL task before the previously saved task', async () => {
 
   expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
   expect(execute).toHaveBeenCalledWith('Layout.getHref')
+})
+
+test('falls back to the saved task when the URL task no longer exists', async () => {
+  const api = createMockChatApi()
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/#chat-deleted-task'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: 'mock-task-1' }),
+    api,
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+  expect(execute).not.toHaveBeenCalledWith('Layout.setHash', '')
+})
+
+test('clears malformed chat fragments while restoring the saved task', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/#chat-%E0%A4%A'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: 'mock-task-1' }),
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+  expect(execute).toHaveBeenCalledWith('Layout.setHash', '')
 })
 
 test('syncs selected and cleared tasks to the URL fragment', async () => {
