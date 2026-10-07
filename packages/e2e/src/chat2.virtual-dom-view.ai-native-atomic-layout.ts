@@ -11,6 +11,7 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   const contentArea = Locator('.ContentArea')
   const sessions = Locator('.ChatSessions')
   const main = Locator('.Main')
+  const composer = Locator('textarea[name="composer"]')
   for (const theme of ['default', 'claude']) {
     await Command.execute('Preferences.update', {
       'chat2.aiNativeTheme': theme,
@@ -24,11 +25,19 @@ export const test: Test = async ({ Command, expect, Locator }) => {
         const chat = Locator('.ChatAiNativeLayout')
         await expect(chat).toBeVisible()
         await expect(chat).toHaveCSS(
+          'flex-direction',
+          side === 'Right' ? 'row-reverse' : 'row',
+        )
+        await expect(chat).toHaveCSS(
           'background-color',
           theme === 'claude' ? 'rgb(250, 249, 246)' : 'rgb(255, 255, 255)',
         )
         await expect(contentArea).toHaveCSS('animation-name', 'none')
         await expect(sessions).toBeVisible()
+        if (side === 'Left' && index === 0) {
+          await composer.type(`Preserve the ${theme} draft`)
+        }
+        await expect(composer).toHaveValue(`Preserve the ${theme} draft`)
         await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
         await expect(workbench).toHaveCount(0)
         await expect(chat).toHaveCount(0)
@@ -41,6 +50,7 @@ export const test: Test = async ({ Command, expect, Locator }) => {
         } as unknown as string)
         await expect(workbench).toHaveCount(1)
         await expect(chat).toBeVisible()
+        await expect(composer).toHaveValue(`Preserve the ${theme} draft`)
         await expect(chat).toHaveCSS(
           'background-color',
           theme === 'claude' ? 'rgb(250, 249, 246)' : 'rgb(255, 255, 255)',
