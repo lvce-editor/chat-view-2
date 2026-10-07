@@ -393,7 +393,10 @@ export const createInstance = async (
     }, copyFeedbackDuration)
   }
 
-  const syncAuthState = async (retryLogin = false): Promise<void> => {
+  const syncAuthState = async (
+    retryLogin = false,
+    requestRerender = true,
+  ): Promise<void> => {
     if (
       !backendConfiguration ||
       (state.loginRequired && !retryLogin) ||
@@ -442,11 +445,15 @@ export const createInstance = async (
       if (nextModels.length > 0) {
         state.errorMessage = ''
       }
-      await context?.requestRerender()
+      if (requestRerender) {
+        await context?.requestRerender()
+      }
     } catch (error) {
       if (!disposed) {
         state.errorMessage = getModelLoadingError(error)
-        await context?.requestRerender()
+        if (requestRerender) {
+          await context?.requestRerender()
+        }
       }
     } finally {
       authStateSyncing = false
@@ -544,6 +551,25 @@ export const createInstance = async (
     }
   }
 
+  const completeLogin = async (): Promise<void> => {
+    try {
+      await execute('Layout.signIn')
+      await syncAuthState(true, false)
+    } catch (error) {
+      state.errorMessage =
+        error instanceof Error ? error.message : String(error)
+    } finally {
+      state.loginPending = false
+      if (!disposed) {
+        try {
+          await context?.requestRerender()
+        } catch {
+          // The event response already renders the pending state.
+        }
+      }
+    }
+  }
+
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       disposed = true
@@ -574,19 +600,9 @@ export const createInstance = async (
         }
         state.loginPending = true
         state.errorMessage = ''
-        await context?.requestRerender()
-        try {
-          await execute('Layout.signIn')
-          await syncAuthState(true)
-        } catch (error) {
-          state.errorMessage =
-            error instanceof Error ? error.message : String(error)
-        } finally {
-          state.loginPending = false
-          if (!disposed) {
-            await context?.requestRerender()
-          }
-        }
+        // The host serializes view commands. Finish the event first so a
+        // rerender requested after sign-in can run without queuing behind it.
+        void completeLogin()
         return
       }
       if (state.loginRequired) {

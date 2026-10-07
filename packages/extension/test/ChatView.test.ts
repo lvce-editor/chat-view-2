@@ -966,6 +966,7 @@ test('renders only the login screen and replaces it after login, then hides chat
   })
   const api = createMockChatApi()
   const listModels = jest.fn(api.listModels)
+  const loginFinished = Promise.withResolvers<void>()
   const host = {
     async createApi() {
       return { ...api, listModels }
@@ -975,7 +976,12 @@ test('renders only the login screen and replaces it after login, then hides chat
     },
   }
   const instance = await createInstance(
-    createViewContext(undefined),
+    {
+      ...createViewContext(undefined),
+      async requestRerender() {
+        loginFinished.resolve()
+      },
+    },
     undefined,
     undefined,
     execute,
@@ -990,6 +996,7 @@ test('renders only the login screen and replaces it after login, then hides chat
     expect(getText(dom)).toContain('Login')
     expect(listModels).not.toHaveBeenCalled()
     await dispatch(instance, { name: 'login', type: 'click' })
+    await loginFinished.promise
     expect(execute).toHaveBeenCalledWith('Layout.signIn')
     expect(
       getNodesByClass(instance.render(), 'ChatComposerInput'),
@@ -1021,8 +1028,14 @@ test('keeps login available after a failed or cancelled login', async () => {
   const execute = jest.fn(async () => {
     throw new Error('Login cancelled')
   })
+  const loginFinished = Promise.withResolvers<void>()
   const instance = await createInstance(
-    createViewContext(undefined),
+    {
+      ...createViewContext(undefined),
+      async requestRerender() {
+        loginFinished.resolve()
+      },
+    },
     undefined,
     undefined,
     execute,
@@ -1037,6 +1050,7 @@ test('keeps login available after a failed or cancelled login', async () => {
   )
   try {
     await dispatch(instance, { name: 'login', type: 'click' })
+    await loginFinished.promise
     expect(getText(instance.render())).toContain('Login cancelled')
     expect(instance.getState().loginPending).toBe(false)
     expect(instance.getState().loginRequired).toBe(true)
@@ -1045,6 +1059,66 @@ test('keeps login available after a failed or cancelled login', async () => {
     ).toHaveLength(0)
   } finally {
     instance.dispose?.()
+  }
+})
+
+test('starts login without awaiting a rerender queued behind the click event', async () => {
+  const configuration: BackendConfiguration = {
+    accessToken: '',
+    baseUrl: 'https://backend.example.com',
+    loginRequired: true,
+    supportsStreaming: true,
+  }
+  const signInGate = Promise.withResolvers<void>()
+  const rerenderGate = Promise.withResolvers<void>()
+  const rerenderStarted = Promise.withResolvers<void>()
+  let signInFinished = false
+  const requestRerender = jest.fn(() => {
+    if (signInFinished) {
+      rerenderStarted.resolve()
+    }
+    return rerenderGate.promise
+  })
+  const execute = jest.fn(async (id: string) => {
+    expect(id).toBe('Layout.signIn')
+    await signInGate.promise
+    signInFinished = true
+  })
+  const instance = await createInstance(
+    { ...createViewContext(undefined), requestRerender },
+    undefined,
+    undefined,
+    execute,
+    {
+      async createApi() {
+        return createMockChatApi()
+      },
+      async resolveConfiguration() {
+        return configuration
+      },
+    },
+  )
+  try {
+    await dispatch(instance, { name: 'login', type: 'click' })
+    expect(execute).toHaveBeenCalledWith('Layout.signIn')
+    expect(instance.getState().loginPending).toBe(true)
+    expect(getNodesByClass(instance.render(), 'ChatLoginButton')[0]).toEqual(
+      expect.objectContaining({ disabled: true }),
+    )
+
+    await dispatch(instance, { name: 'login', type: 'click' })
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(requestRerender).not.toHaveBeenCalled()
+
+    signInGate.resolve()
+    await rerenderStarted.promise
+    expect(instance.getState().loginPending).toBe(false)
+    expect(requestRerender).toHaveBeenCalledTimes(1)
+    rerenderGate.resolve()
+  } finally {
+    instance.dispose?.()
+    signInGate.resolve()
+    rerenderGate.resolve()
   }
 })
 
@@ -1135,6 +1209,7 @@ test.each(['models', 'request'])(
     jest.useFakeTimers()
     let rejectAuthentication: (() => void) | undefined
     let signedIn = false
+    let loginStarted = false
     const configuration: BackendConfiguration = {
       accessToken: 'rejected-token',
       baseUrl: 'https://backend.example.com',
@@ -1142,8 +1217,16 @@ test.each(['models', 'request'])(
     }
     const resolveConfiguration = jest.fn(async () => configuration)
     const api = createMockChatApi(0)
+    const loginFinished = Promise.withResolvers<void>()
     const instance = await createInstance(
-      createViewContext(undefined),
+      {
+        ...createViewContext(undefined),
+        async requestRerender() {
+          if (loginStarted) {
+            loginFinished.resolve()
+          }
+        },
+      },
       undefined,
       undefined,
       async () => {
@@ -1176,7 +1259,9 @@ test.each(['models', 'request'])(
       ).toHaveLength(1)
       await jest.advanceTimersByTimeAsync(2000)
       expect(resolveConfiguration).toHaveBeenCalledTimes(1)
+      loginStarted = true
       await dispatch(instance, { name: 'login', type: 'click' })
+      await loginFinished.promise
       expect(instance.getState().loginRequired).toBe(false)
       expect(
         getNodesByClass(instance.render(), 'ChatComposerInput'),
