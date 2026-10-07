@@ -104,7 +104,14 @@ const mapInput = (input: AgentInput): Readonly<Record<string, unknown>> => {
     }
   }
   return {
-    content: [{ text: input.content, type: 'input_text' }],
+    content: [
+      { text: input.content, type: 'input_text' },
+      ...(input.attachments || []).map((attachment) => ({
+        detail: 'auto',
+        image_url: attachment.dataUrl,
+        type: 'input_image',
+      })),
+    ],
     role: input.role,
   }
 }

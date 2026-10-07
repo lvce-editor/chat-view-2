@@ -30,13 +30,19 @@ export const node = (
 export const div = (
   className: string,
   children: readonly TreeNode[],
-  options: Readonly<{ style?: string }> = {},
+  options: Readonly<{
+    onDragOver?: string
+    onDrop?: string
+    style?: string
+  }> = {},
 ): TreeNode => {
   return node(
     VirtualDomElements.Div,
     {
       className,
       ...(options.style && { style: options.style }),
+      ...(options.onDragOver && { onDragOver: options.onDragOver }),
+      ...(options.onDrop && { onDrop: options.onDrop }),
     },
     children,
   )
@@ -135,7 +141,11 @@ export const heading = (
   return node(type, { className }, [textNode(value)])
 }
 
-export const textArea = (value: string, placeholder: string): TreeNode => {
+export const textArea = (
+  value: string,
+  placeholder: string,
+  options: Readonly<{ onPaste?: string }> = {},
+): TreeNode => {
   return node(VirtualDomElements.TextArea, {
     ariaLabel: 'Message',
     className: 'ChatComposerInput',
@@ -143,6 +153,7 @@ export const textArea = (value: string, placeholder: string): TreeNode => {
     onBlur: 'handleBlur',
     onFocus: 'handleFocus',
     onInput: 'handleInput',
+    ...(options.onPaste && { onPaste: options.onPaste }),
     placeholder,
     rows: 1,
     spellcheck: true,

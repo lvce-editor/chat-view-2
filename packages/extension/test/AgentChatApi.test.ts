@@ -91,7 +91,13 @@ test('runs a multi-step tool loop and records a compact event history', async ()
     toolHost,
   })
 
+  const attachment = {
+    dataUrl: 'data:image/png;base64,aGVsbG8=',
+    mimeType: 'image/png',
+    name: 'sample.png',
+  }
   const task = await api.createTask('Inspect this repo', 'gpt-test', {
+    attachments: [attachment],
     onTrace(message) {
       trace.push(message)
     },
@@ -111,6 +117,12 @@ test('runs a multi-step tool loop and records a compact event history', async ()
       type: 'function_call',
     },
   ])
+  expect(runStep.mock.calls[0]?.[0].input[0]).toEqual(
+    expect.objectContaining({ attachments: [attachment] }),
+  )
+  expect(task.events[0]).toEqual(
+    expect.objectContaining({ attachments: [attachment] }),
+  )
   expect(task.responseHistory).toEqual([
     { content: 'Finished', role: 'assistant' },
   ])
