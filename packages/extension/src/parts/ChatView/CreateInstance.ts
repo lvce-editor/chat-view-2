@@ -48,6 +48,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly handleImageDrop: (dropId: unknown) => Promise<void>
   readonly handleImagePaste: (fileIds: unknown) => Promise<void>
+  readonly handleKeyDown: (key: unknown) => void
   readonly handleSessionsSashPointerDown: (
     clientX: number,
     containerWidth: number,
@@ -894,6 +895,11 @@ export const createInstance = async (
         state.errorMessage =
           error instanceof Error ? error.message : String(error)
         await context?.requestRerender()
+      }
+    },
+    handleKeyDown(key: unknown): void {
+      if (key === 'Escape' && state.modelPickerOpen) {
+        state.modelPickerOpen = false
       }
     },
     handleSessionsSashPointerDown(

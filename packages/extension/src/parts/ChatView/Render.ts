@@ -778,7 +778,11 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       renderTaskList(tasks, fontFamily, fontSize),
       renderComposer(state),
     ],
-    { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+    {
+      onDragOver: 'handleDragOver',
+      onDrop: 'handleImageDrop',
+      onKeyDown: 'handleKeyDown',
+    },
   )
 }
 
@@ -957,13 +961,21 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     return Dom.div(
       getRootClassName(state, 'ChatDetailView'),
       [header, Dom.div('ChatConversationBody', [messages, changes, composer])],
-      { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+      {
+        onDragOver: 'handleDragOver',
+        onDrop: 'handleImageDrop',
+        onKeyDown: 'handleKeyDown',
+      },
     )
   }
   return Dom.div(
     getRootClassName(state, 'ChatDetailView'),
     [header, messages, changes, composer],
-    { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+    {
+      onDragOver: 'handleDragOver',
+      onDrop: 'handleImageDrop',
+      onKeyDown: 'handleKeyDown',
+    },
   )
 }
 
@@ -1035,7 +1047,11 @@ export const render = (
               renderComposer(state),
             ]),
           ],
-          { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+          {
+            onDragOver: 'handleDragOver',
+            onDrop: 'handleImageDrop',
+            onKeyDown: 'handleKeyDown',
+          },
         )
     return Dom.flatten(
       Dom.div(
@@ -1067,7 +1083,11 @@ export const render = (
           }),
           conversation,
         ],
-        { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+        {
+          onDragOver: 'handleDragOver',
+          onDrop: 'handleImageDrop',
+          onKeyDown: 'handleKeyDown',
+        },
       ),
     )
   }

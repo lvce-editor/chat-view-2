@@ -1079,6 +1079,44 @@ test('opens the model picker without adding model controls to the header', async
   expect(getText(dom)).toContain('GPT-5.4')
 })
 
+test('closes the model picker on Escape without changing the model or draft', async () => {
+  const instance = await createTestInstance()
+  instance.setState({
+    ...instance.getState(),
+    draft: 'keep this draft',
+    modelPickerOpen: true,
+    selectedModelId: 'gpt-5.4',
+  })
+
+  instance.handleKeyDown('Enter')
+  expect(instance.getState().modelPickerOpen).toBe(true)
+
+  instance.handleKeyDown('Escape')
+  expect(instance.getState().modelPickerOpen).toBe(false)
+  expect(instance.getState().selectedModelId).toBe('gpt-5.4')
+  expect(instance.getState().draft).toBe('keep this draft')
+  expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+
+  instance.handleKeyDown('Escape')
+  expect(instance.getState().modelPickerOpen).toBe(false)
+  await dispatch(instance, { name: 'model-picker', type: 'click' })
+  expect(instance.getState().modelPickerOpen).toBe(true)
+  instance.dispose?.()
+})
+
+test('registers model picker keydown handling on the view root', async () => {
+  const instance = await createTestInstance()
+
+  expect(view.eventListeners).toContainEqual({
+    name: 'handleKeyDown',
+    params: ['handleKeyDown', 'event.key'],
+  })
+  expect(instance.render()[0]).toEqual(
+    expect.objectContaining({ onKeyDown: 'handleKeyDown' }),
+  )
+  instance.dispose?.()
+})
+
 test('shows how many seconds an active task has been working', async () => {
   jest.useFakeTimers()
   jest.setSystemTime(Date.parse('2026-07-15T12:00:00.000Z'))
