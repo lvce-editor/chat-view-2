@@ -1,9 +1,21 @@
-import type { ChatModel, ChatTask } from '../ChatApi/ChatApi.ts'
+import type {
+  ChatImageAttachment,
+  ChatModel,
+  ChatTask,
+} from '../ChatApi/ChatApi.ts'
+
+export interface ChatComposerImage {
+  readonly attachment?: ChatImageAttachment
+  readonly id: string
+  readonly name: string
+  readonly status: 'error' | 'loading' | 'ready'
+}
 
 export interface ChatViewState {
   readonly activityExpanded: boolean
   readonly changesExpanded: boolean
   readonly composerFocused: boolean
+  readonly composerImages: readonly ChatComposerImage[]
   readonly copiedMessageId: string
   readonly draft: string
   readonly errorMessage: string

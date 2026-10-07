@@ -20,12 +20,19 @@ export interface ChatChangedFile {
   readonly status: 'added' | 'deleted' | 'modified'
 }
 
+export interface ChatImageAttachment {
+  readonly dataUrl: string
+  readonly mimeType: string
+  readonly name: string
+}
+
 interface ChatTaskEventBase {
   readonly id: string
   readonly timestamp: string
 }
 
 export interface ChatUserMessageEvent extends ChatTaskEventBase {
+  readonly attachments?: readonly ChatImageAttachment[]
   readonly text: string
   readonly type: 'user-message'
 }
@@ -130,6 +137,7 @@ export interface ChatTask {
 }
 
 export interface ChatRunOptions {
+  readonly attachments?: readonly ChatImageAttachment[]
   readonly onTrace?: (message: ChatTraceMessage) => void | Promise<void>
   readonly onUpdate?: (task: ChatTask) => void | Promise<void>
   readonly signal?: AbortSignal
@@ -151,5 +159,9 @@ export interface ChatApi {
     message: string,
     options?: ChatRunOptions,
   ) => Promise<ChatTask>
-  readonly steer: (taskId: string, message: string) => Promise<void>
+  readonly steer: (
+    taskId: string,
+    message: string,
+    attachments?: readonly ChatImageAttachment[],
+  ) => Promise<void>
 }

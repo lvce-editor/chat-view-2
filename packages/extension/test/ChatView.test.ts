@@ -58,8 +58,22 @@ const dispatch = async (
 const createTestInstance = async (
   delayMs = 0,
   readPreference?: (key: string) => Promise<unknown>,
+  imageTransferHost?: {
+    readonly discardDrop: (dropId: number) => Promise<void>
+    readonly getClipboardFiles: (
+      fileIds: readonly number[],
+    ) => Promise<readonly File[]>
+    readonly getDroppedFiles: (dropId: number) => Promise<readonly File[]>
+  },
 ) => {
-  return createInstance(undefined, createMockChatApi(delayMs), readPreference)
+  return createInstance(
+    undefined,
+    createMockChatApi(delayMs),
+    readPreference,
+    undefined,
+    undefined,
+    imageTransferHost,
+  )
 }
 
 const createViewContext = (state: unknown): ViewContext => ({
@@ -133,6 +147,135 @@ test('requests scrolling the messages to the bottom after every render', async (
   const instance = await createTestInstance()
 
   expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+})
+
+test('shows loading feedback and blocks submission until images finish loading', async () => {
+  const instance = await createTestInstance()
+  instance.setState({
+    ...instance.getState(),
+    composerImages: [{ id: 'image-1', name: 'sample.png', status: 'loading' }],
+    draft: 'Describe this',
+  })
+
+  expect(
+    getNodesByClass(instance.render(), 'ChatComposerImage-loading'),
+  ).toHaveLength(1)
+  expect(getText(instance.render())).toContain('Loading image…')
+  await instance.submit()
+
+  expect(instance.getState().draft).toBe('Describe this')
+  expect(instance.getState().selectedTask).toBeUndefined()
+})
+
+test('submits image attachments and keeps a small preview in the message history', async () => {
+  const instance = await createTestInstance()
+  const attachment = {
+    dataUrl: 'data:image/png;base64,aGVsbG8=',
+    mimeType: 'image/png',
+    name: 'sample.png',
+  }
+  instance.setState({
+    ...instance.getState(),
+    composerImages: [
+      { attachment, id: 'image-1', name: 'sample.png', status: 'ready' },
+    ],
+    draft: 'Describe this',
+  })
+
+  await instance.submit()
+
+  expect(instance.getState().selectedTask?.events).toContainEqual(
+    expect.objectContaining({
+      attachments: [attachment],
+      text: 'Describe this',
+      type: 'user-message',
+    }),
+  )
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      alt: 'sample.png',
+      className: 'ChatMessageImage',
+      src: attachment.dataUrl,
+    }),
+  )
+})
+
+test('loads pasted image files once and submits the decoded image bytes', async () => {
+  const imageBytes = Promise.withResolvers<ArrayBuffer>()
+  const file = {
+    arrayBuffer: () => imageBytes.promise,
+    name: 'pasted.png',
+    type: 'image/png',
+  } as File
+  const imageTransferHost = {
+    async discardDrop() {},
+    async getClipboardFiles() {
+      return [file]
+    },
+    async getDroppedFiles() {
+      return []
+    },
+  }
+  const instance = await createTestInstance(0, undefined, imageTransferHost)
+  instance.setState({ ...instance.getState(), draft: 'Read the pasted image' })
+
+  const loading = instance.handleImagePaste([1])
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  expect(instance.getState().composerImages[0]?.status).toBe('loading')
+  await instance.submit()
+  expect(instance.getState().selectedTask).toBeUndefined()
+
+  imageBytes.resolve(new TextEncoder().encode('hello').buffer)
+  await loading
+  expect(instance.getState().composerImages[0]?.status).toBe('ready')
+  await instance.submit()
+
+  expect(
+    instance
+      .getState()
+      .selectedTask?.events.find((event) => event.type === 'user-message'),
+  ).toEqual(
+    expect.objectContaining({
+      attachments: [
+        {
+          dataUrl: 'data:image/png;base64,aGVsbG8=',
+          mimeType: 'image/png',
+          name: 'pasted.png',
+        },
+      ],
+    }),
+  )
+})
+
+test('reads dropped image data and releases its drop session', async () => {
+  const file = {
+    arrayBuffer: async () => new TextEncoder().encode('drop').buffer,
+    name: 'dropped.png',
+    type: 'image/png',
+  } as File
+  const discardDrop = jest.fn(async (_dropId: number) => {})
+  const getDroppedFiles = jest.fn(async (_dropId: number) => [file])
+  const instance = await createTestInstance(0, undefined, {
+    discardDrop,
+    async getClipboardFiles() {
+      return []
+    },
+    getDroppedFiles,
+  })
+
+  await instance.handleImageDrop(42)
+
+  expect(getDroppedFiles).toHaveBeenCalledWith(42)
+  expect(discardDrop).toHaveBeenCalledWith(42)
+  expect(instance.getState().composerImages[0]).toEqual(
+    expect.objectContaining({
+      attachment: expect.objectContaining({
+        dataUrl: 'data:image/png;base64,ZHJvcA==',
+        mimeType: 'image/png',
+      }),
+      status: 'ready',
+    }),
+  )
 })
 
 test('saves and restores the composer draft through view state', async () => {

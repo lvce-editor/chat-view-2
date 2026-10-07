@@ -123,7 +123,13 @@ export const createAgentChatApi = ({
   store,
   toolHost,
 }: AgentChatApiOptions): ChatApi => {
-  const steering = new Map<string, string[]>()
+  const steering = new Map<
+    string,
+    {
+      readonly attachments?: ChatRunOptions['attachments']
+      readonly text: string
+    }[]
+  >()
 
   const run = async (
     initialTask: ChatTask,
@@ -145,6 +151,7 @@ export const createAgentChatApi = ({
     let input: readonly AgentInput[] = [
       {
         content: `${await toolHost.getWorkspaceContext()}\n\nUser task:\n${message}`,
+        ...(options?.attachments && { attachments: options.attachments }),
         role: 'user',
       },
     ]
@@ -160,17 +167,26 @@ export const createAgentChatApi = ({
           for (const steeringMessage of queued) {
             task = await withEvent(
               task,
-              createEvent({ text: steeringMessage, type: 'user-message' }),
+              createEvent({
+                ...(steeringMessage.attachments && {
+                  attachments: steeringMessage.attachments,
+                }),
+                text: steeringMessage.text,
+                type: 'user-message',
+              }),
               store,
               options,
             )
           }
           input = [
             ...input,
-            {
-              content: `User steering update:\n${queued.join('\n')}`,
-              role: 'user',
-            },
+            ...queued.map((steeringMessage) => ({
+              content: `User steering update:\n${steeringMessage.text}`,
+              ...(steeringMessage.attachments && {
+                attachments: steeringMessage.attachments,
+              }),
+              role: 'user' as const,
+            })),
           ]
         }
         const result = await backend.runStep({
@@ -229,13 +245,22 @@ export const createAgentChatApi = ({
           for (const steeringMessage of lateSteering) {
             task = await withEvent(
               task,
-              createEvent({ text: steeringMessage, type: 'user-message' }),
+              createEvent({
+                ...(steeringMessage.attachments && {
+                  attachments: steeringMessage.attachments,
+                }),
+                text: steeringMessage.text,
+                type: 'user-message',
+              }),
               store,
               options,
             )
           }
           input = lateSteering.map((steeringMessage) => ({
-            content: `User steering update:\n${steeringMessage}`,
+            content: `User steering update:\n${steeringMessage.text}`,
+            ...(steeringMessage.attachments && {
+              attachments: steeringMessage.attachments,
+            }),
             role: 'user' as const,
           }))
           continue
@@ -407,7 +432,13 @@ export const createAgentChatApi = ({
       const now = new Date().toISOString()
       const task: ChatTask = {
         createdAt: now,
-        events: [createEvent({ text: message, type: 'user-message' })],
+        events: [
+          createEvent({
+            ...(options?.attachments && { attachments: options.attachments }),
+            text: message,
+            type: 'user-message',
+          }),
+        ],
         id: `task-${Date.now()}-${nextTaskId++}`,
         modelId,
         status: 'idle',
@@ -449,15 +480,22 @@ export const createAgentChatApi = ({
     async sendMessage(task, message, options) {
       const updated = appendEvent(
         task,
-        createEvent({ text: message, type: 'user-message' }),
+        createEvent({
+          ...(options?.attachments && { attachments: options.attachments }),
+          text: message,
+          type: 'user-message',
+        }),
       )
       await store.save(updated)
       await notify(updated, options)
       return run(updated, message, options)
     },
-    async steer(taskId, message) {
+    async steer(taskId, message, attachments) {
       const messages = steering.get(taskId) || []
-      steering.set(taskId, [...messages, message])
+      steering.set(taskId, [
+        ...messages,
+        { ...(attachments && { attachments }), text: message },
+      ])
     },
   }
 }

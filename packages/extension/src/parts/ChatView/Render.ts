@@ -169,6 +169,20 @@ const renderMessage = (
   const copied = message.id === copiedMessageId
   return Dom.div(`ChatMessage ${roleClass}`, [
     Dom.div('ChatMessageText', renderMessageText(message.text)),
+    ...(message.type === 'user-message' && message.attachments?.length
+      ? [
+          Dom.div(
+            'ChatMessageImages',
+            message.attachments.map((attachment) =>
+              Dom.node(VirtualDomElements.Img, {
+                alt: attachment.name,
+                className: 'ChatMessageImage',
+                src: attachment.dataUrl,
+              }),
+            ),
+          ),
+        ]
+      : []),
     ...(message.type === 'user-message'
       ? [
           Dom.div('ChatMessageMetadata', [
@@ -232,7 +246,13 @@ const getSelectedModelLabel = (state: Readonly<ChatViewState>): string => {
 }
 
 const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const { draft, modelPickerOpen, selectedModelId, selectedTask } = state
+  const {
+    composerImages,
+    draft,
+    modelPickerOpen,
+    selectedModelId,
+    selectedTask,
+  } = state
   const running = isRunning(selectedTask)
   const placeholder = running
     ? 'Steer the current task'
@@ -242,7 +262,43 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   return Dom.div('ChatComposerArea', [
     renderModelPicker(state),
     Dom.form('composer', 'ChatComposer', [
-      Dom.div('ChatComposerInputContainer', [Dom.textArea(draft, placeholder)]),
+      ...(composerImages.length > 0
+        ? [
+            Dom.div(
+              'ChatComposerImages',
+              composerImages.map((image) =>
+                Dom.div(`ChatComposerImage ChatComposerImage-${image.status}`, [
+                  ...(image.status === 'ready' && image.attachment
+                    ? [
+                        Dom.node(VirtualDomElements.Img, {
+                          alt: image.name,
+                          className: 'ChatComposerImagePreview',
+                          src: image.attachment.dataUrl,
+                        }),
+                      ]
+                    : [
+                        Dom.div('ChatComposerImageStatus', [
+                          Dom.textNode(
+                            image.status === 'loading'
+                              ? 'Loading image…'
+                              : 'Could not load image',
+                          ),
+                        ]),
+                      ]),
+                  Dom.button(
+                    `remove-image:${image.id}`,
+                    '×',
+                    'ChatComposerImageRemove',
+                    { ariaLabel: `Remove ${image.name}` },
+                  ),
+                ]),
+              ),
+            ),
+          ]
+        : []),
+      Dom.div('ChatComposerInputContainer', [
+        Dom.textArea(draft, placeholder, { onPaste: 'handleImagePaste' }),
+      ]),
       Dom.div('ChatComposerControls', [
         Dom.div('ChatComposerSpacer', []),
         Dom.button(
@@ -258,7 +314,10 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
             })
           : Dom.button('submit', '↑', 'ChatSubmitButton', {
               ariaLabel: 'Send message',
-              disabled: !draft.trim() || !selectedModelId,
+              disabled:
+                (!draft.trim() && composerImages.length === 0) ||
+                composerImages.some((image) => image.status !== 'ready') ||
+                !selectedModelId,
               title: 'Send message',
             }),
       ]),
@@ -298,23 +357,27 @@ const getRootClassName = (
 
 const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   const { errorMessage, fontFamily, fontSize, tasks } = state
-  return Dom.div(getRootClassName(state, 'ChatListView'), [
-    Dom.div('ChatTaskListHeader', [
-      Dom.heading(1, 'ChatTitle', 'Tasks'),
-      Dom.div('ChatHeaderSpacer', []),
-      ...renderFocusModeButton(state),
-      Dom.div('ChatTaskCount', [
-        Dom.textNode(
-          `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`,
-        ),
+  return Dom.div(
+    getRootClassName(state, 'ChatListView'),
+    [
+      Dom.div('ChatTaskListHeader', [
+        Dom.heading(1, 'ChatTitle', 'Tasks'),
+        Dom.div('ChatHeaderSpacer', []),
+        ...renderFocusModeButton(state),
+        Dom.div('ChatTaskCount', [
+          Dom.textNode(
+            `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'}`,
+          ),
+        ]),
       ]),
-    ]),
-    ...(errorMessage
-      ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-      : []),
-    renderTaskList(tasks, fontFamily, fontSize),
-    renderComposer(state),
-  ])
+      ...(errorMessage
+        ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+        : []),
+      renderTaskList(tasks, fontFamily, fontSize),
+      renderComposer(state),
+    ],
+    { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+  )
 }
 
 const getLatestActivities = (
@@ -463,17 +526,17 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   const changes = renderChanges(state)
   const composer = renderComposer(state)
   if (focusMode) {
-    return Dom.div(getRootClassName(state, 'ChatDetailView'), [
-      header,
-      Dom.div('ChatConversationBody', [messages, changes, composer]),
-    ])
+    return Dom.div(
+      getRootClassName(state, 'ChatDetailView'),
+      [header, Dom.div('ChatConversationBody', [messages, changes, composer])],
+      { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+    )
   }
-  return Dom.div(getRootClassName(state, 'ChatDetailView'), [
-    header,
-    messages,
-    changes,
-    composer,
-  ])
+  return Dom.div(
+    getRootClassName(state, 'ChatDetailView'),
+    [header, messages, changes, composer],
+    { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+  )
 }
 
 export const render = (
@@ -491,56 +554,72 @@ export const render = (
   } = state
   if (loginRequired) {
     return Dom.flatten(
-      Dom.div(getRootClassName(state, 'ChatLoggedOut'), [
-        ...renderFocusModeButton(state),
-        Dom.node(VirtualDomElements.P, { className: 'ChatLoginDescription' }, [
-          Dom.textNode(
-            'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
+      Dom.div(
+        getRootClassName(state, 'ChatLoggedOut'),
+        [
+          ...renderFocusModeButton(state),
+          Dom.node(
+            VirtualDomElements.P,
+            { className: 'ChatLoginDescription' },
+            [
+              Dom.textNode(
+                'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
+              ),
+            ],
           ),
-        ]),
-        Dom.button('login', 'Login', 'ChatLoginButton', {
-          disabled: loginPending,
-        }),
-        ...(errorMessage && !loginPending
-          ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
-          : []),
-      ]),
+          Dom.button('login', 'Login', 'ChatLoginButton', {
+            disabled: loginPending,
+          }),
+          ...(errorMessage && !loginPending
+            ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
+            : []),
+        ],
+        { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+      ),
     )
   }
   if (focusMode) {
     const conversation = selectedTask
       ? renderDetailView(state)
-      : Dom.div('ChatView ChatDetailView', [
-          Dom.div('ChatDetailHeader', [
-            Dom.heading(1, 'ChatTitle', 'Chat'),
-            ...renderFocusModeButton(state),
-          ]),
-          Dom.div('ChatConversationBody', [
-            Dom.div('ChatMessages', [
-              Dom.heading(
-                2,
-                'ChatEmptyTitle',
-                'What would you like to work on?',
-              ),
-              ...(errorMessage
-                ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-                : []),
+      : Dom.div(
+          'ChatView ChatDetailView',
+          [
+            Dom.div('ChatDetailHeader', [
+              Dom.heading(1, 'ChatTitle', 'Chat'),
+              ...renderFocusModeButton(state),
             ]),
-            renderChanges(state),
-            renderComposer(state),
-          ]),
-        ])
+            Dom.div('ChatConversationBody', [
+              Dom.div('ChatMessages', [
+                Dom.heading(
+                  2,
+                  'ChatEmptyTitle',
+                  'What would you like to work on?',
+                ),
+                ...(errorMessage
+                  ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+                  : []),
+              ]),
+              renderChanges(state),
+              renderComposer(state),
+            ]),
+          ],
+          { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+        )
     return Dom.flatten(
-      Dom.div('ChatView ChatAiNativeLayout', [
-        Dom.div('ChatSessions', [
-          Dom.div('ChatTaskListHeader', [
-            Dom.heading(1, 'ChatTitle', 'Sessions'),
-            Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
+      Dom.div(
+        'ChatView ChatAiNativeLayout',
+        [
+          Dom.div('ChatSessions', [
+            Dom.div('ChatTaskListHeader', [
+              Dom.heading(1, 'ChatTitle', 'Sessions'),
+              Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
+            ]),
+            renderTaskList(tasks, fontFamily, fontSize),
           ]),
-          renderTaskList(tasks, fontFamily, fontSize),
-        ]),
-        conversation,
-      ]),
+          conversation,
+        ],
+        { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+      ),
     )
   }
   return Dom.flatten(
