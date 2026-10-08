@@ -12,6 +12,7 @@ export const test: Test = async ({ Command, expect, KeyBoard, Locator }) => {
   const activityBar = Locator('.ActivityBar')
   const activityBarLayout = Locator('.ActivityBarLayout')
   const sessions = Locator('.ChatSessions')
+  const taskTitle = Locator('.ChatDetailTitle')
   let expectedSessionsWidth = 280
   for (const side of ['Right', 'Left']) {
     await Command.execute(`Layout.moveSideBar${side}`)
@@ -51,6 +52,7 @@ export const test: Test = async ({ Command, expect, KeyBoard, Locator }) => {
     const task = Locator('.ChatTaskButton').first()
     // eslint-disable-next-line e2e/no-direct-click
     await task.click()
+    await expect(taskTitle).toBeVisible()
     await KeyBoard.press('Control+B')
     await expect(sessions).toHaveCount(0)
     await expect(sash).toHaveCount(0)

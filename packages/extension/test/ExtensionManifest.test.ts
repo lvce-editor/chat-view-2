@@ -107,6 +107,11 @@ test('makes AI-native layout switching available by default', async () => {
     label: 'View: Toggle AI-Native / IDE Layout',
   })
   expect(manifest.activation).toContain('onCommand:chat2.toggleAiNativeLayout')
+  expect(manifest.commands).toContainEqual({
+    id: 'chat2.toggleSessionsList',
+    label: 'Chat 2: Toggle Sessions List',
+  })
+  expect(manifest.activation).toContain('onCommand:chat2.toggleSessionsList')
 })
 
 test('contributes selectable AI-native theme presets', async () => {
