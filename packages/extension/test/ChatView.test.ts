@@ -400,12 +400,14 @@ test('restores a copied chat URL when the view has no saved state', async () => 
 })
 
 test('AI-native browser title includes the editor name and restores the workspace title', async () => {
-  const execute = jest.fn(async (command: string) => {
-    if (command === 'Workspace.getPath') {
-      return '/workspace/my-project'
-    }
-    return command === 'Layout.getSideBarFocusMode'
-  })
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      if (command === 'Workspace.getPath') {
+        return '/workspace/my-project'
+      }
+      return command === 'Layout.getSideBarFocusMode'
+    },
+  )
   const instance = await createInstance(
     undefined,
     createMockChatApi(),
