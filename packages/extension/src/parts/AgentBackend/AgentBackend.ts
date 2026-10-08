@@ -38,6 +38,7 @@ export interface AgentStepResult {
 }
 
 export interface AgentBackend {
+  readonly generateTitle?: (message: string, modelId: string) => Promise<string>
   readonly listModels: () => Promise<readonly ChatModel[]>
   readonly runStep: (options: AgentStepOptions) => Promise<AgentStepResult>
 }

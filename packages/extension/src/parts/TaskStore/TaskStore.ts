@@ -29,8 +29,15 @@ export const createMemoryTaskStore = (
         .slice(0, Math.max(0, limit))
     },
     async save(task) {
-      const archived = tasks.get(task.id)?.archived
-      tasks.set(task.id, archived ? { ...task, archived: true } : task)
+      const existing = tasks.get(task.id)
+      tasks.set(task.id, {
+        ...task,
+        ...(existing?.archived && { archived: true }),
+        ...(existing?.titleGenerated && {
+          title: existing.title,
+          titleGenerated: true,
+        }),
+      })
     },
   }
 }
@@ -113,7 +120,14 @@ export const createIndexedDbTaskStore = (): TaskStore => {
           store.get(task.id),
         )
         await requestToPromise(
-          store.put(existing?.archived ? { ...task, archived: true } : task),
+          store.put({
+            ...task,
+            ...(existing?.archived && { archived: true }),
+            ...(existing?.titleGenerated && {
+              title: existing.title,
+              titleGenerated: true,
+            }),
+          }),
         )
       } finally {
         database.close()

@@ -29,6 +29,7 @@ export const createDefaultChatApi = async ({
     openAiWebSearch = true,
     refreshAccessToken,
     supportsStreaming,
+    titleModelId = 'gpt-6-luna',
   } = providedConfiguration ||
   (await resolveBackendConfiguration(undefined, providedAccessToken))
   if (!baseUrl) {
@@ -44,6 +45,7 @@ export const createDefaultChatApi = async ({
       supportsStreaming,
     }),
     store: createIndexedDbTaskStore(),
+    titleModelId,
     toolHost: await createRemoteAgentToolHost(fileSystemAccess),
   })
 }

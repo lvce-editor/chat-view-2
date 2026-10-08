@@ -7,6 +7,7 @@ export interface BackendConfiguration {
   readonly openAiWebSearch?: boolean
   readonly refreshAccessToken?: () => Promise<string>
   readonly supportsStreaming: boolean
+  readonly titleModelId?: string
 }
 
 interface BackendConfigurationHost {
@@ -35,6 +36,17 @@ const getPreferenceString = async (
 ): Promise<string> => {
   try {
     return getString(await host.getPreference(key))
+  } catch {
+    return ''
+  }
+}
+
+const getPreferenceValue = async (
+  host: BackendConfigurationHost,
+  key: string,
+): Promise<unknown> => {
+  try {
+    return await host.getPreference(key)
   } catch {
     return ''
   }
@@ -86,6 +98,13 @@ const normalizeBackendUrl = (value: string): string => {
   return value.slice(0, end)
 }
 
+const allowedTitleModels = new Set(['gpt-6-luna', 'gpt-5.6-luna'])
+
+const getTitleModelId = (value: unknown): string => {
+  const modelId = getString(value)
+  return allowedTitleModels.has(modelId) ? modelId : 'gpt-6-luna'
+}
+
 export const resolveBackendConfiguration = async (
   host: BackendConfigurationHost = defaultHost,
   providedAccessToken = '',
@@ -96,12 +115,14 @@ export const resolveBackendConfiguration = async (
     configuredSupportsStreaming,
     useMockBackend,
     openAiWebSearch,
+    titleModelId,
   ] = await Promise.all([
     getPreferenceString(host, 'chat2.backendUrl'),
     executeStringCommand(host, 'Layout.getBackendUrl'),
     getPreferenceBoolean(host, 'chat2.supportsStreaming'),
     getPreferenceBoolean(host, 'chat2.useMockBackend'),
     getPreferenceBoolean(host, 'chat2.openAiWebSearch', true),
+    getPreferenceValue(host, 'chat2.titleModelId'),
   ])
   if (useMockBackend) {
     return {
@@ -109,6 +130,7 @@ export const resolveBackendConfiguration = async (
       baseUrl: '',
       openAiWebSearch,
       supportsStreaming: configuredSupportsStreaming,
+      titleModelId: getTitleModelId(titleModelId),
     }
   }
   const baseUrl = configuredBaseUrl || editorBaseUrl
@@ -126,6 +148,7 @@ export const resolveBackendConfiguration = async (
     baseUrl,
     openAiWebSearch,
     supportsStreaming,
+    titleModelId: getTitleModelId(titleModelId),
     ...(usesEditorBackend && {
       refreshAccessToken: async (): Promise<string> =>
         getString(await host.getAccessToken({ refresh: 'always' })),

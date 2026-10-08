@@ -676,6 +676,35 @@ export const createResponsesBackend = ({
     }
   }
   return {
+    async generateTitle(message, modelId) {
+      const response = await authenticatedFetch(`${root}/v1/responses`, {
+        body: JSON.stringify({
+          input: [
+            {
+              content: [{ text: message, type: 'input_text' }],
+              role: 'user',
+            },
+          ],
+          instructions:
+            'Create a concise, descriptive title for the user message. Correct spelling mistakes. Return only the title, with no quotes or explanation.',
+          max_output_tokens: 40,
+          model: modelId,
+          store: false,
+          stream: false,
+          tools: [],
+        }),
+        credentials: 'include',
+        method: 'POST',
+      })
+      if (!response.ok) {
+        throw new Error(await getModelRequestErrorMessage(response, false))
+      }
+      const result = await readResponse(response)
+      if (result.toolCalls.length > 0) {
+        throw new Error('Title generation returned an unexpected tool call')
+      }
+      return result.text
+    },
     async listModels() {
       const response = await authenticatedFetch(`${root}/v1/models`, {
         credentials: 'include',

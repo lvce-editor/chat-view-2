@@ -49,6 +49,12 @@
       "default": "",
       "description": "The preferred model for new Chat 2 tasks."
     },
+    "chat2.titleModelId": {
+      "type": "string",
+      "enum": ["gpt-6-luna", "gpt-5.6-luna"],
+      "default": "gpt-6-luna",
+      "description": "The model used to generate titles for new chats."
+    },
     "chat2.supportsStreaming": {
       "type": "boolean",
       "default": false,

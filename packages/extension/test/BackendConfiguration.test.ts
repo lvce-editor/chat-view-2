@@ -11,6 +11,7 @@ const createHost = ({
   configuredBackendUrl = '',
   openAiWebSearch = true,
   supportsStreaming = false,
+  titleModelId = 'gpt-6-luna',
   useMockBackend = false,
 }: {
   readonly accessToken?: string
@@ -18,6 +19,7 @@ const createHost = ({
   readonly configuredBackendUrl?: string
   readonly openAiWebSearch?: boolean
   readonly supportsStreaming?: boolean
+  readonly titleModelId?: string
   readonly useMockBackend?: boolean
 } = {}): BackendConfigurationHost => {
   const executeCommand = jest.fn(async (id: string): Promise<unknown> => {
@@ -36,6 +38,9 @@ const createHost = ({
       if (key === 'chat2.openAiWebSearch') {
         return openAiWebSearch
       }
+      if (key === 'chat2.titleModelId') {
+        return titleModelId
+      }
       return key === 'chat2.useMockBackend'
         ? useMockBackend
         : configuredBackendUrl
@@ -52,6 +57,7 @@ test('uses the editor backend and authentication by default', async () => {
     openAiWebSearch: true,
     refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.backendUrl')
   expect(host.executeCommand).toHaveBeenCalledWith('Layout.getBackendUrl')
@@ -72,6 +78,7 @@ test('uses editor authentication for an equivalent configured backend URL', asyn
     openAiWebSearch: true,
     refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
 })
 
@@ -86,6 +93,7 @@ test('prefers prompt authentication for the editor backend', async () => {
     openAiWebSearch: true,
     refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
 })
@@ -102,6 +110,7 @@ test('does not expose editor authentication to a custom backend', async () => {
     baseUrl: 'https://backend.example.com',
     openAiWebSearch: true,
     supportsStreaming: false,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
 })
@@ -114,6 +123,7 @@ test('uses the deterministic mock backend when explicitly configured', async () 
     baseUrl: '',
     openAiWebSearch: true,
     supportsStreaming: false,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
 })
@@ -136,6 +146,7 @@ test('falls back to the mock backend when editor configuration is unavailable', 
     baseUrl: '',
     openAiWebSearch: true,
     supportsStreaming: false,
+    titleModelId: 'gpt-6-luna',
   })
 })
 
@@ -143,6 +154,7 @@ test('enables streaming for a custom backend only when explicitly configured', a
   const host = createHost({
     configuredBackendUrl: 'https://backend.example.com',
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
 
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
@@ -150,6 +162,7 @@ test('enables streaming for a custom backend only when explicitly configured', a
     baseUrl: 'https://backend.example.com',
     openAiWebSearch: true,
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.supportsStreaming')
 })
@@ -164,6 +177,7 @@ test('requires login only for the editor backend without an access token', async
     openAiWebSearch: true,
     refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
 })
 
@@ -186,4 +200,13 @@ test('preserves an explicit false web-search preference', async () => {
   )
 
   expect(configuration.openAiWebSearch).toBe(false)
+})
+
+test('uses the selected title model and rejects unsupported model values', async () => {
+  await expect(
+    resolveBackendConfiguration(createHost({ titleModelId: 'gpt-5.6-luna' })),
+  ).resolves.toMatchObject({ titleModelId: 'gpt-5.6-luna' })
+  await expect(
+    resolveBackendConfiguration(createHost({ titleModelId: 'gpt-5.6-sol' })),
+  ).resolves.toMatchObject({ titleModelId: 'gpt-6-luna' })
 })

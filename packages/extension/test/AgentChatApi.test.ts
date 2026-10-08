@@ -1,4 +1,5 @@
 // cspell:words nemotron logprobs
+// cspell:words titlte
 /* eslint-disable unicorn/max-nested-calls */
 import type { AgentToolHost } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { expect, jest, test } from '@jest/globals'
@@ -189,6 +190,91 @@ test('runs a multi-step tool loop and records a compact event history', async ()
       role: 'assistant',
     }),
   ])
+})
+
+test('generates the title asynchronously and preserves it through later task saves', async () => {
+  const step =
+    Promise.withResolvers<Awaited<ReturnType<AgentBackend['runStep']>>>()
+  const stepPromise = step.promise
+  const titleUpdated = Promise.withResolvers<void>()
+  const generateTitle = jest
+    .fn<NonNullable<AgentBackend['generateTitle']>>()
+    .mockResolvedValue('Fix the Chat Title')
+  const runStep = jest.fn<AgentBackend['runStep']>(() => stepPromise)
+  const backend: AgentBackend = {
+    generateTitle,
+    async listModels() {
+      return []
+    },
+    runStep,
+  }
+  const store = createMemoryTaskStore()
+  const updates: string[] = []
+  const toolHost: AgentToolHost = {
+    beginTurn() {},
+    async execute() {
+      return { content: '', isError: false }
+    },
+    getChangedFiles() {
+      return []
+    },
+    getDefinitions() {
+      return []
+    },
+    async getWorkspaceContext() {
+      return 'Workspace unavailable'
+    },
+    async revert() {
+      return []
+    },
+  }
+  const api = createAgentChatApi({
+    backend,
+    store,
+    titleModelId: 'gpt-5.6-luna',
+    toolHost,
+  })
+  const taskPromise = api.createTask(
+    'please fix the titlte of this chat',
+    'gpt-test',
+    {
+      onUpdate(task) {
+        updates.push(task.title)
+        if (task.title === 'Fix the Chat Title') {
+          titleUpdated.resolve()
+        }
+      },
+    },
+  )
+
+  await titleUpdated.promise
+  expect(generateTitle).toHaveBeenCalledWith(
+    'please fix the titlte of this chat',
+    'gpt-5.6-luna',
+  )
+  expect(updates[0]).toBe('please fix the titlte of this chat')
+  step.resolve({ responseId: 'response-1', text: 'Done.', toolCalls: [] })
+
+  const task = await taskPromise
+  expect(task).toMatchObject({
+    status: 'completed',
+    title: 'Fix the Chat Title',
+    titleGenerated: true,
+  })
+  expect(task.events).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        text: 'please fix the titlte of this chat',
+        type: 'user-message',
+      }),
+      expect.objectContaining({ text: 'Done.', type: 'assistant-message' }),
+    ]),
+  )
+  await expect(store.get(task.id)).resolves.toMatchObject({
+    title: 'Fix the Chat Title',
+    titleGenerated: true,
+  })
+  expect(updates).toContain('Fix the Chat Title')
 })
 
 test('answers a general question and follow-up when no workspace is open', async () => {
