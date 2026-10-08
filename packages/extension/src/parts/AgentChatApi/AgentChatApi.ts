@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, sonarjs/cognitive-complexity, sonarjs/no-nested-conditional, unicorn/no-top-level-assignment-in-function */
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, sonarjs/cognitive-complexity, sonarjs/no-nested-conditional */
 import type {
   AgentToolCall,
   AgentToolHost,
@@ -28,8 +28,6 @@ const readOnlyTools = new Set([
   'read_file',
   'search_workspace',
 ])
-
-let nextTaskId = 1
 
 const getTitle = (message: string): string => {
   const firstLine = message.split('\n', 1)[0]?.trim() || 'New task'
@@ -439,7 +437,7 @@ export const createAgentChatApi = ({
             type: 'user-message',
           }),
         ],
-        id: `task-${Date.now()}-${nextTaskId++}`,
+        id: crypto.randomUUID(),
         modelId,
         status: 'idle',
         title: getTitle(message),

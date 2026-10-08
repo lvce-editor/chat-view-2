@@ -17,6 +17,18 @@ test('creates a chat task fragment that can be parsed back', () => {
   })
 })
 
+test.each(['7d107d77-56d6-458f-b17f-27dce196bb8b', 'task-1791373265724-1'])(
+  'round-trips chat task ID %s',
+  (id) => {
+    expect(
+      parseChatTaskHash(`https://example.com/${getChatTaskHash(id)}`),
+    ).toEqual({
+      id,
+      type: 'task',
+    })
+  },
+)
+
 test('ignores unrelated fragments', () => {
   expect(parseChatTaskHash('https://example.com/#section')).toEqual({
     type: 'none',

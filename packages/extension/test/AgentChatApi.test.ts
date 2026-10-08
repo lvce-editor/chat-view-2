@@ -257,6 +257,69 @@ test('answers a general question and follow-up when no workspace is open', async
   expect(execute).not.toHaveBeenCalled()
 })
 
+test('creates uniquely identified tasks and preserves their IDs for follow-ups', async () => {
+  const uuids: [string, string] = [
+    '7d107d77-56d6-458f-b17f-27dce196bb8b',
+    '9129e442-9488-4e3b-a263-e08f9b89b458',
+  ]
+  const randomUUID = jest
+    .spyOn(crypto, 'randomUUID')
+    .mockReturnValueOnce(uuids[0])
+    .mockReturnValueOnce(uuids[1])
+  try {
+    const backend: AgentBackend = {
+      async listModels() {
+        return []
+      },
+      async runStep() {
+        return {
+          responseId: 'response',
+          text: 'Done',
+          toolCalls: [],
+        }
+      },
+    }
+    const toolHost: AgentToolHost = {
+      beginTurn() {},
+      async execute() {
+        return { content: '', isError: false }
+      },
+      getChangedFiles() {
+        return []
+      },
+      getDefinitions() {
+        return []
+      },
+      async getWorkspaceContext() {
+        return 'Workspace context is unavailable.'
+      },
+      async revert() {
+        return []
+      },
+    }
+    const store = createMemoryTaskStore()
+    const api = createAgentChatApi({
+      backend,
+      store,
+      toolHost,
+    })
+
+    const first = await api.createTask('First task', 'gpt-test')
+    const followUp = await api.sendMessage(first, 'Continue')
+    const second = await api.createTask('Second task', 'gpt-test')
+
+    expect(first.id).toBe(uuids[0])
+    expect(followUp.id).toBe(first.id)
+    const restoredTask = await api.getTask(first.id)
+    expect(restoredTask?.id).toBe(first.id)
+    expect(second.id).toBe(uuids[1])
+    expect(second.id).not.toBe(first.id)
+    expect(randomUUID).toHaveBeenCalledTimes(2)
+  } finally {
+    randomUUID.mockRestore()
+  }
+})
+
 test('records a failed task when the backend rejects the request', async () => {
   const backend: AgentBackend = {
     async listModels() {
