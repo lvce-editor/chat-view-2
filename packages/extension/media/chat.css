@@ -1101,6 +1101,22 @@
 .ChatAiNativeLayout .ChatMessages {
   gap: 0;
 }
+.ChatAiNativeLayout .ChatConversationBody > .ChatMessages {
+  padding-bottom: 0;
+}
+.ChatAiNativeLayout .ChatConversationBody > .ChatMessages > .ChatComposerArea {
+  box-sizing: border-box;
+  position: sticky;
+  bottom: 0;
+  width: min(100%, 960px);
+  flex: 0 0 auto;
+  margin-top: auto;
+  margin-inline: auto;
+}
+.ChatAiNativeLayout .ChatConversationBody > .ChatMessages > .ChatChanges {
+  width: min(100%, 960px);
+  margin-inline: auto;
+}
 .ChatAiNativeLayout .ChatMessagesContent {
   box-sizing: border-box;
   display: flex;
