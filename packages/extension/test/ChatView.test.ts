@@ -1,4 +1,5 @@
 // cspell:words nemotron
+// cspell:ignore João Gonçalves Zarco
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import type { ViewContext, ViewEvent } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
@@ -1350,6 +1351,69 @@ test('renders Markdown tables in messages while keeping malformed streaming text
       dom.filter((node) => node.type === VirtualDomElements.Img),
     ).toHaveLength(0)
     expect(getNodesByClass(dom, 'ChatMessageTable')).toHaveLength(2)
+  } finally {
+    instance.dispose?.()
+  }
+})
+
+test('renders Markdown headings in saved and streaming messages', async () => {
+  const timestamp = '2026-09-10T12:00:00.000Z'
+  const task: ChatTask = {
+    createdAt: timestamp,
+    events: [
+      createEvent({ text: 'Show headings', type: 'user-message' }),
+      createEvent({
+        text: 'Before\n# Heading one\n## Heading **two**\n### João Gonçalves Zarco\n#### Heading four\n##### Heading five\n###### Heading six',
+        type: 'assistant-message',
+      }),
+    ],
+    id: 'heading-task',
+    modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+    status: 'running',
+    streamingText: 'Streaming **heading**\n### End heading',
+    title: 'Show headings',
+    updatedAt: timestamp,
+  }
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: task.id }),
+    {
+      ...createMockChatApi(),
+      async getTask() {
+        return task
+      },
+    },
+  )
+  try {
+    const dom = instance.render() as readonly any[]
+    const headings = dom.filter((node) =>
+      node.className?.split(' ').includes('ChatMessageHeading'),
+    )
+    expect(headings.map((node) => node.type)).toEqual([
+      VirtualDomElements.H1,
+      VirtualDomElements.H2,
+      VirtualDomElements.H3,
+      VirtualDomElements.H4,
+      VirtualDomElements.H5,
+      VirtualDomElements.H6,
+      VirtualDomElements.H3,
+    ])
+    expect(headings.map((node) => node.className)).toEqual([
+      'ChatMessageHeading ChatMessageHeading-1',
+      'ChatMessageHeading ChatMessageHeading-2',
+      'ChatMessageHeading ChatMessageHeading-3',
+      'ChatMessageHeading ChatMessageHeading-4',
+      'ChatMessageHeading ChatMessageHeading-5',
+      'ChatMessageHeading ChatMessageHeading-6',
+      'ChatMessageHeading ChatMessageHeading-3',
+    ])
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Strong),
+    ).toHaveLength(2)
+    expect(getText(dom)).toContain('João Gonçalves Zarco')
+    expect(getText(dom)).not.toContain('### João Gonçalves Zarco')
+    expect(getText(dom)).toContain('Streaming')
+    expect(getText(dom)).toContain('heading')
+    expect(getText(dom)).toContain('End heading')
   } finally {
     instance.dispose?.()
   }

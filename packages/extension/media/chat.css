@@ -536,6 +536,35 @@
   overflow-wrap: anywhere;
 }
 
+.ChatMessageHeading {
+  margin: 12px 0 6px;
+  line-height: 1.3;
+}
+
+.ChatMessageHeading-1 {
+  font-size: 1.5em;
+}
+
+.ChatMessageHeading-2 {
+  font-size: 1.35em;
+}
+
+.ChatMessageHeading-3 {
+  font-size: 1.2em;
+}
+
+.ChatMessageHeading-4 {
+  font-size: 1.1em;
+}
+
+.ChatMessageHeading-5 {
+  font-size: 1em;
+}
+
+.ChatMessageHeading-6 {
+  font-size: 0.9em;
+}
+
 .ChatMessageTableContainer {
   max-width: 100%;
   margin: 8px 0;
