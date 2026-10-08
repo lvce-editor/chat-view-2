@@ -1121,9 +1121,9 @@ export const render = (
                     ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
                     : []),
                 ]),
+                renderChanges(state),
+                renderComposer(state),
               ]),
-              renderChanges(state),
-              renderComposer(state),
             ]),
           ],
           {

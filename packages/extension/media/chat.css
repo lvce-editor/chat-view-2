@@ -1101,19 +1101,29 @@
 .ChatAiNativeLayout .ChatMessages {
   gap: 0;
 }
-.ChatAiNativeLayout .ChatConversationBody > .ChatMessages {
+.ChatAiNativeLayout
+  .ChatConversationBody:not(:has(.ChatEmptyTitle))
+  > .ChatMessages {
   padding-bottom: 0;
 }
 .ChatAiNativeLayout .ChatConversationBody > .ChatMessages > .ChatComposerArea {
   box-sizing: border-box;
-  position: sticky;
-  bottom: 0;
   width: min(100%, 960px);
-  flex: 0 0 auto;
-  margin-top: auto;
   margin-inline: auto;
 }
-.ChatAiNativeLayout .ChatConversationBody > .ChatMessages > .ChatChanges {
+.ChatAiNativeLayout
+  .ChatConversationBody:not(:has(.ChatEmptyTitle))
+  > .ChatMessages
+  > .ChatComposerArea {
+  position: sticky;
+  bottom: 0;
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+.ChatAiNativeLayout
+  .ChatConversationBody:not(:has(.ChatEmptyTitle))
+  > .ChatMessages
+  > .ChatChanges {
   width: min(100%, 960px);
   margin-inline: auto;
 }
