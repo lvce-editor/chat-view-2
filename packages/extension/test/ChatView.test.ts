@@ -866,16 +866,26 @@ test('submits a task and shows a Codex-style changed-files summary', async () =>
   expect(instance.getState().draft).toBe('')
 })
 
-test('renders message urls as external links and preserves punctuation', async () => {
+test('renders Markdown and bare urls as external links and preserves punctuation', async () => {
   const instance = await createTestInstance()
   await dispatch(instance, {
     name: 'composer',
     type: 'input',
-    value: 'Inspect https://example.com/docs?q=chat.',
+    value:
+      'l [VS Code download page](https://code.visualstudio.com/Download). Also https://example.com/docs?q=chat.',
   })
   await instance.submit()
 
   const dom = instance.render() as readonly any[]
+  expect(dom).toContainEqual({
+    childCount: 1,
+    className: 'ChatMessageLink',
+    href: 'https://code.visualstudio.com/Download',
+    rel: 'noopener noreferrer',
+    target: '_blank',
+    title: 'https://code.visualstudio.com/Download',
+    type: VirtualDomElements.A,
+  })
   expect(dom).toContainEqual({
     childCount: 1,
     className: 'ChatMessageLink',
@@ -885,7 +895,9 @@ test('renders message urls as external links and preserves punctuation', async (
     title: 'https://example.com/docs?q=chat',
     type: VirtualDomElements.A,
   })
-  expect(getText(dom)).toContain('Inspect \nhttps://example.com/docs?q=chat\n.')
+  expect(getText(dom)).toContain(
+    'l \nVS Code download page\n. Also \nhttps://example.com/docs?q=chat\n.',
+  )
 })
 
 test('renders Markdown tables in messages while keeping malformed streaming text literal', async () => {
@@ -1385,7 +1397,8 @@ test('reopening a recovered task renders its answer without the previous error b
     id: 'recovered-task',
     modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
     status: 'completed',
-    streamingText: 'Streaming **bold** and unmatched **',
+    streamingText:
+      'Streaming **bold** and unmatched ** plus [unfinished](https://example.com',
     title: '1+1',
     updatedAt: timestamp,
   }
@@ -1403,8 +1416,10 @@ test('reopening a recovered task renders its answer without the previous error b
     expect(getText(dom)).toContain(
       '2+2 is \n4\n. Also \n5\n! Visit \nhttps://example.com\n.',
     )
-    expect(getText(dom)).toContain('Streaming \nbold\n and unmatched **')
-    expect(getNodesByClass(dom, 'ChatMessageLink')).toHaveLength(1)
+    expect(getText(dom)).toContain(
+      'Streaming \nbold\n and unmatched ** plus [unfinished](',
+    )
+    expect(getNodesByClass(dom, 'ChatMessageLink')).toHaveLength(2)
     expect(
       dom.filter((node) => node.type === VirtualDomElements.Strong),
     ).toHaveLength(3)
