@@ -3,10 +3,14 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 export const name = 'chat2.virtual-dom-view.ai-native-sidebar-side'
 
 export const test: Test = async ({ Command, expect, Locator }) => {
-  await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
+  await Command.execute('Preferences.update', {
+    'chat2.aiNativeTheme': 'default',
+    'chat2.useMockBackend': true,
+  })
   await Command.executeExtensionCommand('chat2.show')
   const chat = Locator('.ChatAiNativeLayout')
   const activityBar = Locator('.ActivityBar')
+  const activityBarLayout = Locator('.ActivityBarLayout')
   const sessions = Locator('.ChatSessions')
   let expectedSessionsWidth = 280
   for (const side of ['Right', 'Left']) {
@@ -18,6 +22,11 @@ export const test: Test = async ({ Command, expect, Locator }) => {
       side === 'Right' ? 'row-reverse' : 'row',
     )
     await expect(sessions).toBeVisible()
+    await expect(activityBarLayout).toHaveCSS(
+      'background-color',
+      'rgb(245, 245, 245)',
+    )
+    await expect(sessions).toHaveCSS('background-color', 'rgb(250, 250, 250)')
     const sash = Locator('.ChatSessionsSash')
     await expect(sash).toHaveAttribute('role', 'separator')
     await sash.dispatchEvent('pointerdown', {
@@ -58,6 +67,11 @@ export const test: Test = async ({ Command, expect, Locator }) => {
       'flex-direction',
       side === 'Right' ? 'row-reverse' : 'row',
     )
+    await expect(activityBarLayout).toHaveCSS(
+      'background-color',
+      'rgb(245, 245, 245)',
+    )
+    await expect(sessions).toHaveCSS('background-color', 'rgb(250, 250, 250)')
     await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
   }
 }

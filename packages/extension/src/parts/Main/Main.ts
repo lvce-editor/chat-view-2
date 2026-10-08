@@ -4,6 +4,7 @@ import {
   registerCommand,
   registerView,
 } from '@lvce-editor/api'
+import { parseChatTaskHash } from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { view, viewId } from '../ChatView/ChatView.ts'
 import {
   newChatInActiveChatViewInstance,
@@ -80,6 +81,14 @@ export const activate = async (): Promise<void> => {
       },
       id,
     })
+  }
+  try {
+    const href = await executeCommand('Layout.getHref')
+    if (typeof href === 'string' && parseChatTaskHash(href).type === 'task') {
+      await executeCommand('SideBar.show', viewId, true)
+    }
+  } catch {
+    // The editor may not expose URL commands while the extension is activating.
   }
 }
 

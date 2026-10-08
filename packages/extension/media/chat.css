@@ -205,7 +205,7 @@
   width: 16px;
   height: 16px;
   background: currentColor;
-  mask: url('/icons/archive.svg') center / 16px no-repeat;
+  mask: url('./icons/archive.svg') center / 16px no-repeat;
   pointer-events: none;
 }
 
@@ -534,6 +534,41 @@
   user-select: text;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.ChatMessageTableContainer {
+  max-width: 100%;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+
+.ChatMessageTable {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.ChatMessageTable th,
+.ChatMessageTable td {
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--ChatForeground) 20%, transparent);
+  vertical-align: top;
+}
+
+.ChatMessageTable th {
+  font-weight: 600;
+}
+
+.ChatMessageTableCell-left {
+  text-align: left;
+}
+
+.ChatMessageTableCell-center {
+  text-align: center;
+}
+
+.ChatMessageTableCell-right {
+  text-align: right;
 }
 
 .ChatCodeBlock {
@@ -1003,7 +1038,7 @@
     );
   min-width: 0;
   min-height: 0;
-  background: #f5f5f5;
+  background: #fafafa;
   border-right: 1px solid var(--ChatBorder);
 }
 .ChatSessionsSash {
@@ -1076,6 +1111,13 @@
   min-height: 100%;
   padding-inline: 18px;
   margin-inline: auto;
+}
+.ChatAiNativeLayout .ChatTurnLatest {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 24px;
+  min-height: 100%;
 }
 
 .AiNativeLayout .ActivityBarLayout {

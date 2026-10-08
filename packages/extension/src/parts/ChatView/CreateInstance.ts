@@ -26,6 +26,10 @@ import {
   isImageFile,
   loadImageAttachment,
 } from '../ChatImageAttachments/ChatImageAttachments.ts'
+import {
+  getChatTaskHash,
+  parseChatTaskHash,
+} from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
 import {
   createDefaultChatApi,
@@ -44,6 +48,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly handleImageDrop: (dropId: unknown) => Promise<void>
   readonly handleImagePaste: (fileIds: unknown) => Promise<void>
+  readonly handleKeyDown: (key: unknown) => void
   readonly handleSessionsSashPointerDown: (
     clientX: number,
     containerWidth: number,
@@ -59,11 +64,11 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
     newContext: Readonly<Record<string, boolean>>,
   ) => string
   readonly render: () => readonly VirtualDomNode[]
-  readonly renderScrollPosition: () => readonly [
-    selector: string,
-    scrollTop: number,
-  ]
+  readonly renderScrollPosition: () =>
+    | readonly []
+    | readonly [selector: string, scrollTop: number]
   readonly renderTitle: () => string
+  readonly renderWorkbenchLayout: () => 'ide' | 'ai-native' | undefined
   readonly setState: (state: unknown) => void
   readonly submit: (requestRerender?: boolean) => Promise<void>
   readonly toggleFocusMode: (requestRerender?: boolean) => Promise<void>
@@ -186,6 +191,26 @@ const getSavedState = (value: unknown): SavedState => {
   return value && typeof value === 'object' ? value : {}
 }
 
+const getHref = async (execute: ExecuteCommand): Promise<string> => {
+  try {
+    const href = await execute('Layout.getHref')
+    return typeof href === 'string' ? href : ''
+  } catch {
+    return ''
+  }
+}
+
+const setChatTaskHash = async (
+  execute: ExecuteCommand,
+  taskId?: string,
+): Promise<void> => {
+  try {
+    await execute('Layout.setHash', taskId ? getChatTaskHash(taskId) : '')
+  } catch {
+    // Older editor builds do not expose the hash command.
+  }
+}
+
 const activeInstances = new Set<ActiveChatViewInstance>()
 
 const getPreferredModelId = async (): Promise<string> => {
@@ -253,6 +278,7 @@ export const createInstance = async (
   defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
   imageTransferHost: ImageTransferHost = defaultImageTransferHost,
 ): Promise<ActiveChatViewInstance> => {
+  let pendingWorkbenchLayout: 'ide' | 'ai-native' | undefined
   let authenticationRejected = false
   let currentState: MutableChatViewState | undefined
   const onLoginRequired = (): void => {
@@ -294,9 +320,20 @@ export const createInstance = async (
   const fontSize = await readFontSize(readPreference)
   const aiNativeTheme = await readAiNativeTheme(readPreference)
   const selectedModelId = getSelectedModelId(models, preferredModelId)
-  const selectedTask = saved.selectedTaskId
-    ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
-    : undefined
+  const href = await getHref(execute)
+  const chatHash = parseChatTaskHash(href)
+  const urlTask =
+    chatHash.type === 'task'
+      ? await api.getTask(chatHash.id).catch(() => undefined)
+      : undefined
+  const selectedTask =
+    urlTask ||
+    (saved.selectedTaskId
+      ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
+      : undefined)
+  if (chatHash.type === 'invalid') {
+    await setChatTaskHash(execute)
+  }
   const focusModeEnabled = await getFocusModeEnabled()
   const state: MutableChatViewState = {
     activityExpanded: false,
@@ -369,6 +406,7 @@ export const createInstance = async (
   let sessionsSashDrag: SessionsSashDrag | undefined
   let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
+  let scrollToLatestTurn = state.focusMode && Boolean(state.selectedTask)
 
   const addImageFiles = async (files: readonly File[]): Promise<void> => {
     const imageFiles = files.filter(isImageFile)
@@ -527,6 +565,7 @@ export const createInstance = async (
     selectedTaskRequest++
     resetCopyFeedback()
     state.selectedTask = undefined
+    await setChatTaskHash(execute)
     state.draft = ''
     state.composerImages = []
     state.activityExpanded = false
@@ -539,11 +578,15 @@ export const createInstance = async (
     }
   }
 
-  const setTask = (task: ChatTask): void => {
+  const setTask = async (task: ChatTask): Promise<void> => {
     if (archivedTaskIds.has(task.id)) {
       return
     }
+    const taskChanged = state.selectedTask?.id !== task.id
     state.selectedTask = task
+    if (taskChanged) {
+      await setChatTaskHash(execute, task.id)
+    }
     syncWorkingTimer(task)
     state.tasks = [
       task,
@@ -559,7 +602,7 @@ export const createInstance = async (
     if (disposed || request !== selectedTaskRequest) {
       return
     }
-    setTask(task)
+    await setTask(task)
     await context?.requestRerender()
   }
 
@@ -578,6 +621,9 @@ export const createInstance = async (
     }
     if (activeController && state.selectedTask?.status !== 'running') {
       return
+    }
+    if (state.focusMode) {
+      scrollToLatestTurn = true
     }
     state.draft = ''
     state.composerImages = []
@@ -615,8 +661,12 @@ export const createInstance = async (
   const handleToggleFocusMode = async (
     requestRerender = false,
   ): Promise<void> => {
-    state.focusMode = await getFocusMode()
-    state.focusMode = await toggleFocusMode(state)
+    if (!state.focusModeEnabled) {
+      return
+    }
+    state.focusMode = await getFocusMode(execute)
+    state.focusMode = toggleFocusMode(state)
+    pendingWorkbenchLayout = state.focusMode ? 'ai-native' : 'ide'
     await syncWindowTitle()
     if (requestRerender) {
       await context?.requestRerender()
@@ -736,7 +786,7 @@ export const createInstance = async (
       }
       if (event.name === 'stop') {
         if (state.selectedTask?.status === 'running') {
-          setTask(setStatus(state.selectedTask, 'stopping'))
+          await setTask(setStatus(state.selectedTask, 'stopping'))
         }
         activeController?.abort()
         return
@@ -759,7 +809,7 @@ export const createInstance = async (
       }
       if (event.name === 'revert' && state.selectedTask) {
         try {
-          setTask(await api.revertTask(state.selectedTask))
+          await setTask(await api.revertTask(state.selectedTask))
           state.errorMessage = ''
         } catch (error) {
           state.errorMessage =
@@ -817,9 +867,13 @@ export const createInstance = async (
           return
         }
         state.selectedTask = task
+        scrollToLatestTurn = state.focusMode && Boolean(task)
         syncWorkingTimer(state.selectedTask)
         if (state.selectedTask) {
           state.selectedModelId = state.selectedTask.modelId
+          await setChatTaskHash(execute, state.selectedTask.id)
+        } else {
+          await setChatTaskHash(execute)
         }
         state.draft = ''
         state.composerImages = []
@@ -857,6 +911,11 @@ export const createInstance = async (
         state.errorMessage =
           error instanceof Error ? error.message : String(error)
         await context?.requestRerender()
+      }
+    },
+    handleKeyDown(key: unknown): void {
+      if (key === 'Escape' && state.modelPickerOpen) {
+        state.modelPickerOpen = false
       }
     },
     handleSessionsSashPointerDown(
@@ -908,13 +967,26 @@ export const createInstance = async (
     render(): readonly VirtualDomNode[] {
       return render(state)
     },
-    renderScrollPosition(): readonly [selector: string, scrollTop: number] {
+    renderScrollPosition():
+      | readonly []
+      | readonly [selector: string, scrollTop: number] {
+      if (state.focusMode) {
+        if (!scrollToLatestTurn) {
+          return []
+        }
+        scrollToLatestTurn = false
+      }
       return [messagesSelector, maxScrollTop]
     },
     renderTitle(): string {
       return state.selectedTask
         ? `Chat 2: ${state.selectedTask.title}`
         : 'Chat 2'
+    },
+    renderWorkbenchLayout() {
+      const layout = pendingWorkbenchLayout
+      pendingWorkbenchLayout = undefined
+      return layout
     },
     saveState(): unknown {
       return {

@@ -185,10 +185,27 @@ test('renders a Sessions sash and resizes the panel with bounded pointer movemen
   expect(instance.getState().sessionsWidth).toBe(230)
 })
 
-test('requests scrolling the messages to the bottom after every render', async () => {
+test('keeps scrolling to the bottom for the ordinary chat layout', async () => {
   const instance = await createTestInstance()
 
   expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+})
+
+test('scrolls to the latest AI-native turn once after each submission', async () => {
+  const instance = await createTestInstance()
+  instance.setState({ ...instance.getState(), draft: 'First', focusMode: true })
+
+  await instance.submit()
+
+  expect(getNodesByClass(instance.render(), 'ChatTurnLatest')).toHaveLength(1)
+  expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+  expect(instance.renderScrollPosition()).toEqual([])
+
+  instance.setState({ ...instance.getState(), draft: 'Follow-up' })
+  await instance.submit()
+
+  expect(instance.renderScrollPosition()).toEqual(['.ChatMessages', 9_999_999])
+  expect(instance.renderScrollPosition()).toEqual([])
 })
 
 test('shows loading feedback and blocks submission until images finish loading', async () => {
@@ -342,6 +359,107 @@ test('saves and restores the composer draft through view state', async () => {
       value: 'Keep this draft across reloads',
     }),
   )
+})
+
+test('restores the URL task before the previously saved task', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/?workspace=project#chat-mock-task-2'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: 'mock-task-1' }),
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+  expect(execute).toHaveBeenCalledWith('Layout.getHref')
+})
+
+test('restores a copied chat URL when the view has no saved state', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/?workspace=project#chat-mock-task-2'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+  expect(execute).toHaveBeenCalledWith('Layout.getHref')
+})
+
+test('falls back to the saved task when the URL task no longer exists', async () => {
+  const api = createMockChatApi()
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/#chat-deleted-task'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: 'mock-task-1' }),
+    api,
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+  expect(execute).not.toHaveBeenCalledWith('Layout.setHash', '')
+})
+
+test('clears malformed chat fragments while restoring the saved task', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/static/#chat-%E0%A4%A'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: 'mock-task-1' }),
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+  expect(execute).toHaveBeenCalledWith('Layout.setHash', '')
+})
+
+test('syncs selected and cleared tasks to the URL fragment', async () => {
+  const execute = jest.fn(
+    async (_command: string, ..._args: readonly unknown[]) => undefined,
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  await dispatch(instance, {
+    name: 'task:mock-task-2',
+    type: 'click',
+  })
+  expect(execute).toHaveBeenLastCalledWith(
+    'Layout.setHash',
+    '#chat-mock-task-2',
+  )
+
+  await instance.newChat()
+  expect(execute).toHaveBeenLastCalledWith('Layout.setHash', '')
 })
 
 test('exposes and applies live component state without replacing the chat instance', async () => {
@@ -727,6 +845,117 @@ test('renders message urls as external links and preserves punctuation', async (
   expect(getText(dom)).toContain('Inspect \nhttps://example.com/docs?q=chat\n.')
 })
 
+test('renders Markdown tables in messages while keeping malformed streaming text literal', async () => {
+  const timestamp = '2026-09-10T12:00:00.000Z'
+  const countries = [
+    'India',
+    'China',
+    'United States',
+    'Indonesia',
+    'Pakistan',
+    'Nigeria',
+    'Brazil',
+    'Bangladesh',
+    'Russia',
+    'Ethiopia',
+    'Mexico',
+    'Japan',
+    'Egypt',
+    'Philippines',
+    'Democratic Republic of the Congo',
+    'Vietnam',
+    'Iran',
+    'Turkey',
+    'Germany',
+    'Thailand',
+  ]
+  const table = [
+    '| Country | Population |',
+    '| :--- | ---: |',
+    ...countries.map((country, index) => {
+      const countryText = index === 0 ? '**India**' : country
+      const population =
+        index === 1 ? 'https://example.com' : `${index + 1} million`
+      return `| ${countryText} | ${population} |`
+    }),
+  ].join('\n')
+  const task: ChatTask = {
+    createdAt: timestamp,
+    events: [
+      createEvent({ text: 'Show the country table', type: 'user-message' }),
+      createEvent({
+        text: `Before the table.\n\n${table}\n\nMalformed:\n| Only | Header |\n| --- | --- |\n\nAfter the table with <img src=x onerror=alert(1)>`,
+        type: 'assistant-message',
+      }),
+    ],
+    id: 'table-task',
+    modelId: 'openrouter/nvidia/nemotron-3-super-120b-a12b:free',
+    status: 'running',
+    streamingText: '| Partial | Header |\n| --- | :---: |\n| Streaming | row |',
+    title: 'Show the country table',
+    updatedAt: timestamp,
+  }
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: task.id }),
+    {
+      ...createMockChatApi(),
+      async getTask() {
+        return task
+      },
+    },
+  )
+  try {
+    const dom = instance.render() as readonly any[]
+    const tableNodes = getNodesByClass(dom, 'ChatMessageTable')
+    expect(tableNodes).toHaveLength(2)
+    expect(getNodesByClass(dom, 'ChatMessageTableContainer')).toHaveLength(2)
+    expect(getNodesByClass(dom, 'ChatMessageStreaming')).toHaveLength(1)
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Th),
+    ).toHaveLength(4)
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Td),
+    ).toHaveLength(42)
+    expect(dom).toContainEqual(
+      expect.objectContaining({
+        className: 'ChatMessageTableCell ChatMessageTableCell-left',
+        scope: 'col',
+        type: VirtualDomElements.Th,
+      }),
+    )
+    expect(dom).toContainEqual(
+      expect.objectContaining({
+        className: 'ChatMessageTableCell ChatMessageTableCell-right',
+        type: VirtualDomElements.Td,
+      }),
+    )
+    expect(dom).toContainEqual(
+      expect.objectContaining({
+        className: 'ChatMessageTableCell ChatMessageTableCell-center',
+        type: VirtualDomElements.Th,
+      }),
+    )
+    expect(getNodesByClass(dom, 'ChatMessageLink')).toHaveLength(1)
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Strong),
+    ).toHaveLength(1)
+    expect(getText(dom)).toContain('Before the table.')
+    expect(getText(dom)).toContain(
+      'After the table with <img src=x onerror=alert(1)>',
+    )
+    expect(getText(dom)).toContain(
+      'Malformed:\n| Only | Header |\n| --- | --- |',
+    )
+    expect(getText(dom)).toContain('Streaming')
+    expect(
+      dom.filter((node) => node.type === VirtualDomElements.Img),
+    ).toHaveLength(0)
+    expect(getNodesByClass(dom, 'ChatMessageTable')).toHaveLength(2)
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('renders fenced JSON as safe highlighted code in messages and streaming text', async () => {
   const timestamp = '2026-09-10T12:00:00.000Z'
   const task: ChatTask = {
@@ -848,6 +1077,44 @@ test('opens the model picker without adding model controls to the header', async
   expect(getNodesByClass(dom, 'Chat2ModelPicker')).toHaveLength(1)
   expect(getText(dom)).toContain('Models')
   expect(getText(dom)).toContain('GPT-5.4')
+})
+
+test('closes the model picker on Escape without changing the model or draft', async () => {
+  const instance = await createTestInstance()
+  instance.setState({
+    ...instance.getState(),
+    draft: 'keep this draft',
+    modelPickerOpen: true,
+    selectedModelId: 'gpt-5.4',
+  })
+
+  instance.handleKeyDown('Enter')
+  expect(instance.getState().modelPickerOpen).toBe(true)
+
+  instance.handleKeyDown('Escape')
+  expect(instance.getState().modelPickerOpen).toBe(false)
+  expect(instance.getState().selectedModelId).toBe('gpt-5.4')
+  expect(instance.getState().draft).toBe('keep this draft')
+  expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+
+  instance.handleKeyDown('Escape')
+  expect(instance.getState().modelPickerOpen).toBe(false)
+  await dispatch(instance, { name: 'model-picker', type: 'click' })
+  expect(instance.getState().modelPickerOpen).toBe(true)
+  instance.dispose?.()
+})
+
+test('registers model picker keydown handling on the view root', async () => {
+  const instance = await createTestInstance()
+
+  expect(view.eventListeners).toContainEqual({
+    name: 'handleKeyDown',
+    params: ['handleKeyDown', 'event.key'],
+  })
+  expect(instance.render()[0]).toEqual(
+    expect.objectContaining({ onKeyDown: 'handleKeyDown' }),
+  )
+  instance.dispose?.()
 })
 
 test('shows how many seconds an active task has been working', async () => {
@@ -1206,6 +1473,9 @@ test('starts login without awaiting a rerender queued behind the click event', a
     return rerenderGate.promise
   })
   const execute = jest.fn(async (id: string) => {
+    if (id === 'Layout.getHref') {
+      return ''
+    }
     expect(id).toBe('Layout.signIn')
     await signInGate.promise
     signInFinished = true
@@ -1233,7 +1503,9 @@ test('starts login without awaiting a rerender queued behind the click event', a
     )
 
     await dispatch(instance, { name: 'login', type: 'click' })
-    expect(execute).toHaveBeenCalledTimes(1)
+    expect(
+      execute.mock.calls.flat().filter((id) => id === 'Layout.signIn'),
+    ).toHaveLength(1)
     expect(requestRerender).not.toHaveBeenCalled()
 
     signInGate.resolve()
@@ -1418,5 +1690,42 @@ test('AI-native view keeps sessions visible while changing the active conversati
   await dispatch(instance, { name: 'new-task', type: 'click' })
   expect(getNodesByClass(instance.render(), 'ChatSessions')).toHaveLength(1)
   expect(getNodesByClass(instance.render(), 'ChatComposer')).toHaveLength(1)
+  instance.dispose?.()
+})
+
+test('focus toggles return matching view markup and layout metadata without committing layout early', async () => {
+  let workbenchFocusMode = false
+  const execute = jest.fn(async (id: string) => {
+    return id === 'Layout.getSideBarFocusMode' ? workbenchFocusMode : undefined
+  })
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+  const state = instance.getState() as { focusModeEnabled: boolean }
+  state.focusModeEnabled = true
+  expect(instance.renderWorkbenchLayout()).toBeUndefined()
+
+  await dispatch(instance, { name: 'toggle-focus-mode', type: 'click' })
+  expect(instance.renderWorkbenchLayout()).toBe('ai-native')
+  expect(instance.renderWorkbenchLayout()).toBeUndefined()
+  expect(getNodesByClass(instance.render(), 'ChatAiNativeLayout')).toHaveLength(
+    1,
+  )
+  workbenchFocusMode = true
+  await instance.toggleFocusMode()
+  expect(instance.renderWorkbenchLayout()).toBe('ide')
+  expect(getNodesByClass(instance.render(), 'ChatAiNativeLayout')).toHaveLength(
+    0,
+  )
+  expect(
+    execute.mock.calls.some(
+      (args: readonly [string]) =>
+        args[0] === 'Layout.enterAiNativeLayout' ||
+        args[0] === 'Layout.leaveSideBarFocusMode',
+    ),
+  ).toBe(false)
   instance.dispose?.()
 })
