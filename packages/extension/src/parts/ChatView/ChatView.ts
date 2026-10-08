@@ -62,6 +62,11 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
       params: ['handleImageDrop', 'event.dropId'],
       preventDefault: true,
     },
+    {
+      name: 'handleDragOver',
+      params: ['handleDragOver'],
+      preventDefault: true,
+    },
   ],
   getComponentState: (instance) => instance.getState(),
   icon: 'comment-discussion',

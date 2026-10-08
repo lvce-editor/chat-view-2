@@ -671,6 +671,25 @@ test('preserves ordinary text paste when image paste prevents the browser defaul
   }
 })
 
+test('prevents the browser default while dragging files over the chat', async () => {
+  const instance = await createTestInstance()
+
+  try {
+    expect(view.eventListeners).toContainEqual(
+      expect.objectContaining({
+        name: 'handleDragOver',
+        params: ['handleDragOver'],
+        preventDefault: true,
+      }),
+    )
+    expect(instance.render()).toContainEqual(
+      expect.objectContaining({ onDragOver: 'handleDragOver' }),
+    )
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('does not paste an unreadable local image path into the composer', async () => {
   const instance = await createTestInstance()
   instance.setState({ ...instance.getState(), draft: 'keep this draft' })

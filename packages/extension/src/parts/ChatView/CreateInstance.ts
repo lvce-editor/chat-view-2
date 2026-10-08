@@ -48,6 +48,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
   readonly getState: () => Readonly<ChatViewState>
+  readonly handleDragOver: () => void
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly handleImageDrop: (dropId: unknown) => Promise<void>
   readonly handleImagePaste: (
@@ -851,6 +852,7 @@ export const createInstance = async (
     getState(): Readonly<ChatViewState> {
       return state
     },
+    handleDragOver(): void {},
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'contextmenu') {
         if (
