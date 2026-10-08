@@ -545,7 +545,7 @@ test('shows a session selector toggle in focus mode', async () => {
     }),
   )
 
-  await instance.handleEvent({ type: 'click', name: 'toggle-sessions' })
+  await instance.handleEvent({ name: 'toggle-sessions', type: 'click' })
 
   expect(instance.getState().sessionsVisible).toBe(true)
   expect(instance.render()[0]).toEqual(

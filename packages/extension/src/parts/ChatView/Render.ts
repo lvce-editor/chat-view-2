@@ -912,6 +912,13 @@ const getAiNativeLayoutClassName = (
     : `ChatAiNativeLayout ChatAiNativeLayoutTheme-${theme}`
 }
 
+const getAiNativeLayoutViewClassName = (
+  theme: ChatViewState['aiNativeTheme'],
+  sessionsVisible: boolean,
+): string => {
+  return `ChatView ${getAiNativeLayoutClassName(theme)}${sessionsVisible ? ' ChatSessionsVisible' : ''}`
+}
+
 const getAiNativeThemeClassName = (
   theme: ChatViewState['aiNativeTheme'],
 ): string => {
@@ -1085,18 +1092,9 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       onContextMenu: 'handleContextMenu',
     }),
     ...renderFocusModeButton(state),
-    ...(focusMode
-      ? [
-          Dom.button(
-            'toggle-sessions',
-            'Sessions',
-            'ChatSessionsToggleButton',
-            {
-              ariaExpanded: sessionsVisible,
-            },
-          ),
-        ]
-      : []),
+    Dom.button('toggle-sessions', 'Sessions', 'ChatSessionsToggleButton', {
+      ariaExpanded: sessionsVisible,
+    }),
     ...(focusMode ? [] : [Dom.button('new-task', 'New', 'ChatNewTaskButton')]),
   ])
   const renderedMessages = summary.messages.map((message) =>
@@ -1177,6 +1175,7 @@ export const render = (
     loginPending,
     loginRequired,
     selectedTask,
+    sessionsVisible,
     sessionsWidth,
     tasks,
   } = state
@@ -1223,7 +1222,7 @@ export const render = (
                 'Sessions',
                 'ChatSessionsToggleButton',
                 {
-                  ariaExpanded: state.sessionsVisible,
+                  ariaExpanded: sessionsVisible,
                 },
               ),
               ...renderFocusModeButton(state),
@@ -1254,7 +1253,7 @@ export const render = (
         )
     return Dom.flatten(
       Dom.div(
-        `ChatView ${getAiNativeLayoutClassName(aiNativeTheme)}${state.sessionsVisible ? ' ChatSessionsVisible' : ''}`,
+        getAiNativeLayoutViewClassName(aiNativeTheme, sessionsVisible),
         [
           Dom.div(
             'ChatSessions',
@@ -1267,7 +1266,7 @@ export const render = (
                   'Close',
                   'ChatSessionsToggleButton',
                   {
-                    ariaExpanded: state.sessionsVisible,
+                    ariaExpanded: sessionsVisible,
                   },
                 ),
               ]),
