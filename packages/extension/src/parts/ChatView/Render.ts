@@ -242,6 +242,78 @@ const getTableAlignment = (cell: string): string => {
 
 const tableDelimiterPattern = /^:?-{3,}:?$/u
 
+type MarkdownHeading = {
+  readonly level: 1 | 2 | 3 | 4 | 5 | 6
+  readonly text: string
+}
+
+const parseMarkdownHeading = (line: string): MarkdownHeading | undefined => {
+  let markerStart = 0
+  while (line[markerStart] === ' ' && markerStart < 3) {
+    markerStart++
+  }
+  let markerEnd = markerStart
+  while (line[markerEnd] === '#') {
+    markerEnd++
+  }
+  const level = markerEnd - markerStart
+  if (
+    level === 0 ||
+    level > 6 ||
+    (markerEnd < line.length &&
+      line[markerEnd] !== ' ' &&
+      line[markerEnd] !== '\t')
+  ) {
+    return undefined
+  }
+  let text = line.slice(markerEnd).trim()
+  let closingMarkerStart = text.length
+  while (text[closingMarkerStart - 1] === '#') {
+    closingMarkerStart--
+  }
+  if (
+    closingMarkerStart < text.length &&
+    (text[closingMarkerStart - 1] === ' ' ||
+      text[closingMarkerStart - 1] === '\t')
+  ) {
+    text = text.slice(0, closingMarkerStart).trimEnd()
+  }
+  return {
+    level: level as 1 | 2 | 3 | 4 | 5 | 6,
+    text: text.trimEnd(),
+  }
+}
+
+const renderMarkdownHeadingLine = (
+  text: string,
+  heading: MarkdownHeading,
+  line: string,
+  lineStart: number,
+  previousOffset: number,
+): {
+  readonly children: readonly Dom.TreeNode[]
+  readonly previousOffset: number
+} => {
+  const children: Dom.TreeNode[] = []
+  if (lineStart > previousOffset) {
+    children.push(
+      ...renderMessageInlineText(text.slice(previousOffset, lineStart)),
+    )
+  }
+  children.push(
+    Dom.heading(
+      heading.level,
+      `ChatMessageHeading ChatMessageHeading-${heading.level}`,
+      renderMessageInlineText(heading.text),
+    ),
+  )
+  const lineEnd = lineStart + line.length
+  return {
+    children,
+    previousOffset: lineEnd < text.length ? lineEnd + 1 : lineEnd,
+  }
+}
+
 const isTableDelimiter = (cell: string): boolean =>
   tableDelimiterPattern.test(cell)
 
@@ -580,8 +652,26 @@ const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
   const children: Dom.TreeNode[] = []
   let previousOffset = 0
   let lineIndex = 0
-  while (lineIndex < lines.length - 1) {
-    const table = getMarkdownTableAtLine(lines, lineStarts, lineIndex)
+  while (lineIndex < lines.length) {
+    const heading = parseMarkdownHeading(lines[lineIndex])
+    if (heading) {
+      const { children: headingChildren, previousOffset: nextOffset } =
+        renderMarkdownHeadingLine(
+          text,
+          heading,
+          lines[lineIndex],
+          lineStarts[lineIndex],
+          previousOffset,
+        )
+      children.push(...headingChildren)
+      previousOffset = nextOffset
+      lineIndex++
+      continue
+    }
+    const table =
+      lineIndex < lines.length - 1
+        ? getMarkdownTableAtLine(lines, lineStarts, lineIndex)
+        : undefined
     if (!table) {
       lineIndex++
       continue

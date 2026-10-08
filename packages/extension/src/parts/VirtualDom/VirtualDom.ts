@@ -9,6 +9,15 @@ export interface TreeNode {
   readonly node: VirtualDomNode
 }
 
+const headingTypes = [
+  VirtualDomElements.H1,
+  VirtualDomElements.H2,
+  VirtualDomElements.H3,
+  VirtualDomElements.H4,
+  VirtualDomElements.H5,
+  VirtualDomElements.H6,
+]
+
 export const textNode = (value: string): TreeNode => ({
   children: [],
   node: text(value),
@@ -139,12 +148,12 @@ export const form = (
 }
 
 export const heading = (
-  level: 1 | 2,
+  level: 1 | 2 | 3 | 4 | 5 | 6,
   className: string,
-  value: string,
+  value: string | readonly TreeNode[],
   options: Readonly<{ name?: string; onContextMenu?: string }> = {},
 ): TreeNode => {
-  const type = level === 1 ? VirtualDomElements.H1 : VirtualDomElements.H2
+  const type = headingTypes[level - 1]
   return node(
     type,
     {
@@ -152,7 +161,7 @@ export const heading = (
       ...(options.name && { name: options.name }),
       ...(options.onContextMenu && { onContextMenu: options.onContextMenu }),
     },
-    [textNode(value)],
+    typeof value === 'string' ? [textNode(value)] : value,
   )
 }
 
