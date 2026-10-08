@@ -375,6 +375,7 @@ export const createInstance = async (
     models,
     selectedModelId,
     selectedTask,
+    sessionsVisible: false,
     tasks,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
@@ -924,6 +925,10 @@ export const createInstance = async (
       }
       if (event.name === 'toggle-focus-mode') {
         await handleToggleFocusMode()
+        return
+      }
+      if (event.name === 'toggle-sessions') {
+        state.sessionsVisible = !state.sessionsVisible
         return
       }
       if (event.name === 'stop') {

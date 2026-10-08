@@ -1067,7 +1067,13 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 }
 
 const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const { copiedMessageId, errorMessage, focusMode, selectedTask: task } = state
+  const {
+    copiedMessageId,
+    errorMessage,
+    focusMode,
+    selectedTask: task,
+    sessionsVisible,
+  } = state
   if (!task) {
     return renderListView(state)
   }
@@ -1079,6 +1085,18 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       onContextMenu: 'handleContextMenu',
     }),
     ...renderFocusModeButton(state),
+    ...(focusMode
+      ? [
+          Dom.button(
+            'toggle-sessions',
+            'Sessions',
+            'ChatSessionsToggleButton',
+            {
+              ariaExpanded: sessionsVisible,
+            },
+          ),
+        ]
+      : []),
     ...(focusMode ? [] : [Dom.button('new-task', 'New', 'ChatNewTaskButton')]),
   ])
   const renderedMessages = summary.messages.map((message) =>
@@ -1200,6 +1218,14 @@ export const render = (
           [
             Dom.div('ChatDetailHeader', [
               Dom.heading(1, 'ChatTitle', 'Chat'),
+              Dom.button(
+                'toggle-sessions',
+                'Sessions',
+                'ChatSessionsToggleButton',
+                {
+                  ariaExpanded: state.sessionsVisible,
+                },
+              ),
               ...renderFocusModeButton(state),
             ]),
             Dom.div('ChatConversationBody', [
@@ -1228,7 +1254,7 @@ export const render = (
         )
     return Dom.flatten(
       Dom.div(
-        `ChatView ${getAiNativeLayoutClassName(aiNativeTheme)}`,
+        `ChatView ${getAiNativeLayoutClassName(aiNativeTheme)}${state.sessionsVisible ? ' ChatSessionsVisible' : ''}`,
         [
           Dom.div(
             'ChatSessions',
@@ -1236,6 +1262,14 @@ export const render = (
               Dom.div('ChatTaskListHeader', [
                 Dom.heading(1, 'ChatTitle', 'Sessions'),
                 Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
+                Dom.button(
+                  'toggle-sessions',
+                  'Close',
+                  'ChatSessionsToggleButton',
+                  {
+                    ariaExpanded: state.sessionsVisible,
+                  },
+                ),
               ]),
               renderTaskList(tasks, fontFamily, fontSize),
             ],

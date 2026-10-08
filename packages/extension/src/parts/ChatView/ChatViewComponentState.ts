@@ -108,6 +108,7 @@ const booleanStateKeys = [
   'loginPending',
   'loginRequired',
   'modelPickerOpen',
+  'sessionsVisible',
 ] as const
 
 const stringStateKeys = [

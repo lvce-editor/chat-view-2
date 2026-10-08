@@ -530,6 +530,32 @@ test('renders a Sessions sash and resizes the panel with bounded pointer movemen
   expect(instance.getState().sessionsWidth).toBe(230)
 })
 
+test('shows a session selector toggle in focus mode', async () => {
+  const instance = await createTestInstance()
+  instance.setState({ ...instance.getState(), focusMode: true })
+
+  const toggle = getNodesByClass(
+    instance.render(),
+    'ChatSessionsToggleButton',
+  )[0]
+  expect(toggle).toEqual(
+    expect.objectContaining({
+      ariaExpanded: false,
+      name: 'toggle-sessions',
+    }),
+  )
+
+  await instance.handleEvent({ type: 'click', name: 'toggle-sessions' })
+
+  expect(instance.getState().sessionsVisible).toBe(true)
+  expect(instance.render()[0]).toEqual(
+    expect.objectContaining({
+      className: expect.stringContaining('ChatSessionsVisible'),
+    }),
+  )
+  instance.dispose?.()
+})
+
 test('keeps scrolling to the bottom for the ordinary chat layout', async () => {
   const instance = await createTestInstance()
 
