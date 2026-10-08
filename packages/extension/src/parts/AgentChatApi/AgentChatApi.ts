@@ -30,8 +30,9 @@ const readOnlyTools = new Set([
   'search_workspace',
 ])
 const titleWhitespacePattern = /\s+/g
+const titleCasedLetterPattern = /\p{Cased_Letter}/u
 const capitalizeTitle = (title: string): string =>
-  title.replace(/\p{Cased_Letter}/u, (letter) => letter.toUpperCase())
+  title.replace(titleCasedLetterPattern, (letter) => letter.toUpperCase())
 const quotedTitlePattern = /^(["'])(.*)\1$/
 
 const getTitle = (message: string): string => {

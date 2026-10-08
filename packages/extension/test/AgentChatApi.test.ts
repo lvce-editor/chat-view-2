@@ -1,5 +1,6 @@
 // cspell:words nemotron logprobs
 // cspell:words titlte
+// cspell:words über
 /* eslint-disable unicorn/max-nested-calls */
 import type { AgentToolHost } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { expect, jest, test } from '@jest/globals'
