@@ -275,6 +275,21 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
         .filter((task) => !archivedTaskIds.has(task.id))
         .slice(0, Math.max(0, limit))
     },
+    async renameTask(id, title) {
+      const index = tasks.findIndex((task) => task.id === id)
+      if (index === -1 || archivedTaskIds.has(id)) {
+        return undefined
+      }
+      const task = tasks[index]
+      const renamed = {
+        ...task,
+        title,
+        titleGenerated: true,
+        updatedAt: new Date().toISOString(),
+      }
+      tasks = [...tasks.slice(0, index), renamed, ...tasks.slice(index + 1)]
+      return renamed
+    },
     async revertTask(task) {
       const changedFileCount =
         task.events.findLast((event) => event.type === 'changes')?.files

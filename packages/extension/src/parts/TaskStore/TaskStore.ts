@@ -5,6 +5,7 @@ export interface TaskStore {
   readonly archive: (id: string) => Promise<void>
   readonly get: (id: string) => Promise<ChatTask | undefined>
   readonly list: (limit: number) => Promise<readonly ChatTask[]>
+  readonly rename: (id: string, title: string) => Promise<ChatTask | undefined>
   readonly save: (task: ChatTask) => Promise<void>
 }
 
@@ -27,6 +28,20 @@ export const createMemoryTaskStore = (
         .filter((task) => !task.archived)
         .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, Math.max(0, limit))
+    },
+    async rename(id, title) {
+      const task = tasks.get(id)
+      if (!task || task.archived) {
+        return undefined
+      }
+      const renamed = {
+        ...task,
+        title,
+        titleGenerated: true,
+        updatedAt: new Date().toISOString(),
+      }
+      tasks.set(id, renamed)
+      return renamed
     },
     async save(task) {
       const existing = tasks.get(task.id)
@@ -141,6 +156,27 @@ export const createIndexedDbTaskStore = (): TaskStore => {
           .filter((task) => !task.archived)
           .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
           .slice(0, Math.max(0, limit))
+      } finally {
+        database.close()
+      }
+    },
+    async rename(id, title) {
+      const database = await openDatabase()
+      try {
+        const transaction = database.transaction(storeName, 'readwrite')
+        const store = transaction.objectStore(storeName)
+        const task = await requestToPromise<ChatTask | undefined>(store.get(id))
+        if (!task || task.archived) {
+          return undefined
+        }
+        const renamed = {
+          ...task,
+          title,
+          titleGenerated: true,
+          updatedAt: new Date().toISOString(),
+        }
+        await requestToPromise(store.put(renamed))
+        return renamed
       } finally {
         database.close()
       }

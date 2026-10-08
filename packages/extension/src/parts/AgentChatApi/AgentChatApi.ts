@@ -507,6 +507,9 @@ export const createAgentChatApi = ({
     listTasks(limit) {
       return store.list(limit)
     },
+    renameTask(id, title) {
+      return store.rename(id, title)
+    },
     async revertTask(task) {
       const files = await toolHost.revert()
       let updated = appendEvent(
