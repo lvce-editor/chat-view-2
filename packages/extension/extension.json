@@ -39,6 +39,11 @@
       "default": "13px",
       "description": "Font size for chat task list items, for example 20px."
     },
+    "chat2.openAiWebSearch": {
+      "type": "boolean",
+      "default": true,
+      "description": "Allow OpenAI models to search the web for current information."
+    },
     "chat2.selectedModelId": {
       "type": "string",
       "default": "",
