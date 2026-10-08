@@ -1101,6 +1101,32 @@
 .ChatAiNativeLayout .ChatMessages {
   gap: 0;
 }
+.ChatAiNativeLayout
+  .ChatConversationBody:not(:has(.ChatEmptyTitle))
+  > .ChatMessages {
+  padding-bottom: 0;
+}
+.ChatAiNativeLayout .ChatConversationBody > .ChatMessages > .ChatComposerArea {
+  box-sizing: border-box;
+  width: min(100%, 960px);
+  margin-inline: auto;
+}
+.ChatAiNativeLayout
+  .ChatConversationBody:not(:has(.ChatEmptyTitle))
+  > .ChatMessages
+  > .ChatComposerArea {
+  position: sticky;
+  bottom: 0;
+  flex: 0 0 auto;
+  margin-top: auto;
+}
+.ChatAiNativeLayout
+  .ChatConversationBody:not(:has(.ChatEmptyTitle))
+  > .ChatMessages
+  > .ChatChanges {
+  width: min(100%, 960px);
+  margin-inline: auto;
+}
 .ChatAiNativeLayout .ChatMessagesContent {
   box-sizing: border-box;
   display: flex;
@@ -1108,16 +1134,21 @@
   gap: 24px;
   width: 100%;
   max-width: 960px;
-  min-height: 100%;
   padding-inline: 18px;
   margin-inline: auto;
 }
+.ChatAiNativeLayout
+  .ChatConversationBody:not(:has(.ChatEmptyTitle))
+  .ChatMessagesContent {
+  flex: 1 0 auto;
+  min-height: 0;
+}
 .ChatAiNativeLayout .ChatTurnLatest {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 24px;
-  min-height: 100%;
+  min-height: 0;
 }
 
 .AiNativeLayout .ActivityBarLayout {
