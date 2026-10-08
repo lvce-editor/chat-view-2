@@ -720,9 +720,9 @@ export const createInstance = async (
       oldContext: Readonly<Record<string, boolean>>,
       newContext: Readonly<Record<string, boolean>>,
     ): string {
-      return oldContext['chat2.focusComposerRequest'] !==
-        newContext['chat2.focusComposerRequest']
-        ? '[name="composer"]'
+      return Boolean(oldContext['chat2.focusComposerRequest']) !==
+        Boolean(newContext['chat2.focusComposerRequest'])
+        ? 'textarea[name="composer"]'
         : ''
     },
     getState(): Readonly<ChatViewState> {
