@@ -4,6 +4,7 @@ export interface BackendConfiguration {
   readonly accessToken: string
   readonly baseUrl: string
   readonly loginRequired?: boolean
+  readonly openAiWebSearch?: boolean
   readonly refreshAccessToken?: () => Promise<string>
   readonly supportsStreaming: boolean
 }
@@ -42,11 +43,13 @@ const getPreferenceString = async (
 const getPreferenceBoolean = async (
   host: BackendConfigurationHost,
   key: string,
+  defaultValue = false,
 ): Promise<boolean> => {
   try {
-    return (await host.getPreference(key)) === true
+    const value = await host.getPreference(key)
+    return typeof value === 'boolean' ? value : defaultValue
   } catch {
-    return false
+    return defaultValue
   }
 }
 
@@ -92,16 +95,19 @@ export const resolveBackendConfiguration = async (
     editorBaseUrl,
     configuredSupportsStreaming,
     useMockBackend,
+    openAiWebSearch,
   ] = await Promise.all([
     getPreferenceString(host, 'chat2.backendUrl'),
     executeStringCommand(host, 'Layout.getBackendUrl'),
     getPreferenceBoolean(host, 'chat2.supportsStreaming'),
     getPreferenceBoolean(host, 'chat2.useMockBackend'),
+    getPreferenceBoolean(host, 'chat2.openAiWebSearch', true),
   ])
   if (useMockBackend) {
     return {
       accessToken: '',
       baseUrl: '',
+      openAiWebSearch,
       supportsStreaming: configuredSupportsStreaming,
     }
   }
@@ -118,6 +124,7 @@ export const resolveBackendConfiguration = async (
   return {
     accessToken,
     baseUrl,
+    openAiWebSearch,
     supportsStreaming,
     ...(usesEditorBackend && {
       refreshAccessToken: async (): Promise<string> =>

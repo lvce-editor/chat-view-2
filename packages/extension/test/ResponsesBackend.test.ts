@@ -164,6 +164,53 @@ test('sends image attachments with their MIME-aware data URLs', async () => {
   ])
 })
 
+test('enables OpenAI web search by default and omits it when disabled', async () => {
+  for (const [openAiWebSearch, modelId, expectedTools] of [
+    [true, 'gpt-test', [{ type: 'web_search' }]],
+    [false, 'gpt-test', []],
+    [true, 'openrouter/anthropic/claude', []],
+  ] as const) {
+    const fetchMock = jest
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ id: 'response-search', output: [] }))
+    const backend = createResponsesBackend({
+      baseUrl: 'https://backend.example.com',
+      fetch: fetchMock,
+      openAiWebSearch,
+    })
+
+    await backend.runStep({
+      input: [{ content: 'What is current?', role: 'user' }],
+      modelId,
+      onTextDelta() {},
+      tools: [
+        {
+          description: 'Read a file.',
+          inputSchema: { properties: {}, type: 'object' },
+          name: 'read_file',
+        },
+      ],
+    })
+
+    const body = fetchMock.mock.calls[0]?.[1]?.body
+    if (typeof body !== 'string') {
+      throw new TypeError('Expected a JSON request body')
+    }
+    const request = JSON.parse(body) as {
+      readonly tools: readonly Readonly<Record<string, unknown>>[]
+    }
+    expect(request.tools).toEqual([
+      {
+        description: 'Read a file.',
+        name: 'read_file',
+        parameters: { properties: {}, type: 'object' },
+        type: 'function',
+      },
+      ...expectedTools,
+    ])
+  }
+})
+
 test('uses the backend message when loading models is unauthorized', async () => {
   const fetchMock = jest
     .fn<typeof fetch>()
@@ -328,7 +375,33 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
       type: 'response.create',
     }),
   )
+  expect(JSON.parse(socket.sent[0]).tools).toEqual([{ type: 'web_search' }])
   expect(JSON.parse(socket.sent[0])).not.toHaveProperty('stream')
+})
+
+test('omits web search from Responses WebSocket requests when disabled', async () => {
+  const socket = new MockResponsesWebSocket()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    openAiWebSearch: false,
+    supportsStreaming: true,
+  })
+  const resultPromise = backend.runStep({
+    input: [{ content: 'Answer from model knowledge.', role: 'user' }],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+
+  socket.open()
+  socket.receive({
+    response: { id: 'response-no-search' },
+    type: 'response.completed',
+  })
+  await resultPromise
+
+  expect(JSON.parse(socket.sent[0] || '{}').tools).toEqual([])
 })
 
 test('explicitly describes registered computer-use access to the agent', async () => {

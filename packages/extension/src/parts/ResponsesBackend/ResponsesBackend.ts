@@ -14,6 +14,7 @@ export interface ResponsesBackendOptions {
   readonly createWebSocket?: ResponsesWebSocketFactory
   readonly fetch?: typeof fetch
   readonly onLoginRequired?: () => void
+  readonly openAiWebSearch?: boolean
   readonly refreshAccessToken?: () => Promise<string>
   readonly supportsStreaming?: boolean
 }
@@ -123,6 +124,7 @@ const getAgentInstructions = (options: AgentStepOptions): string =>
 
 const createResponseRequest = (
   options: AgentStepOptions,
+  openAiWebSearch: boolean,
 ): Readonly<Record<string, unknown>> => ({
   input: options.input.map(mapInput),
   instructions: getAgentInstructions(options),
@@ -130,12 +132,18 @@ const createResponseRequest = (
   ...(options.previousResponseId && {
     previous_response_id: options.previousResponseId,
   }),
-  tools: options.tools.map((tool) => ({
-    description: tool.description,
-    name: tool.name,
-    parameters: tool.inputSchema,
-    type: 'function',
-  })),
+  tools: [
+    ...options.tools.map((tool) => ({
+      description: tool.description,
+      name: tool.name,
+      parameters: tool.inputSchema,
+      type: 'function',
+    })),
+    ...(openAiWebSearch &&
+    !options.modelId.toLowerCase().startsWith('openrouter/')
+      ? [{ type: 'web_search' }]
+      : []),
+  ],
 })
 
 const parseModels = (value: unknown): readonly ChatModel[] => {
@@ -270,6 +278,7 @@ const runWebSocketRequest = (
   accessToken: string | undefined,
   createWebSocket: ResponsesWebSocketFactory,
   options: AgentStepOptions,
+  openAiWebSearch: boolean,
   path: string,
 ): Promise<AgentStepResult> => {
   const { promise, reject, resolve } = Promise.withResolvers<AgentStepResult>()
@@ -417,7 +426,7 @@ const runWebSocketRequest = (
       options.signal?.throwIfAborted()
       socket.send(
         JSON.stringify({
-          ...createResponseRequest(options),
+          ...createResponseRequest(options, openAiWebSearch),
           type: 'response.create',
         }),
       )
@@ -449,6 +458,7 @@ const runWebSocketStep = async (
   accessToken: string | undefined,
   createWebSocket: ResponsesWebSocketFactory,
   options: AgentStepOptions,
+  openAiWebSearch: boolean,
 ): Promise<AgentStepResult> => {
   try {
     return await runWebSocketRequest(
@@ -456,6 +466,7 @@ const runWebSocketStep = async (
       accessToken,
       createWebSocket,
       options,
+      openAiWebSearch,
       '/v1/responses',
     )
   } catch (error) {
@@ -467,6 +478,7 @@ const runWebSocketStep = async (
       accessToken,
       createWebSocket,
       options,
+      openAiWebSearch,
       '/v1/realtime',
     )
   }
@@ -552,6 +564,7 @@ export const createResponsesBackend = ({
   createWebSocket = defaultCreateWebSocket,
   fetch: fetchImplementation = globalThis.fetch,
   onLoginRequired,
+  openAiWebSearch = true,
   refreshAccessToken,
   supportsStreaming = false,
 }: ResponsesBackendOptions): AgentBackend => {
@@ -620,6 +633,7 @@ export const createResponsesBackend = ({
         currentAccessToken,
         createWebSocket,
         options,
+        openAiWebSearch,
       )
     } catch (error) {
       // Browser WebSocket errors hide the upgrade status. Confirm an auth
@@ -643,6 +657,7 @@ export const createResponsesBackend = ({
           currentAccessToken,
           createWebSocket,
           options,
+          openAiWebSearch,
         )
       } catch (retryError) {
         if (!(retryError instanceof WebSocketUpgradeError)) {
@@ -700,7 +715,7 @@ export const createResponsesBackend = ({
           'OpenRouter conversation history is unavailable. Start a new chat.',
         )
       }
-      const request = createResponseRequest(options)
+      const request = createResponseRequest(options, openAiWebSearch)
       const openRouterInput = isOpenRouter
         ? [...(options.responseHistory || []), ...options.input.map(mapInput)]
         : []
