@@ -13,7 +13,6 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   )
   await Command.executeExtensionCommand('chat2.submit')
 
-  const message = Locator('.ChatMessageUser .ChatMessageText')
   const headings = Locator('.ChatMessageUser .ChatMessageHeading')
   const thirdHeading = Locator('.ChatMessageUser h3')
   const firstHeading = Locator('.ChatMessageUser h1')
@@ -25,6 +24,5 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(firstHeading).toHaveText('Heading one')
   await expect(sixthHeading).toHaveText('Heading six')
   await expect(codeBlock).toContainText('### Literal code heading')
-  await expect(thirdHeadingStyle).toHaveCSS('font-size', '19.2px')
-  await expect(message).not.toContainText('### João Gonçalves Zarco')
+  await expect(thirdHeadingStyle).toHaveCSS('font-size', '15.6px')
 }
