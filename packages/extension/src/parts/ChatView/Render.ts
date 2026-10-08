@@ -88,7 +88,51 @@ const renderTaskList = (
 }
 
 const urlPattern = /https?:\/\/[^\s<>"']+/gu
+const invalidMarkdownDestinationPattern = /[\s<>"']/u
 const trailingPunctuation = new Set(['!', ',', '.', ':', ';', '?'])
+
+const findNextMarkdownLink = (
+  text: string,
+  startIndex: number,
+):
+  | {
+      readonly destination: string
+      readonly endIndex: number
+      readonly index: number
+      readonly label: string
+    }
+  | undefined => {
+  let searchIndex = startIndex
+  while (searchIndex < text.length) {
+    const labelEndIndex = text.indexOf('](', searchIndex)
+    if (labelEndIndex === -1) {
+      return undefined
+    }
+    const labelStartIndex = text.lastIndexOf('[', labelEndIndex)
+    const destinationStartIndex = labelEndIndex + 2
+    const destinationEndIndex = text.indexOf(')', destinationStartIndex)
+    const label = text.slice(labelStartIndex + 1, labelEndIndex)
+    const destination = text.slice(destinationStartIndex, destinationEndIndex)
+    if (
+      labelStartIndex >= startIndex &&
+      label.length > 0 &&
+      !label.includes('[') &&
+      destinationEndIndex !== -1 &&
+      (destination.startsWith('http://') ||
+        destination.startsWith('https://')) &&
+      !invalidMarkdownDestinationPattern.test(destination)
+    ) {
+      return {
+        destination,
+        endIndex: destinationEndIndex + 1,
+        index: labelStartIndex,
+        label,
+      }
+    }
+    searchIndex = labelEndIndex + 2
+  }
+  return undefined
+}
 
 const trimUrl = (value: string): string => {
   let url = value
@@ -110,9 +154,7 @@ const trimUrl = (value: string): string => {
   return url
 }
 
-const renderMessageTextWithoutBold = (
-  text: string,
-): readonly Dom.TreeNode[] => {
+const renderMessageTextWithUrls = (text: string): readonly Dom.TreeNode[] => {
   const children: Dom.TreeNode[] = []
   let previousIndex = 0
   for (const match of text.matchAll(urlPattern)) {
@@ -127,6 +169,29 @@ const renderMessageTextWithoutBold = (
   }
   if (previousIndex < text.length) {
     children.push(Dom.textNode(text.slice(previousIndex)))
+  }
+  return children
+}
+
+const renderMessageTextWithoutBold = (
+  text: string,
+): readonly Dom.TreeNode[] => {
+  const children: Dom.TreeNode[] = []
+  let previousIndex = 0
+  let link = findNextMarkdownLink(text, previousIndex)
+  while (link) {
+    const matchIndex = link.index
+    if (matchIndex > previousIndex) {
+      children.push(
+        ...renderMessageTextWithUrls(text.slice(previousIndex, matchIndex)),
+      )
+    }
+    children.push(Dom.link(link.destination, link.label, 'ChatMessageLink'))
+    previousIndex = link.endIndex
+    link = findNextMarkdownLink(text, previousIndex)
+  }
+  if (previousIndex < text.length) {
+    children.push(...renderMessageTextWithUrls(text.slice(previousIndex)))
   }
   return children
 }
