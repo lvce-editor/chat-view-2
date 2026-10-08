@@ -1134,16 +1134,21 @@
   gap: 24px;
   width: 100%;
   max-width: 960px;
-  min-height: 100%;
   padding-inline: 18px;
   margin-inline: auto;
 }
+.ChatAiNativeLayout
+  .ChatConversationBody:not(:has(.ChatEmptyTitle))
+  .ChatMessagesContent {
+  flex: 1 0 auto;
+  min-height: 0;
+}
 .ChatAiNativeLayout .ChatTurnLatest {
   display: flex;
-  flex: 0 0 auto;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 24px;
-  min-height: 100%;
+  min-height: 0;
 }
 
 .AiNativeLayout .ActivityBarLayout {
