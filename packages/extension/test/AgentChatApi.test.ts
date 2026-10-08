@@ -258,7 +258,10 @@ test('answers a general question and follow-up when no workspace is open', async
 })
 
 test('creates uniquely identified tasks and preserves their IDs for follow-ups', async () => {
-  const uuids: [string, string] = [
+  const uuids: [
+    ReturnType<typeof crypto.randomUUID>,
+    ReturnType<typeof crypto.randomUUID>,
+  ] = [
     '7d107d77-56d6-458f-b17f-27dce196bb8b',
     '9129e442-9488-4e3b-a263-e08f9b89b458',
   ]
