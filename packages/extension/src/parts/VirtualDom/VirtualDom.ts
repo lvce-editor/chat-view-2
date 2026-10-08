@@ -31,9 +31,11 @@ export const div = (
   className: string,
   children: readonly TreeNode[],
   options: Readonly<{
+    onClick?: string
     onDragOver?: string
     onDrop?: string
     onKeyDown?: string
+    name?: string
     style?: string
   }> = {},
 ): TreeNode => {
@@ -41,10 +43,12 @@ export const div = (
     VirtualDomElements.Div,
     {
       className,
+      ...(options.onClick && { onClick: options.onClick }),
       ...(options.style && { style: options.style }),
       ...(options.onDragOver && { onDragOver: options.onDragOver }),
       ...(options.onDrop && { onDrop: options.onDrop }),
       ...(options.onKeyDown && { onKeyDown: options.onKeyDown }),
+      ...(options.name && { name: options.name }),
     },
     children,
   )

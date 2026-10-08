@@ -1079,6 +1079,36 @@ test('opens the model picker without adding model controls to the header', async
   expect(getText(dom)).toContain('GPT-5.4')
 })
 
+test('closes the model picker when clicking outside it', async () => {
+  const instance = await createTestInstance()
+  instance.setState({
+    ...instance.getState(),
+    draft: 'keep this draft',
+    modelPickerOpen: true,
+  })
+
+  instance.handleModelPickerOutsideClick('model-picker-popup', undefined)
+  expect(instance.getState().modelPickerOpen).toBe(true)
+  instance.handleModelPickerOutsideClick('model:gpt-5.4', undefined)
+  expect(instance.getState().modelPickerOpen).toBe(true)
+
+  instance.handleModelPickerOutsideClick('composer', 'keep this draft')
+  expect(instance.getState().modelPickerOpen).toBe(false)
+  expect(instance.getState().draft).toBe('keep this draft')
+  expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+
+  instance.setState({ ...instance.getState(), modelPickerOpen: true })
+  instance.handleModelPickerOutsideClick(undefined, undefined)
+
+  expect(instance.getState().modelPickerOpen).toBe(false)
+  expect(instance.getState().draft).toBe('keep this draft')
+  expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+
+  await dispatch(instance, { type: 'blur' })
+  expect(instance.getState().modelPickerOpen).toBe(false)
+  instance.dispose?.()
+})
+
 test('closes the model picker on Escape without changing the model or draft', async () => {
   const instance = await createTestInstance()
   instance.setState({

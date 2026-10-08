@@ -619,10 +619,16 @@ const renderModelPicker = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   if (!modelPickerOpen) {
     return Dom.div('ChatModelPickerHidden', [])
   }
-  return Dom.div('Chat2ModelPicker', [
-    Dom.div('ChatModelPickerTitle', [Dom.textNode('Models')]),
-    ...models.map(renderModel),
-  ])
+  return Dom.div(
+    'Chat2ModelPicker',
+    [
+      Dom.div('ChatModelPickerTitle', [Dom.textNode('Models')], {
+        name: 'model-picker-popup',
+      }),
+      ...models.map(renderModel),
+    ],
+    { name: 'model-picker-popup' },
+  )
 }
 
 const getSelectedModelLabel = (state: Readonly<ChatViewState>): string => {
@@ -779,6 +785,7 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       renderComposer(state),
     ],
     {
+      onClick: 'handleModelPickerOutsideClick',
       onDragOver: 'handleDragOver',
       onDrop: 'handleImageDrop',
       onKeyDown: 'handleKeyDown',
@@ -962,6 +969,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       getRootClassName(state, 'ChatDetailView'),
       [header, Dom.div('ChatConversationBody', [messages, changes, composer])],
       {
+        onClick: 'handleModelPickerOutsideClick',
         onDragOver: 'handleDragOver',
         onDrop: 'handleImageDrop',
         onKeyDown: 'handleKeyDown',
@@ -972,6 +980,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
     getRootClassName(state, 'ChatDetailView'),
     [header, messages, changes, composer],
     {
+      onClick: 'handleModelPickerOutsideClick',
       onDragOver: 'handleDragOver',
       onDrop: 'handleImageDrop',
       onKeyDown: 'handleKeyDown',
@@ -1016,7 +1025,11 @@ export const render = (
             ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
             : []),
         ],
-        { onDragOver: 'handleDragOver', onDrop: 'handleImageDrop' },
+        {
+          onClick: 'handleModelPickerOutsideClick',
+          onDragOver: 'handleDragOver',
+          onDrop: 'handleImageDrop',
+        },
       ),
     )
   }
@@ -1048,6 +1061,7 @@ export const render = (
             ]),
           ],
           {
+            onClick: 'handleModelPickerOutsideClick',
             onDragOver: 'handleDragOver',
             onDrop: 'handleImageDrop',
             onKeyDown: 'handleKeyDown',
@@ -1084,6 +1098,7 @@ export const render = (
           conversation,
         ],
         {
+          onClick: 'handleModelPickerOutsideClick',
           onDragOver: 'handleDragOver',
           onDrop: 'handleImageDrop',
           onKeyDown: 'handleKeyDown',
