@@ -1130,6 +1130,26 @@
 .ChatAiNativeLayout .ChatMessages {
   gap: 0;
 }
+.ChatAiNativeLayout .ChatMessages:not(:has(.ChatEmptyTitle)) > .ChatChanges {
+  position: relative;
+}
+.ChatAiNativeLayout
+  .ChatMessages:not(:has(.ChatEmptyTitle)):not(:has(> .ChatChanges))
+  > .ChatComposerArea::before,
+.ChatAiNativeLayout
+  .ChatMessages:not(:has(.ChatEmptyTitle))
+  > .ChatChanges::before,
+.ChatAiNativeLayout
+  .ChatDetailView:not(:has(.ChatEmptyTitle, .ChatChanges))
+  > .ChatComposerArea::before {
+  position: absolute;
+  inset-inline: 0;
+  top: -40px;
+  height: 40px;
+  pointer-events: none;
+  content: '';
+  background: linear-gradient(to bottom, transparent, var(--ChatBackground));
+}
 .ChatAiNativeLayout
   .ChatConversationBody:not(:has(.ChatEmptyTitle))
   > .ChatMessages {
