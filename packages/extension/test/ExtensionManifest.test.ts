@@ -149,6 +149,7 @@ test('contributes every preference read by Chat 2', async () => {
       'chat2.openAiWebSearch',
       'chat2.selectedModelId',
       'chat2.supportsStreaming',
+      'chat2.titleModelId',
       'chat2.useMockBackend',
     ].toSorted((a, b) => a.localeCompare(b)),
   )

@@ -19,6 +19,7 @@ export interface AgentChatApiOptions {
   readonly backend: AgentBackend
   readonly maxSteps?: number
   readonly store: TaskStore
+  readonly titleModelId?: string
   readonly toolHost: AgentToolHost
 }
 
@@ -28,6 +29,8 @@ const readOnlyTools = new Set([
   'read_file',
   'search_workspace',
 ])
+const titleWhitespacePattern = /\s+/g
+const quotedTitlePattern = /^(["'])(.*)\1$/
 
 const getTitle = (message: string): string => {
   const firstLine = message.split('\n', 1)[0]?.trim() || 'New task'
@@ -37,9 +40,24 @@ const getTitle = (message: string): string => {
 const notify = async (
   task: ChatTask,
   options?: ChatRunOptions,
+  store?: TaskStore,
 ): Promise<void> => {
-  await options?.onUpdate?.(task)
+  const current = store ? await store.get(task.id) : undefined
+  const latestTask = current
+    ? {
+        ...current,
+        ...(task.streamingText !== undefined && {
+          streamingText: task.streamingText,
+        }),
+      }
+    : task
+  await options?.onUpdate?.(latestTask)
 }
+
+const withStoredTitle = (task: ChatTask, current?: ChatTask): ChatTask =>
+  current?.titleGenerated
+    ? { ...task, title: current.title, titleGenerated: true }
+    : task
 
 const trace = async (
   message: ChatTraceMessage,
@@ -68,7 +86,7 @@ const withEvent = async (
 ): Promise<ChatTask> => {
   const updated = appendEvent(task, event)
   await store.save(updated)
-  await notify(updated, options)
+  await notify(updated, options, store)
   return updated
 }
 
@@ -119,6 +137,7 @@ export const createAgentChatApi = ({
   backend,
   maxSteps = 30,
   store,
+  titleModelId,
   toolHost,
 }: AgentChatApiOptions): ChatApi => {
   const steering = new Map<
@@ -145,7 +164,7 @@ export const createAgentChatApi = ({
     )
     await toolHost.beginTurn(task.id)
     await store.save(task)
-    await notify(task, options)
+    await notify(task, options, store)
     let input: readonly AgentInput[] = [
       {
         content: `${await toolHost.getWorkspaceContext()}\n\nUser task:\n${message}`,
@@ -199,7 +218,7 @@ export const createAgentChatApi = ({
             if (now - lastStreamRender >= 50) {
               task = { ...task, streamingText: streamedText }
               lastStreamRender = now
-              await notify(task, options)
+              await notify(task, options, store)
             }
           },
           ...(previousResponseId && { previousResponseId }),
@@ -327,7 +346,7 @@ export const createAgentChatApi = ({
             )
           }
           await store.save(task)
-          await notify(task, options)
+          await notify(task, options, store)
           return task
         }
         if (result.text) {
@@ -350,7 +369,7 @@ export const createAgentChatApi = ({
           task = appendEvent(task, activity)
         }
         await store.save(task)
-        await notify(task, options)
+        await notify(task, options, store)
         const outputs = await executeCalls(
           result.toolCalls,
           toolHost,
@@ -394,7 +413,7 @@ export const createAgentChatApi = ({
           type: 'function-call-output' as const,
         }))
         await store.save(task)
-        await notify(task, options)
+        await notify(task, options, store)
       }
       throw new Error(`Agent stopped after ${maxSteps} steps`)
     } catch (error) {
@@ -417,7 +436,7 @@ export const createAgentChatApi = ({
         task = setStatus(task, 'failed')
       }
       await store.save(task)
-      await notify(task, options)
+      await notify(task, options, store)
       return task
     }
   }
@@ -444,8 +463,40 @@ export const createAgentChatApi = ({
         updatedAt: now,
       }
       await store.save(task)
-      await notify(task, options)
-      return run(task, message, options)
+      await notify(task, options, store)
+      void (async () => {
+        try {
+          if (!titleModelId || !backend.generateTitle) {
+            return
+          }
+          const generatedResponse = await backend.generateTitle(
+            message,
+            titleModelId,
+          )
+          const generatedTitle = generatedResponse
+            .trim()
+            .replaceAll(titleWhitespacePattern, ' ')
+            .replace(quotedTitlePattern, '$2')
+          if (!generatedTitle) {
+            return
+          }
+          const current = await store.get(task.id)
+          if (!current || current.archived || current.titleGenerated) {
+            return
+          }
+          const updated = {
+            ...current,
+            title: generatedTitle.slice(0, 80),
+            titleGenerated: true,
+          }
+          await store.save(updated)
+          await notify(updated, options, store)
+        } catch {
+          // Keep the first-message title when title generation is unavailable.
+        }
+      })()
+      const result = await run(task, message, options)
+      return withStoredTitle(result, await store.get(task.id))
     },
     getTask(id) {
       return store.get(id)
@@ -485,7 +536,7 @@ export const createAgentChatApi = ({
         }),
       )
       await store.save(updated)
-      await notify(updated, options)
+      await notify(updated, options, store)
       return run(updated, message, options)
     },
     async steer(taskId, message, attachments) {

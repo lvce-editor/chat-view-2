@@ -133,6 +133,7 @@ export interface ChatTask {
   readonly status: ChatTaskStatus
   readonly streamingText?: string
   readonly title: string
+  readonly titleGenerated?: boolean
   readonly updatedAt: string
 }
 

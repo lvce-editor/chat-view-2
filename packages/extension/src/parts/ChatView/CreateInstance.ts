@@ -252,6 +252,7 @@ const isSameBackendConfiguration = (
     oldConfiguration.accessToken === newConfiguration.accessToken &&
     oldConfiguration.loginRequired === newConfiguration.loginRequired &&
     oldConfiguration.openAiWebSearch === newConfiguration.openAiWebSearch &&
+    oldConfiguration.titleModelId === newConfiguration.titleModelId &&
     oldConfiguration.baseUrl === newConfiguration.baseUrl &&
     oldConfiguration.supportsStreaming === newConfiguration.supportsStreaming
   )

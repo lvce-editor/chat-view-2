@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
+// cspell:words titlte
 import { expect, jest, test } from '@jest/globals'
 import { createResponsesBackend } from '../src/parts/ResponsesBackend/ResponsesBackend.ts'
 
@@ -121,6 +122,84 @@ whats json`,
   )
   expect(request.input[0]?.content[0]?.text).toContain(
     'Answer general questions without workspace access.',
+  )
+})
+
+test('generates a title with the selected model, a single message, and no tools', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      id: 'response-title',
+      output: [
+        {
+          content: [{ text: 'Fix Chat Title Typos', type: 'output_text' }],
+          role: 'assistant',
+          type: 'message',
+        },
+      ],
+    }),
+  )
+  const backend = createResponsesBackend({
+    accessToken: 'editor-token',
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+    openAiWebSearch: true,
+    supportsStreaming: true,
+  })
+
+  await expect(
+    backend.generateTitle?.('fix typo in chat titlte', 'gpt-5.6-luna'),
+  ).resolves.toBe('Fix Chat Title Typos')
+
+  const requestBody = fetchMock.mock.calls[0]?.[1]?.body
+  if (typeof requestBody !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  const request = JSON.parse(requestBody) as Readonly<{
+    readonly input: readonly Readonly<Record<string, unknown>>[]
+    readonly instructions: string
+    readonly max_output_tokens: number
+    readonly model: string
+    readonly tools: readonly unknown[]
+  }>
+  expect(request).toMatchObject({
+    input: [
+      {
+        content: [{ text: 'fix typo in chat titlte', type: 'input_text' }],
+        role: 'user',
+      },
+    ],
+    max_output_tokens: 40,
+    model: 'gpt-5.6-luna',
+    store: false,
+    tools: [],
+  })
+  expect(request.instructions).toContain('Return only the title')
+  expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual(
+    expect.objectContaining({ Authorization: 'Bearer editor-token' }),
+  )
+})
+
+test('rejects title response tool calls without running them', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      id: 'response-title-tool',
+      output: [
+        {
+          arguments: '{}',
+          call_id: 'call-1',
+          name: 'run_command',
+          type: 'function_call',
+        },
+      ],
+    }),
+  )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await expect(backend.generateTitle?.('hello', 'gpt-6-luna')).rejects.toThrow(
+    'unexpected tool call',
   )
 })
 
