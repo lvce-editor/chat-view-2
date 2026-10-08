@@ -2,7 +2,7 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.ai-native-sidebar-side'
 
-export const test: Test = async ({ Command, expect, Locator }) => {
+export const test: Test = async ({ Command, expect, KeyBoard, Locator }) => {
   await Command.execute('Preferences.update', {
     'chat2.aiNativeTheme': 'default',
     'chat2.useMockBackend': true,
@@ -51,8 +51,24 @@ export const test: Test = async ({ Command, expect, Locator }) => {
     const task = Locator('.ChatTaskButton').first()
     // eslint-disable-next-line e2e/no-direct-click
     await task.click()
+    await KeyBoard.press('Control+B')
+    await expect(sessions).toHaveCount(0)
+    await expect(sash).toHaveCount(0)
+    await expect(chat).toBeVisible()
+    await KeyBoard.press('Control+B')
+    await expect(sessions).toBeVisible()
+    await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
     const composer = Locator('textarea[name="composer"]')
     await composer.type('Long conversation '.repeat(100))
+    await KeyBoard.press('Control+B')
+    await expect(sessions).toHaveCount(0)
+    await expect(sash).toHaveCount(0)
+    await expect(chat).toBeVisible()
+    await expect(composer).toHaveValue('Long conversation '.repeat(100))
+    await KeyBoard.press('Control+B')
+    await expect(sessions).toBeVisible()
+    await expect(sash).toBeVisible()
+    await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
     await Command.executeExtensionCommand('chat2.submit')
     const messages = Locator('.ChatMessages')
     const messageContent = Locator('.ChatMessagesContent')

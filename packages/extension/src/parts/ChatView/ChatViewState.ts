@@ -32,6 +32,7 @@ export interface ChatViewState {
   readonly selectedModelId: string
   readonly selectedTask: ChatTask | undefined
   readonly sessionsVisible: boolean
+  readonly sessionsListVisible: boolean
   readonly sessionsWidth?: number
   readonly tasks: readonly ChatTask[]
   readonly workingSeconds: number

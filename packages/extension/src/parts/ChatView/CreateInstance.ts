@@ -86,6 +86,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly setState: (state: unknown) => void
   readonly submit: (requestRerender?: boolean) => Promise<void>
   readonly toggleFocusMode: (requestRerender?: boolean) => Promise<void>
+  readonly toggleSessionsList: (requestRerender?: boolean) => Promise<void>
 }
 
 interface SavedState {
@@ -290,6 +291,10 @@ export const toggleActiveChatViewFocusMode = async (): Promise<void> => {
   await getActiveInstance()?.toggleFocusMode(true)
 }
 
+export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
+  await getActiveInstance()?.toggleSessionsList(true)
+}
+
 export const createInstance = async (
   context?: ViewContext,
   providedApi?: ChatApi,
@@ -376,6 +381,7 @@ export const createInstance = async (
     selectedModelId,
     selectedTask,
     sessionsVisible: false,
+    sessionsListVisible: true,
     tasks,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
@@ -730,6 +736,15 @@ export const createInstance = async (
     state.focusMode = toggleFocusMode(state)
     pendingWorkbenchLayout = state.focusMode ? 'ai-native' : 'ide'
     await syncWindowTitle()
+    if (requestRerender) {
+      await context?.requestRerender()
+    }
+  }
+
+  const handleToggleSessionsList = async (
+    requestRerender = false,
+  ): Promise<void> => {
+    state.sessionsListVisible = !state.sessionsListVisible
     if (requestRerender) {
       await context?.requestRerender()
     }
@@ -1204,6 +1219,7 @@ export const createInstance = async (
     },
     submit,
     toggleFocusMode: handleToggleFocusMode,
+    toggleSessionsList: handleToggleSessionsList,
   }
   syncWorkingTimer(selectedTask)
   void syncWindowTitle().catch(() => {})
