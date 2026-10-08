@@ -385,7 +385,7 @@ export const createInstance = async (
       return Promise.resolve()
     }
     const title = state.focusMode
-      ? state.selectedTask?.title || defaultChatTitle
+      ? `${state.selectedTask?.title || defaultChatTitle} - Lvce Editor`
       : undefined
     windowTitleQueue = windowTitleQueue
       .catch(() => {})
