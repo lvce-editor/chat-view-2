@@ -60,6 +60,10 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly handleSessionsSashPointerUp: () => void
   readonly newChat: (requestRerender?: boolean) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
+  readonly renderFocus: (
+    oldContext: Readonly<Record<string, boolean>>,
+    newContext: Readonly<Record<string, boolean>>,
+  ) => string
   readonly renderScrollPosition: () =>
     | readonly []
     | readonly [selector: string, scrollTop: number]
@@ -358,6 +362,7 @@ export const createInstance = async (
         : 0,
   }
   let selectedTaskRequest = 0
+  let focusComposerRequest = false
   let windowTitleQueue = Promise.resolve()
   let windowTitleActive = false
   const getWorkspaceTitle = async (): Promise<string> => {
@@ -567,6 +572,7 @@ export const createInstance = async (
     state.changesExpanded = false
     syncWorkingTimer(undefined)
     void syncWindowTitle().catch(() => {})
+    focusComposerRequest = !focusComposerRequest
     if (requestRerender) {
       await context?.requestRerender()
     }
@@ -705,6 +711,7 @@ export const createInstance = async (
     getContext(): Readonly<Record<string, boolean>> {
       return {
         'chat2.composerFocus': state.composerFocused,
+        'chat2.focusComposerRequest': focusComposerRequest,
         'chat2.focusMode': state.focusMode,
         'chat2.taskRunning': state.selectedTask?.status === 'running',
       }
@@ -950,6 +957,15 @@ export const createInstance = async (
     newChat,
     render(): readonly VirtualDomNode[] {
       return render(state)
+    },
+    renderFocus(
+      oldContext: Readonly<Record<string, boolean>>,
+      newContext: Readonly<Record<string, boolean>>,
+    ): string {
+      return (oldContext['chat2.focusComposerRequest'] ?? false) ===
+        (newContext['chat2.focusComposerRequest'] ?? false)
+        ? ''
+        : 'textarea[name="composer"]'
     },
     renderScrollPosition():
       | readonly []
