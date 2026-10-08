@@ -12,6 +12,7 @@ import {
   createMockChatApi,
   mockResponse,
 } from '../src/parts/MockChatApi/MockChatApi.ts'
+import { taskStoreChannelName } from '../src/parts/TaskStore/TaskStore.ts'
 
 const getText = (dom: readonly any[]): string => {
   return dom
@@ -82,6 +83,92 @@ const createViewContext = (state: unknown): ViewContext => ({
   state,
   uid: 1,
   viewId: 'chat2.views.chat',
+})
+
+test('refreshes changed tasks from another tab without replacing the draft', async () => {
+  const channels: TestBroadcastChannel[] = []
+  class TestBroadcastChannel extends BroadcastChannel {
+    constructor(name: Readonly<string>) {
+      super(name)
+      channels.push(this)
+    }
+
+    override postMessage(data: Readonly<unknown>): void {
+      for (const channel of channels) {
+        if (channel !== this) {
+          channel.onmessage?.(new MessageEvent('message', { data }))
+        }
+      }
+    }
+  }
+  const originalBroadcastChannel = BroadcastChannel
+  Object.defineProperty(globalThis, 'BroadcastChannel', {
+    configurable: true,
+    value: TestBroadcastChannel,
+  })
+  const baseApi = createMockChatApi()
+  const [task, createdTask] = await baseApi.listTasks(2)
+  if (!task || !createdTask) {
+    throw new Error('Expected a mock task')
+  }
+  let storedTasks = [task]
+  const api = {
+    ...baseApi,
+    async getTask(id: string) {
+      return storedTasks.find((item) => item.id === id)
+    },
+    async listTasks() {
+      return storedTasks.filter((item) => !item.archived)
+    },
+  }
+  const instance = await createInstance(undefined, api)
+  const secondInstance = await createInstance(undefined, api)
+  const channel = new BroadcastChannel(taskStoreChannelName)
+
+  try {
+    for (const viewInstance of [instance, secondInstance]) {
+      viewInstance.setState({
+        ...viewInstance.getState(),
+        draft: 'keep this draft',
+        selectedTask: task,
+      })
+    }
+    storedTasks = [{ ...task, title: 'Updated in another tab' }, createdTask]
+    channel.postMessage({ type: 'tasks-changed' })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    for (const viewInstance of [instance, secondInstance]) {
+      expect(viewInstance.getState().selectedTask?.title).toBe(
+        'Updated in another tab',
+      )
+      expect(viewInstance.getState().tasks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: createdTask.id }),
+        ]),
+      )
+      expect(viewInstance.getState().draft).toBe('keep this draft')
+    }
+
+    storedTasks = [{ ...task, archived: true }, createdTask]
+    channel.postMessage({ type: 'tasks-changed' })
+    await new Promise((resolve) => setTimeout(resolve, 30))
+
+    for (const viewInstance of [instance, secondInstance]) {
+      expect(viewInstance.getState().selectedTask).toBeUndefined()
+      expect(viewInstance.getState().tasks).toEqual([
+        expect.objectContaining({ id: createdTask.id }),
+      ])
+      expect(viewInstance.getState().draft).toBe('keep this draft')
+    }
+  } finally {
+    channel.close()
+    instance.dispose?.()
+    secondInstance.dispose?.()
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      configurable: true,
+      value: originalBroadcastChannel,
+    })
+  }
 })
 
 test('renders a focused task list, model control, and composer', async () => {
