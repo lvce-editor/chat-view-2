@@ -39,6 +39,14 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
       params: ['handleImagePaste', 'event.clipboardData.files2'],
     },
     {
+      name: 'handleModelPickerOutsideClick',
+      params: [
+        'handleModelPickerOutsideClick',
+        'event.target.name',
+        'event.target.value',
+      ],
+    },
+    {
       name: 'handleKeyDown',
       params: ['handleKeyDown', 'event.key'],
     },

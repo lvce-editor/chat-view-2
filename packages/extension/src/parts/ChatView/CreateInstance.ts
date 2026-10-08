@@ -49,6 +49,10 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly handleImageDrop: (dropId: unknown) => Promise<void>
   readonly handleImagePaste: (fileIds: unknown) => Promise<void>
   readonly handleKeyDown: (key: unknown) => void
+  readonly handleModelPickerOutsideClick: (
+    name: unknown,
+    value: unknown,
+  ) => void
   readonly handleSessionsSashPointerDown: (
     clientX: number,
     containerWidth: number,
@@ -754,6 +758,10 @@ export const createInstance = async (
         state.composerFocused = false
         return
       }
+      if (event.type === 'blur' && event.name === undefined) {
+        state.modelPickerOpen = false
+        return
+      }
       if (event.type !== 'click') {
         return
       }
@@ -906,6 +914,19 @@ export const createInstance = async (
     },
     handleKeyDown(key: unknown): void {
       if (key === 'Escape' && state.modelPickerOpen) {
+        state.modelPickerOpen = false
+      }
+    },
+    handleModelPickerOutsideClick(name: unknown, value: unknown): void {
+      if (name === 'composer' && typeof value === 'string') {
+        state.draft = value
+      }
+      if (
+        state.modelPickerOpen &&
+        name !== 'model-picker' &&
+        name !== 'model-picker-popup' &&
+        !(typeof name === 'string' && name.startsWith('model:'))
+      ) {
         state.modelPickerOpen = false
       }
     },

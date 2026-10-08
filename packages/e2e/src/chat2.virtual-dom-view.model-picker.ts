@@ -62,4 +62,25 @@ export const test: Test = async ({
   await expect(picker).toHaveCount(0)
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(composer).toHaveValue('keep this draft')
+
+  // Clicking the composer outside the picker dismisses it.
+  // eslint-disable-next-line e2e/no-direct-click
+  await toggle.click()
+  await expect(picker).toBeVisible()
+  // eslint-disable-next-line e2e/no-direct-click
+  await composer.click()
+  await expect(picker).toHaveCount(0)
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(composer).toHaveValue('keep this draft')
+
+  // Moving focus to another LVCE view also dismisses the picker.
+  // eslint-disable-next-line e2e/no-direct-click
+  await toggle.click()
+  await expect(picker).toBeVisible()
+  const activityBarItem = Locator('.ActivityBarItem').first()
+  // eslint-disable-next-line e2e/no-direct-click
+  await activityBarItem.click()
+  await expect(picker).toHaveCount(0)
+  await Command.executeExtensionCommand('chat2.show')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 }
