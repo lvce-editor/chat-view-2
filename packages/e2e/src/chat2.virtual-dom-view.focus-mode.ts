@@ -16,7 +16,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await Command.executeExtensionCommand('chat2.toggleFocusMode')
   await expect(toggle).toHaveCount(0)
   await expect(focusMode).toBeVisible()
-  await expect(browserTabTitle).toHaveText('Chat 2')
+  await expect(browserTabTitle).toHaveText('Chat 2 - Lvce Editor')
   const activityBar = Locator('.ActivityBar')
   await expect(activityBar).toBeVisible()
   const sessions = Locator('.ChatSessions')
@@ -39,7 +39,9 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await composerInput.type('Center the new chat composer')
   await expect(composerInput).toHaveValue('Center the new chat composer')
   await Command.executeExtensionCommand('chat2.submit')
-  await expect(browserTabTitle).toHaveText('Center the new chat composer')
+  await expect(browserTabTitle).toHaveText(
+    'Center the new chat composer - Lvce Editor',
+  )
   const userMessage = Locator('.ChatMessageUser')
   await expect(userMessage).toContainText('Center the new chat composer')
   await expect(emptyTitle).toHaveCount(0)
@@ -49,7 +51,9 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   const task = Locator('.ChatTaskButton').nth(2)
   // eslint-disable-next-line e2e/no-direct-click
   await task.click()
-  await expect(browserTabTitle).toHaveText('Fix quickpick beforeinput crash')
+  await expect(browserTabTitle).toHaveText(
+    'Fix quickpick beforeinput crash - Lvce Editor',
+  )
   await expect(headerFocusButton).toHaveCount(0)
   await expect(headerNewChatButton).toHaveCount(0)
   const messages = Locator('.ChatMessages')
@@ -60,7 +64,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(tasks).toHaveCount(20)
   // eslint-disable-next-line e2e/no-direct-click
   await newChatButton.click()
-  await expect(browserTabTitle).toHaveText('Chat 2')
+  await expect(browserTabTitle).toHaveText('Chat 2 - Lvce Editor')
   await expect(emptyTitle).toBeVisible()
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
   await expect(composerInput).toBeFocused()

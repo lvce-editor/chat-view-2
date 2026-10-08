@@ -399,6 +399,49 @@ test('restores a copied chat URL when the view has no saved state', async () => 
   expect(execute).toHaveBeenCalledWith('Layout.getHref')
 })
 
+test('AI-native browser title includes the editor name and restores the workspace title', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      if (command === 'Workspace.getPath') {
+        return '/workspace/my-project'
+      }
+      return command === 'Layout.getSideBarFocusMode'
+    },
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+  const state = instance.getState() as {
+    focusMode: boolean
+    focusModeEnabled: boolean
+  }
+  state.focusModeEnabled = true
+  state.focusMode = true
+
+  try {
+    await dispatch(instance, { name: 'task:mock-task-2', type: 'click' })
+    expect(execute).toHaveBeenCalledWith(
+      'WindowTitle.set',
+      'Fix quickpick beforeinput crash - Lvce Editor',
+    )
+
+    await instance.newChat()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(execute).toHaveBeenCalledWith(
+      'WindowTitle.set',
+      'Chat 2 - Lvce Editor',
+    )
+
+    await instance.toggleFocusMode()
+    expect(execute).toHaveBeenCalledWith('WindowTitle.set', 'my-project')
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('falls back to the saved task when the URL task no longer exists', async () => {
   const api = createMockChatApi()
   const execute = jest.fn(
