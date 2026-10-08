@@ -199,7 +199,7 @@ test('generates the title asynchronously and preserves it through later task sav
   const titleUpdated = Promise.withResolvers<void>()
   const generateTitle = jest
     .fn<NonNullable<AgentBackend['generateTitle']>>()
-    .mockResolvedValue('Fix the Chat Title')
+    .mockResolvedValue('fix the chat title')
   const runStep = jest.fn<AgentBackend['runStep']>(() => stepPromise)
   const backend: AgentBackend = {
     generateTitle,
@@ -235,12 +235,12 @@ test('generates the title asynchronously and preserves it through later task sav
     toolHost,
   })
   const taskPromise = api.createTask(
-    'please fix the titlte of this chat',
+    'über please fix the titlte of this chat',
     'gpt-test',
     {
       onUpdate(task) {
         updates.push(task.title)
-        if (task.title === 'Fix the Chat Title') {
+        if (task.title === 'Fix the chat title') {
           titleUpdated.resolve()
         }
       },
@@ -249,32 +249,32 @@ test('generates the title asynchronously and preserves it through later task sav
 
   await titleUpdated.promise
   expect(generateTitle).toHaveBeenCalledWith(
-    'please fix the titlte of this chat',
+    'über please fix the titlte of this chat',
     'gpt-5.6-luna',
   )
-  expect(updates[0]).toBe('please fix the titlte of this chat')
+  expect(updates[0]).toBe('Über please fix the titlte of this chat')
   step.resolve({ responseId: 'response-1', text: 'Done.', toolCalls: [] })
 
   const task = await taskPromise
   expect(task).toMatchObject({
     status: 'completed',
-    title: 'Fix the Chat Title',
+    title: 'Fix the chat title',
     titleGenerated: true,
   })
   expect(task.events).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        text: 'please fix the titlte of this chat',
+        text: 'über please fix the titlte of this chat',
         type: 'user-message',
       }),
       expect.objectContaining({ text: 'Done.', type: 'assistant-message' }),
     ]),
   )
   await expect(store.get(task.id)).resolves.toMatchObject({
-    title: 'Fix the Chat Title',
+    title: 'Fix the chat title',
     titleGenerated: true,
   })
-  expect(updates).toContain('Fix the Chat Title')
+  expect(updates).toContain('Fix the chat title')
 })
 
 test('answers a general question and follow-up when no workspace is open', async () => {

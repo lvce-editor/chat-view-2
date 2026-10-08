@@ -30,11 +30,16 @@ const readOnlyTools = new Set([
   'search_workspace',
 ])
 const titleWhitespacePattern = /\s+/g
+const capitalizeTitle = (title: string): string =>
+  title.replace(/\p{Cased_Letter}/u, (letter) => letter.toUpperCase())
 const quotedTitlePattern = /^(["'])(.*)\1$/
 
 const getTitle = (message: string): string => {
   const firstLine = message.split('\n', 1)[0]?.trim() || 'New task'
-  return firstLine.length > 60 ? `${firstLine.slice(0, 57)}...` : firstLine
+  const capitalizedFirstLine = capitalizeTitle(firstLine)
+  return capitalizedFirstLine.length > 60
+    ? `${capitalizedFirstLine.slice(0, 57)}...`
+    : capitalizedFirstLine
 }
 
 const notify = async (
@@ -486,7 +491,7 @@ export const createAgentChatApi = ({
           }
           const updated = {
             ...current,
-            title: generatedTitle.slice(0, 80),
+            title: capitalizeTitle(generatedTitle).slice(0, 80),
             titleGenerated: true,
           }
           await store.save(updated)
