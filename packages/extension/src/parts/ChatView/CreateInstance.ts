@@ -36,6 +36,7 @@ import {
   type DefaultChatApiOptions,
 } from '../DefaultChatApi/DefaultChatApi.ts'
 import { initializeImageTransfer } from '../InitializeImageTransfer/InitializeImageTransfer.ts'
+import { taskStoreChannelName } from '../TaskStore/TaskStore.ts'
 import { readAiNativeTheme } from './AiNativeTheme.ts'
 import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
@@ -409,6 +410,12 @@ export const createInstance = async (
   let authStateSyncing = false
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
   let disposed = false
+  let taskRefreshRequest = 0
+  let taskRefreshTimeout: ReturnType<typeof setTimeout> | undefined
+  const taskChangeChannel =
+    typeof BroadcastChannel === 'undefined'
+      ? undefined
+      : new BroadcastChannel(taskStoreChannelName)
   let sessionsSashDrag: SessionsSashDrag | undefined
   let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
@@ -568,6 +575,7 @@ export const createInstance = async (
   }
 
   const newChat = async (requestRerender = false): Promise<void> => {
+    taskRefreshRequest++
     selectedTaskRequest++
     resetCopyFeedback()
     state.selectedTask = undefined
@@ -588,6 +596,7 @@ export const createInstance = async (
     if (archivedTaskIds.has(task.id)) {
       return
     }
+    taskRefreshRequest++
     const taskChanged = state.selectedTask?.id !== task.id
     state.selectedTask = task
     if (taskChanged) {
@@ -609,6 +618,38 @@ export const createInstance = async (
       return
     }
     await setTask(task)
+    await context?.requestRerender()
+  }
+
+  const refreshTasks = async (): Promise<void> => {
+    const request = ++taskRefreshRequest
+    const selectedTaskId = state.selectedTask?.id
+    const selectedTaskRequestAtStart = selectedTaskRequest
+    const [tasks, selectedTask] = await Promise.all([
+      api.listTasks(20),
+      selectedTaskId ? api.getTask(selectedTaskId) : Promise.resolve(undefined),
+    ])
+    if (disposed || request !== taskRefreshRequest) {
+      return
+    }
+    state.tasks = tasks
+    if (
+      selectedTaskId &&
+      selectedTaskRequestAtStart === selectedTaskRequest &&
+      state.selectedTask?.id === selectedTaskId
+    ) {
+      if (!selectedTask || selectedTask.archived) {
+        archivedTaskIds.add(selectedTaskId)
+        selectedTaskRequest++
+        state.selectedTask = undefined
+        syncWorkingTimer(undefined)
+        await setChatTaskHash(execute)
+      } else {
+        state.selectedTask = selectedTask
+        syncWorkingTimer(selectedTask)
+      }
+      void syncWindowTitle().catch(() => {})
+    }
     await context?.requestRerender()
   }
 
@@ -701,6 +742,11 @@ export const createInstance = async (
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       disposed = true
+      taskChangeChannel?.close()
+      if (taskRefreshTimeout !== undefined) {
+        clearTimeout(taskRefreshTimeout)
+        taskRefreshTimeout = undefined
+      }
       if (state.focusMode) {
         void syncWindowTitle().catch(() => {})
       }
@@ -841,6 +887,7 @@ export const createInstance = async (
         }
         try {
           await api.archiveTask(id)
+          taskRefreshRequest++
           archivedTaskIds.add(id)
           state.tasks = state.tasks.filter((task) => task.id !== id)
           state.errorMessage = ''
@@ -1038,6 +1085,38 @@ export const createInstance = async (
     authStatePoll = setInterval(() => {
       void syncAuthState()
     }, authStatePollInterval)
+  }
+  if (taskChangeChannel) {
+    const handleTaskRefreshError = (error: Readonly<unknown>): void => {
+      if (disposed) {
+        return
+      }
+      let message = 'Unable to refresh chat tasks'
+      if (error instanceof Error || typeof error === 'string') {
+        message = error instanceof Error ? error.message : error
+      }
+      state.errorMessage = message
+      void context?.requestRerender()
+    }
+    taskChangeChannel.onmessage = (
+      event: Readonly<{ data: Readonly<Record<string, unknown>> }>,
+    ): void => {
+      if (
+        !event.data ||
+        typeof event.data !== 'object' ||
+        !('type' in event.data) ||
+        event.data.type !== 'tasks-changed'
+      ) {
+        return
+      }
+      if (taskRefreshTimeout !== undefined) {
+        return
+      }
+      taskRefreshTimeout = setTimeout(() => {
+        taskRefreshTimeout = undefined
+        void refreshTasks().catch(handleTaskRefreshError)
+      }, 25)
+    }
   }
   activeInstances.add(instance)
   return instance

@@ -44,6 +44,16 @@ export const createMemoryTaskStore = (
 
 const databaseName = 'lvce-chat-2'
 const storeName = 'tasks'
+export const taskStoreChannelName = 'lvce-chat-2-task-store'
+
+const taskChangeChannel =
+  typeof indexedDB === 'undefined' || typeof BroadcastChannel === 'undefined'
+    ? undefined
+    : new BroadcastChannel(taskStoreChannelName)
+
+const publishTaskChange = (): void => {
+  taskChangeChannel?.postMessage({ type: 'tasks-changed' })
+}
 
 const openDatabase = (): Promise<IDBDatabase> => {
   const { promise, reject, resolve } = Promise.withResolvers<IDBDatabase>()
@@ -66,6 +76,14 @@ const requestToPromise = <T>(request: IDBRequest<T>): Promise<T> => {
   return promise
 }
 
+const transactionToPromise = (transaction: IDBTransaction): Promise<void> => {
+  const { promise, reject, resolve } = Promise.withResolvers<void>()
+  transaction.oncomplete = () => resolve()
+  transaction.onerror = () => reject(transaction.error)
+  transaction.onabort = () => reject(transaction.error)
+  return promise
+}
+
 export const createIndexedDbTaskStore = (): TaskStore => {
   if (typeof indexedDB === 'undefined') {
     return createMemoryTaskStore()
@@ -75,10 +93,26 @@ export const createIndexedDbTaskStore = (): TaskStore => {
       const database = await openDatabase()
       try {
         const transaction = database.transaction(storeName, 'readwrite')
-        const store = transaction.objectStore(storeName)
-        const task = await requestToPromise<ChatTask | undefined>(store.get(id))
-        if (task) {
-          await requestToPromise(store.put({ ...task, archived: true }))
+        const transactionPromise = transactionToPromise(transaction)
+        try {
+          const store = transaction.objectStore(storeName)
+          const task = await requestToPromise<ChatTask | undefined>(
+            store.get(id),
+          )
+          if (task) {
+            await requestToPromise(store.put({ ...task, archived: true }))
+          }
+          await transactionPromise
+          if (task) {
+            publishTaskChange()
+          }
+        } catch (error) {
+          try {
+            await transactionPromise
+          } catch {
+            // Preserve the request error that caused the transaction to abort.
+          }
+          throw error
         }
       } finally {
         database.close()
@@ -115,20 +149,32 @@ export const createIndexedDbTaskStore = (): TaskStore => {
       const database = await openDatabase()
       try {
         const transaction = database.transaction(storeName, 'readwrite')
-        const store = transaction.objectStore(storeName)
-        const existing = await requestToPromise<ChatTask | undefined>(
-          store.get(task.id),
-        )
-        await requestToPromise(
-          store.put({
-            ...task,
-            ...(existing?.archived && { archived: true }),
-            ...(existing?.titleGenerated && {
-              title: existing.title,
-              titleGenerated: true,
+        const transactionPromise = transactionToPromise(transaction)
+        try {
+          const store = transaction.objectStore(storeName)
+          const existing = await requestToPromise<ChatTask | undefined>(
+            store.get(task.id),
+          )
+          await requestToPromise(
+            store.put({
+              ...task,
+              ...(existing?.archived && { archived: true }),
+              ...(existing?.titleGenerated && {
+                title: existing.title,
+                titleGenerated: true,
+              }),
             }),
-          }),
-        )
+          )
+          await transactionPromise
+          publishTaskChange()
+        } catch (error) {
+          try {
+            await transactionPromise
+          } catch {
+            // Preserve the request error that caused the transaction to abort.
+          }
+          throw error
+        }
       } finally {
         database.close()
       }
