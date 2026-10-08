@@ -48,9 +48,15 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
   readonly getState: () => Readonly<ChatViewState>
+  readonly handleDragOver: () => void
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly handleImageDrop: (dropId: unknown) => Promise<void>
-  readonly handleImagePaste: (fileIds: unknown) => Promise<void>
+  readonly handleImagePaste: (
+    fileIds: unknown,
+    text?: unknown,
+    selectionStart?: unknown,
+    selectionEnd?: unknown,
+  ) => Promise<void>
   readonly handleKeyDown: (key: unknown) => void
   readonly handleModelPickerOutsideClick: (
     name: unknown,
@@ -151,6 +157,8 @@ const defaultChatTitle = 'Chat 2'
 const titleMenuId = 'chat2.title'
 const maxTaskTitleLength = 80
 const pathSeparatorRegex = /[\\/]/
+const localImagePathRegex =
+  /^(?:file:\/\/|\/|~\/|[a-z]:[\\/]).+\.(?:avif|bmp|gif|jpe?g|png|webp)$/i
 const toImageFile = async (value: unknown): Promise<File | undefined> => {
   if (!value || typeof value !== 'object') {
     return undefined
@@ -844,6 +852,7 @@ export const createInstance = async (
     getState(): Readonly<ChatViewState> {
       return state
     },
+    handleDragOver(): void {},
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'contextmenu') {
         if (
@@ -1031,21 +1040,46 @@ export const createInstance = async (
         await imageTransferHost.discardDrop(dropId).catch(() => {})
       }
     },
-    async handleImagePaste(fileIds: unknown): Promise<void> {
-      if (
-        !Array.isArray(fileIds) ||
-        fileIds.some((id) => typeof id !== 'number')
-      ) {
+    async handleImagePaste(
+      fileIds: unknown,
+      text?: unknown,
+      selectionStart?: unknown,
+      selectionEnd?: unknown,
+    ): Promise<void> {
+      if (Array.isArray(fileIds) && fileIds.length > 0) {
+        if (fileIds.some((id) => typeof id !== 'number')) {
+          return
+        }
+        try {
+          const files = await imageTransferHost.getClipboardFiles(fileIds)
+          await addImageFiles(files)
+        } catch (error) {
+          state.errorMessage =
+            error instanceof Error ? error.message : String(error)
+          await context?.requestRerender()
+        }
         return
       }
-      try {
-        const files = await imageTransferHost.getClipboardFiles(fileIds)
-        await addImageFiles(files)
-      } catch (error) {
-        state.errorMessage =
-          error instanceof Error ? error.message : String(error)
-        await context?.requestRerender()
+      if (typeof text !== 'string' || text.length === 0) {
+        return
       }
+      if (localImagePathRegex.test(text.trim())) {
+        state.errorMessage =
+          'This browser only provided the image file path. Copy the image itself or drag the image into the chat.'
+        await context?.requestRerender()
+        return
+      }
+      const start =
+        typeof selectionStart === 'number'
+          ? Math.max(0, Math.min(selectionStart, state.draft.length))
+          : state.draft.length
+      const end =
+        typeof selectionEnd === 'number'
+          ? Math.max(start, Math.min(selectionEnd, state.draft.length))
+          : start
+      state.draft = `${state.draft.slice(0, start)}${text}${state.draft.slice(end)}`
+      state.errorMessage = ''
+      await context?.requestRerender()
     },
     handleKeyDown(key: unknown): void {
       if (key === 'Escape' && state.modelPickerOpen) {

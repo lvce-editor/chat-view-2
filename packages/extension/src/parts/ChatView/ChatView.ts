@@ -36,7 +36,14 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
     },
     {
       name: 'handleImagePaste',
-      params: ['handleImagePaste', 'event.clipboardData.files2'],
+      params: [
+        'handleImagePaste',
+        'event.clipboardData.files2',
+        'event.clipboardData.text',
+        'event.target.selectionStart',
+        'event.target.selectionEnd',
+      ],
+      preventDefault: true,
     },
     {
       name: 'handleModelPickerOutsideClick',
@@ -53,6 +60,11 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
     {
       name: 'handleImageDrop',
       params: ['handleImageDrop', 'event.dropId'],
+      preventDefault: true,
+    },
+    {
+      name: 'handleDragOver',
+      params: ['handleDragOver'],
       preventDefault: true,
     },
   ],

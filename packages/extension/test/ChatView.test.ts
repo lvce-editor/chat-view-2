@@ -651,6 +651,66 @@ test('loads pasted image files once and submits the decoded image bytes', async 
   )
 })
 
+test('preserves ordinary text paste when image paste prevents the browser default', async () => {
+  const instance = await createTestInstance()
+  instance.setState({ ...instance.getState(), draft: 'abc' })
+
+  try {
+    await instance.handleImagePaste([], ' text ', 1, 2)
+
+    expect(instance.getState().draft).toBe('a text c')
+    expect(instance.getState().errorMessage).toBe('')
+    expect(view.eventListeners).toContainEqual(
+      expect.objectContaining({
+        name: 'handleImagePaste',
+        preventDefault: true,
+      }),
+    )
+  } finally {
+    instance.dispose?.()
+  }
+})
+
+test('prevents the browser default while dragging files over the chat', async () => {
+  const instance = await createTestInstance()
+
+  try {
+    expect(view.eventListeners).toContainEqual(
+      expect.objectContaining({
+        name: 'handleDragOver',
+        params: ['handleDragOver'],
+        preventDefault: true,
+      }),
+    )
+    expect(instance.render()).toContainEqual(
+      expect.objectContaining({ onDragOver: 'handleDragOver' }),
+    )
+  } finally {
+    instance.dispose?.()
+  }
+})
+
+test('does not paste an unreadable local image path into the composer', async () => {
+  const instance = await createTestInstance()
+  instance.setState({ ...instance.getState(), draft: 'keep this draft' })
+
+  try {
+    await instance.handleImagePaste(
+      [],
+      '/home/simon/Downloads/Pasted image.png',
+      15,
+      15,
+    )
+
+    expect(instance.getState().draft).toBe('keep this draft')
+    expect(instance.getState().errorMessage).toContain(
+      'only provided the image file path',
+    )
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('reads dropped image data and releases its drop session', async () => {
   const file = {
     arrayBuffer: async () => new TextEncoder().encode('drop').buffer,
