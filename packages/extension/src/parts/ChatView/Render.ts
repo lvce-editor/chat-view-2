@@ -984,7 +984,10 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   const summary = summarizeTask(task)
   const header = Dom.div('ChatDetailHeader', [
     Dom.button('back', 'Back', 'ChatBackButton'),
-    Dom.heading(1, 'ChatDetailTitle', task.title),
+    Dom.heading(1, 'ChatDetailTitle', task.title, {
+      name: 'chat-title',
+      onContextMenu: 'handleContextMenu',
+    }),
     ...renderFocusModeButton(state),
     ...(focusMode ? [] : [Dom.button('new-task', 'New', 'ChatNewTaskButton')]),
   ])

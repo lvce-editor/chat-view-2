@@ -4,6 +4,7 @@ import {
   executeCommand,
   getPreference,
   setPreference,
+  type MenuEntry,
   type ViewContext,
   type ViewEvent,
   type VirtualDomViewInstance,
@@ -45,6 +46,7 @@ import { render } from './Render.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
+  readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
   readonly getState: () => Readonly<ChatViewState>
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly handleImageDrop: (dropId: unknown) => Promise<void>
@@ -54,6 +56,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
     name: unknown,
     value: unknown,
   ) => void
+  readonly handleRenameTask: () => void
   readonly handleSessionsSashPointerDown: (
     clientX: number,
     containerWidth: number,
@@ -145,6 +148,8 @@ const maxScrollTop = 9_999_999
 const workingTimerInterval = 1000
 const defaultWindowTitle = 'Lvce Editor'
 const defaultChatTitle = 'Chat 2'
+const titleMenuId = 'chat2.title'
+const maxTaskTitleLength = 80
 const pathSeparatorRegex = /[\\/]/
 const toImageFile = async (value: unknown): Promise<File | undefined> => {
   if (!value || typeof value !== 'object') {
@@ -416,6 +421,7 @@ export const createInstance = async (
     typeof BroadcastChannel === 'undefined'
       ? undefined
       : new BroadcastChannel(taskStoreChannelName)
+  let contextMenuTaskId: string | undefined
   let sessionsSashDrag: SessionsSashDrag | undefined
   let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
@@ -720,6 +726,58 @@ export const createInstance = async (
     }
   }
 
+  const renameTask = async (): Promise<void> => {
+    const id = contextMenuTaskId
+    contextMenuTaskId = undefined
+    if (!id) {
+      return
+    }
+    const task =
+      state.tasks.find((item) => item.id === id) ||
+      (state.selectedTask?.id === id ? state.selectedTask : undefined)
+    if (!task) {
+      return
+    }
+    const value = await execute('ExtensionHostQuickPick.showQuickInput', {
+      placeholder: 'Enter a chat name',
+      value: task.title,
+    })
+    if (typeof value !== 'string') {
+      return
+    }
+    const title = value.trim()
+    if (!title || title.length > maxTaskTitleLength) {
+      return
+    }
+    const renamedTask = await api.renameTask(id, title)
+    if (!renamedTask || disposed) {
+      return
+    }
+    state.tasks = state.tasks.some((item) => item.id === id)
+      ? state.tasks.map((item) => (item.id === id ? renamedTask : item))
+      : [renamedTask, ...state.tasks].slice(0, 20)
+    if (state.selectedTask?.id === id) {
+      state.selectedTask = renamedTask
+      void syncWindowTitle().catch(() => {})
+    }
+    await context?.requestRerender()
+  }
+
+  const handleRenameTask = (): void => {
+    void renameTask().catch(async (error: unknown) => {
+      if (disposed) {
+        return
+      }
+      state.errorMessage =
+        error instanceof Error ? error.message : String(error)
+      try {
+        await context?.requestRerender()
+      } catch {
+        // The event response already renders the error state.
+      }
+    })
+  }
+
   const completeLogin = async (): Promise<void> => {
     try {
       await execute('Layout.signIn')
@@ -768,10 +826,38 @@ export const createInstance = async (
         'chat2.taskRunning': state.selectedTask?.status === 'running',
       }
     },
+    getMenuEntries(menuId: string): readonly MenuEntry[] {
+      if (menuId !== titleMenuId || !state.selectedTask) {
+        return []
+      }
+      contextMenuTaskId ??= state.selectedTask.id
+      return [
+        {
+          args: [context?.uid, 'handleViewCommand', 'handleRenameTask'],
+          command: 'Viewlet.executeViewletCommand',
+          flags: 6,
+          id: 'rename-chat',
+          label: 'Rename',
+        },
+      ]
+    },
     getState(): Readonly<ChatViewState> {
       return state
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
+      if (event.type === 'contextmenu') {
+        if (
+          state.selectedTask &&
+          typeof event.x === 'number' &&
+          Number.isFinite(event.x) &&
+          typeof event.y === 'number' &&
+          Number.isFinite(event.y)
+        ) {
+          contextMenuTaskId = state.selectedTask.id
+          await context?.showContextMenu(titleMenuId, event.x, event.y)
+        }
+        return
+      }
       if (event.type === 'click' && event.name === 'login') {
         if (!state.loginRequired || state.loginPending) {
           return
@@ -979,6 +1065,7 @@ export const createInstance = async (
         state.modelPickerOpen = false
       }
     },
+    handleRenameTask,
     handleSessionsSashPointerDown(
       clientX: number,
       containerWidth: number,

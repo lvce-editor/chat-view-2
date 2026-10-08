@@ -56,6 +56,24 @@ const dispatch = async (
   await instance.handleEvent?.(event)
 }
 
+const dispatchTitleContextMenu = async (
+  instance: Awaited<ReturnType<typeof createInstance>>,
+): Promise<void> => {
+  await dispatch(instance, {
+    name: 'chat-title',
+    type: 'contextmenu',
+    x: 10,
+    y: 20,
+  })
+}
+
+const flushPromises = async (): Promise<void> => {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 const createTestInstance = async (
   delayMs = 0,
   readPreference?: (key: string) => Promise<unknown>,
@@ -228,6 +246,245 @@ test('renders a focused task list, model control, and composer', async () => {
   const submitIndex = dom.findIndex((node) => node.name === 'submit')
   expect(spacerIndex).toBeLessThan(modelIndex)
   expect(modelIndex).toBeLessThan(submitIndex)
+})
+
+test('renames the selected chat from its title context menu', async () => {
+  const baseApi = createMockChatApi()
+  const originalTask = await baseApi.getTask('mock-task-1')
+  if (!originalTask) {
+    throw new Error('Expected mock task')
+  }
+  const renameTask = jest.fn(async (id: string, title: string) => ({
+    ...originalTask,
+    id,
+    title,
+    titleGenerated: true,
+  }))
+  const api = { ...baseApi, renameTask }
+  const showContextMenu = jest.fn(
+    async (_menuId: string, _x: number, _y: number) => {},
+  )
+  const execute = jest.fn(async (id: string, ..._args: readonly unknown[]) => {
+    if (id === 'Layout.getHref') {
+      return ''
+    }
+    if (id === 'ExtensionHostQuickPick.showQuickInput') {
+      return 'Planning notes'
+    }
+    return undefined
+  })
+  const instance = await createInstance(
+    {
+      ...createViewContext({ selectedTaskId: originalTask.id }),
+      showContextMenu,
+    },
+    api,
+    undefined,
+    execute,
+  )
+
+  try {
+    const titleNode = instance
+      .render()
+      .find((node) => node.className?.split(' ').includes('ChatDetailTitle'))
+    expect(titleNode).toEqual(
+      expect.objectContaining({
+        name: 'chat-title',
+        onContextMenu: 'handleContextMenu',
+      }),
+    )
+
+    await dispatchTitleContextMenu(instance)
+    expect(showContextMenu).toHaveBeenCalledWith('chat2.title', 10, 20)
+    expect(instance.getMenuEntries('chat2.title')).toEqual([
+      expect.objectContaining({ id: 'rename-chat', label: 'Rename' }),
+    ])
+
+    instance.handleRenameTask()
+    await flushPromises()
+
+    expect(execute).toHaveBeenCalledWith(
+      'ExtensionHostQuickPick.showQuickInput',
+      { placeholder: 'Enter a chat name', value: originalTask.title },
+    )
+    expect(renameTask).toHaveBeenCalledWith(originalTask.id, 'Planning notes')
+    expect(instance.getState().selectedTask?.title).toBe('Planning notes')
+    expect(
+      instance.getState().tasks.find((task) => task.id === originalTask.id)
+        ?.title,
+    ).toBe('Planning notes')
+  } finally {
+    instance.dispose?.()
+  }
+})
+
+test('renames the original chat if the active session changes while prompting', async () => {
+  const baseApi = createMockChatApi()
+  const originalTask = await baseApi.getTask('mock-task-1')
+  const nextTask = await baseApi.getTask('mock-task-2')
+  if (!originalTask || !nextTask) {
+    throw new Error('Expected mock tasks')
+  }
+  const titlePrompt = Promise.withResolvers<string | undefined>()
+  const renameTask = jest.fn(async (id: string, title: string) => ({
+    ...originalTask,
+    id,
+    title,
+    titleGenerated: true,
+  }))
+  const execute = jest.fn(async (id: string, ..._args: readonly unknown[]) => {
+    if (id === 'Layout.getHref') {
+      return ''
+    }
+    if (id === 'ExtensionHostQuickPick.showQuickInput') {
+      return titlePrompt.promise
+    }
+    return undefined
+  })
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: originalTask.id }),
+    { ...baseApi, renameTask },
+    undefined,
+    execute,
+  )
+
+  try {
+    await dispatchTitleContextMenu(instance)
+    instance.handleRenameTask()
+    await dispatch(instance, { name: `task:${nextTask.id}`, type: 'click' })
+    titlePrompt.resolve('Renamed original chat')
+    await flushPromises()
+
+    expect(renameTask).toHaveBeenCalledWith(
+      originalTask.id,
+      'Renamed original chat',
+    )
+    expect(instance.getState().selectedTask?.id).toBe(nextTask.id)
+    expect(instance.getState().selectedTask?.title).toBe(nextTask.title)
+    expect(
+      instance.getState().tasks.find((task) => task.id === originalTask.id)
+        ?.title,
+    ).toBe('Renamed original chat')
+  } finally {
+    instance.dispose?.()
+  }
+})
+
+test.each([
+  ['blank', ''],
+  ['whitespace-only', ' \t  '],
+  ['over the title limit', 'x'.repeat(81)],
+])(
+  'keeps the existing title when the new name is %s',
+  async (_label, value) => {
+    const baseApi = createMockChatApi()
+    const originalTask = await baseApi.getTask('mock-task-1')
+    if (!originalTask) {
+      throw new Error('Expected mock task')
+    }
+    const renameTask = jest.fn(
+      async (_id: string, _title: string): Promise<ChatTask | undefined> =>
+        undefined,
+    )
+    const execute = jest.fn(
+      async (id: string, ..._args: readonly unknown[]) => {
+        if (id === 'Layout.getHref') {
+          return ''
+        }
+        return value
+      },
+    )
+    const instance = await createInstance(
+      createViewContext({ selectedTaskId: originalTask.id }),
+      { ...baseApi, renameTask },
+      undefined,
+      execute,
+    )
+
+    try {
+      await dispatchTitleContextMenu(instance)
+      instance.handleRenameTask()
+      await flushPromises()
+
+      expect(renameTask).not.toHaveBeenCalled()
+      expect(instance.getState().selectedTask?.title).toBe(originalTask.title)
+    } finally {
+      instance.dispose?.()
+    }
+  },
+)
+
+test('keeps the existing title when renaming is canceled', async () => {
+  const baseApi = createMockChatApi()
+  const originalTask = await baseApi.getTask('mock-task-1')
+  if (!originalTask) {
+    throw new Error('Expected mock task')
+  }
+  const renameTask = jest.fn(
+    async (_id: string, _title: string): Promise<ChatTask | undefined> =>
+      undefined,
+  )
+  const execute = jest.fn(async (id: string, ..._args: readonly unknown[]) => {
+    if (id === 'Layout.getHref') {
+      return ''
+    }
+    return undefined
+  })
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: originalTask.id }),
+    { ...baseApi, renameTask },
+    undefined,
+    execute,
+  )
+
+  try {
+    await dispatchTitleContextMenu(instance)
+    instance.handleRenameTask()
+    await flushPromises()
+
+    expect(renameTask).not.toHaveBeenCalled()
+    expect(instance.getState().selectedTask?.title).toBe(originalTask.title)
+  } finally {
+    instance.dispose?.()
+  }
+})
+
+test('accepts a title at the 80 character limit', async () => {
+  const baseApi = createMockChatApi()
+  const originalTask = await baseApi.getTask('mock-task-1')
+  if (!originalTask) {
+    throw new Error('Expected mock task')
+  }
+  const title = 'x'.repeat(80)
+  const renameTask = jest.fn(async (id: string, nextTitle: string) => ({
+    ...originalTask,
+    id,
+    title: nextTitle,
+    titleGenerated: true,
+  }))
+  const execute = jest.fn(async (id: string, ..._args: readonly unknown[]) => {
+    if (id === 'Layout.getHref') {
+      return ''
+    }
+    return title
+  })
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: originalTask.id }),
+    { ...baseApi, renameTask },
+    undefined,
+    execute,
+  )
+
+  try {
+    await dispatchTitleContextMenu(instance)
+    instance.handleRenameTask()
+    await flushPromises()
+
+    expect(renameTask).toHaveBeenCalledWith(originalTask.id, title)
+    expect(instance.getState().selectedTask?.title).toBe(title)
+  } finally {
+    instance.dispose?.()
+  }
 })
 
 test('renders a Sessions sash and resizes the panel with bounded pointer movement', async () => {

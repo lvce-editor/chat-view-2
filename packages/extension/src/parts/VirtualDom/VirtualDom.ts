@@ -142,9 +142,18 @@ export const heading = (
   level: 1 | 2,
   className: string,
   value: string,
+  options: Readonly<{ name?: string; onContextMenu?: string }> = {},
 ): TreeNode => {
   const type = level === 1 ? VirtualDomElements.H1 : VirtualDomElements.H2
-  return node(type, { className }, [textNode(value)])
+  return node(
+    type,
+    {
+      className,
+      ...(options.name && { name: options.name }),
+      ...(options.onContextMenu && { onContextMenu: options.onContextMenu }),
+    },
+    [textNode(value)],
+  )
 }
 
 export const textArea = (

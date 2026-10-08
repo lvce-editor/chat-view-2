@@ -154,6 +154,10 @@ export interface ChatApi {
   readonly getTask: (id: string) => Promise<ChatTask | undefined>
   readonly listModels: () => Promise<readonly ChatModel[]>
   readonly listTasks: (limit: number) => Promise<readonly ChatTask[]>
+  readonly renameTask: (
+    id: string,
+    title: string,
+  ) => Promise<ChatTask | undefined>
   readonly revertTask: (task: ChatTask) => Promise<ChatTask>
   readonly sendMessage: (
     task: ChatTask,
