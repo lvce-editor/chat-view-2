@@ -1193,12 +1193,12 @@
 .ChatAiNativeLayout
   .ChatConversationBody:not(:has(.ChatEmptyTitle))
   .ChatMessagesContent {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   min-height: 0;
 }
 .ChatAiNativeLayout .ChatTurnLatest {
   display: flex;
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 24px;
   min-height: 0;

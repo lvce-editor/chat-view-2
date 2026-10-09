@@ -18,8 +18,13 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
 
   const messages = Locator('.ChatMessages')
   const latestTurn = Locator('.ChatTurnLatest')
+  const messageContent = Locator('.ChatMessagesContent')
   const userMessage = Locator('.ChatMessageUser')
+  const composerArea = Locator('.ChatComposerArea')
   await expect(latestTurn).toBeVisible()
+  await expect(messageContent).toHaveCSS('flex-shrink', '1')
+  await expect(latestTurn).toHaveCSS('flex-shrink', '1')
   await expect(userMessage).toBeVisible()
   await expect(messages).toHaveJSProperty('scrollTop', 0)
+  await expect(composerArea).toBeVisible()
 }
