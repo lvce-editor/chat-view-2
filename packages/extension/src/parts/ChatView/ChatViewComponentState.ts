@@ -153,6 +153,7 @@ export const isChatViewState = (value: unknown): value is ChatViewState => {
     (value.selectedTask === undefined || isChatTask(value.selectedTask)) &&
     Array.isArray(value.tasks) &&
     value.tasks.every(isChatTask) &&
+    (value.taskOpenMode === 'click' || value.taskOpenMode === 'mousedown') &&
     typeof value.workingSeconds === 'number' &&
     Number.isFinite(value.workingSeconds) &&
     value.workingSeconds >= 0

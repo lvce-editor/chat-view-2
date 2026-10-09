@@ -89,6 +89,8 @@ export const button = (
     ariaLabel?: string
     ariaExpanded?: boolean
     disabled?: boolean
+    onClick?: string
+    onMouseDown?: string
     title?: string
   }> = {},
 ): TreeNode => {
@@ -103,7 +105,8 @@ export const button = (
       }),
       ...(options.disabled && { disabled: true }),
       name,
-      onClick: 'handleClick',
+      onClick: options.onClick || 'handleClick',
+      ...(options.onMouseDown && { onMouseDown: options.onMouseDown }),
       ...(options.title && { title: options.title }),
     },
     [textNode(label)],

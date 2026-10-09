@@ -49,13 +49,22 @@ const getStatusLabel = (task: ChatTask): string => {
   }
 }
 
-const renderTask = (task: ChatTask): Dom.TreeNode => {
+const renderTask = (
+  task: ChatTask,
+  taskOpenMode: ChatViewState['taskOpenMode'],
+): Dom.TreeNode => {
   const status = getStatusLabel(task)
   return Dom.div('ChatTaskItem', [
     Dom.button(
       `task:${task.id}`,
       status ? `${task.title} · ${status}` : task.title,
       `ChatTaskButton ChatTaskStatus-${task.status}`,
+      {
+        onClick: 'handleTaskClick',
+        ...(taskOpenMode === 'mousedown' && {
+          onMouseDown: 'handleTaskMouseDown',
+        }),
+      },
     ),
     Dom.iconButton(
       `archive-task:${task.id}`,
@@ -71,6 +80,7 @@ const renderTaskList = (
   tasks: readonly ChatTask[],
   fontFamily: string,
   fontSize: string,
+  taskOpenMode: ChatViewState['taskOpenMode'],
 ): Dom.TreeNode => {
   if (tasks.length === 0) {
     return Dom.div('ChatEmptyState', [
@@ -82,9 +92,13 @@ const renderTaskList = (
       ]),
     ])
   }
-  return Dom.div('ChatTaskList', tasks.map(renderTask), {
-    style: `--ChatTaskFontFamily: ${fontFamily}; --ChatTaskFontSize: ${fontSize}`,
-  })
+  return Dom.div(
+    'ChatTaskList',
+    tasks.map((task) => renderTask(task, taskOpenMode)),
+    {
+      style: `--ChatTaskFontFamily: ${fontFamily}; --ChatTaskFontSize: ${fontSize}`,
+    },
+  )
 }
 
 const urlPattern = /https?:\/\/[^\s<>"']+/gu
@@ -926,7 +940,7 @@ const getAiNativeThemeClassName = (
 }
 
 const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const { errorMessage, fontFamily, fontSize, tasks } = state
+  const { errorMessage, fontFamily, fontSize, taskOpenMode, tasks } = state
   return Dom.div(
     getRootClassName(state, 'ChatListView'),
     [
@@ -943,7 +957,7 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       ...(errorMessage
         ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
         : []),
-      renderTaskList(tasks, fontFamily, fontSize),
+      renderTaskList(tasks, fontFamily, fontSize, taskOpenMode),
       renderComposer(state),
     ],
     {
@@ -1166,8 +1180,14 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 const renderAiNativeSessions = (
   state: Readonly<ChatViewState>,
 ): readonly Dom.TreeNode[] => {
-  const { fontFamily, fontSize, sessionsListVisible, sessionsWidth, tasks } =
-    state
+  const {
+    fontFamily,
+    fontSize,
+    sessionsListVisible,
+    sessionsWidth,
+    taskOpenMode,
+    tasks,
+  } = state
   if (!sessionsListVisible) {
     return []
   }
@@ -1179,7 +1199,7 @@ const renderAiNativeSessions = (
           Dom.heading(1, 'ChatTitle', 'Sessions'),
           Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
         ]),
-        renderTaskList(tasks, fontFamily, fontSize),
+        renderTaskList(tasks, fontFamily, fontSize, taskOpenMode),
       ],
       {
         ...(sessionsWidth !== undefined && {
