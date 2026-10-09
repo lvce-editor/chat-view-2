@@ -29,6 +29,9 @@ import {
 } from '../ChatImageAttachments/ChatImageAttachments.ts'
 import {
   getChatTaskHash,
+  getChatPath,
+  getIdePath,
+  isChatPath,
   parseChatTaskHash,
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
@@ -234,9 +237,48 @@ const setChatTaskHash = async (
   taskId?: string,
 ): Promise<void> => {
   try {
-    await execute('Layout.setHash', taskId ? getChatTaskHash(taskId) : '')
+    const href = await getHref(execute)
+    const url = new URL(href)
+    const hash = isChatPath(url.pathname)
+      ? taskId
+        ? getChatTaskHash(taskId)
+        : ''
+      : taskId
+        ? `#chat-${encodeURIComponent(taskId)}`
+        : ''
+    await execute('Layout.setHash', hash)
   } catch {
     // Older editor builds do not expose the hash command.
+  }
+}
+
+const setWorkbenchLayoutUrl = async (
+  execute: ExecuteCommand,
+  layout: 'ide' | 'ai-native',
+  taskId?: string,
+): Promise<void> => {
+  try {
+    const href = await getHref(execute)
+    if (!href) {
+      return
+    }
+    const url = new URL(href)
+    if (layout === 'ai-native') {
+      const assetDir = await execute('Layout.getAssetDir')
+      if (typeof assetDir !== 'string' || !assetDir) {
+        return
+      }
+      url.pathname = getChatPath(href, assetDir)
+      url.hash = taskId ? getChatTaskHash(taskId) : ''
+    } else {
+      url.pathname = getIdePath(href)
+      if (isChatPath(new URL(href).pathname)) {
+        url.hash = ''
+      }
+    }
+    await execute('Layout.setPathName', `${url.pathname}${url.search}${url.hash}`)
+  } catch {
+    // Older editor builds do not expose pathname updates.
   }
 }
 
@@ -357,6 +399,7 @@ export const createInstance = async (
   const taskOpenMode = await readTaskOpenMode(readPreference)
   const selectedModelId = getSelectedModelId(models, preferredModelId)
   const href = await getHref(execute)
+  const chatRoute = URL.canParse(href) && isChatPath(new URL(href).pathname)
   const chatHash = parseChatTaskHash(href)
   const urlTask =
     chatHash.type === 'task'
@@ -370,7 +413,8 @@ export const createInstance = async (
   if (chatHash.type === 'invalid') {
     await setChatTaskHash(execute)
   }
-  const focusModeEnabled = await getFocusModeEnabled()
+  const focusModeEnabled = chatRoute || (await getFocusModeEnabled())
+  pendingWorkbenchLayout = chatRoute ? 'ai-native' : undefined
   const state: MutableChatViewState = {
     activityExpanded: false,
     aiNativeTheme,
@@ -380,7 +424,7 @@ export const createInstance = async (
     copiedMessageId: '',
     draft: typeof saved.draft === 'string' ? saved.draft : '',
     errorMessage,
-    focusMode: focusModeEnabled && (await getFocusMode()),
+    focusMode: chatRoute || (focusModeEnabled && (await getFocusMode())),
     focusModeEnabled,
     fontFamily,
     fontSize,
@@ -781,6 +825,7 @@ export const createInstance = async (
     state.focusMode = await getFocusMode(execute)
     state.focusMode = toggleFocusMode(state)
     pendingWorkbenchLayout = state.focusMode ? 'ai-native' : 'ide'
+    await setWorkbenchLayoutUrl(execute, pendingWorkbenchLayout, state.selectedTask?.id)
     await syncWindowTitle()
     if (requestRerender) {
       await context?.requestRerender()

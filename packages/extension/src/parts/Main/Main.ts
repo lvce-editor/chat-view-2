@@ -4,7 +4,10 @@ import {
   registerCommand,
   registerView,
 } from '@lvce-editor/api'
-import { parseChatTaskHash } from '../ChatSessionUrl/ChatSessionUrl.ts'
+import {
+  isChatPath,
+  parseChatTaskHash,
+} from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { view, viewId } from '../ChatView/ChatView.ts'
 import {
   newChatInActiveChatViewInstance,
@@ -91,7 +94,11 @@ export const activate = async (): Promise<void> => {
   })
   try {
     const href = await executeCommand('Layout.getHref')
-    if (typeof href === 'string' && parseChatTaskHash(href).type === 'task') {
+    if (
+      typeof href === 'string' &&
+      (parseChatTaskHash(href).type === 'task' ||
+        (URL.canParse(href) && isChatPath(new URL(href).pathname)))
+    ) {
       await executeCommand('SideBar.show', viewId, true)
     }
   } catch {
