@@ -4,10 +4,7 @@ export const name = 'chat2.virtual-dom-view.task-navigation'
 
 export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Main.closeAllEditors()
-  await Command.execute('Preferences.update', {
-    'chat2.taskOpenMode': 'mousedown',
-    'chat2.useMockBackend': true,
-  })
+  await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
   await Command.executeExtensionCommand('chat2.show')
 
   const task = Locator('.ChatTaskButton').first()
@@ -17,7 +14,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const list = Locator('.ChatListView')
   const tasks = Locator('.ChatTaskButton')
   await expect(task).toContainText('Add worker memory usage')
-  await task.dispatchEvent('mousedown', JSON.stringify({ button: 0 }))
+  await task.dispatchEvent('mousedown', { button: 0 } as unknown as string)
 
   await expect(detail).toBeVisible()
   await expect(detailTitle).toContainText('Add worker memory usage')

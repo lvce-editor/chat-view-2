@@ -1207,7 +1207,7 @@ export const createInstance = async (
       if (
         state.loginRequired ||
         state.taskOpenMode !== 'mousedown' ||
-        button !== 0 ||
+        (button !== 0 && button !== undefined) ||
         typeof name !== 'string' ||
         !name.startsWith('task:')
       ) {
