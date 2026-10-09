@@ -28,6 +28,7 @@ import {
   loadImageAttachment,
 } from '../ChatImageAttachments/ChatImageAttachments.ts'
 import {
+  getUrl,
   getChatTaskHash,
   getChatPath,
   getIdePath,
@@ -238,14 +239,16 @@ const setChatTaskHash = async (
 ): Promise<void> => {
   try {
     const href = await getHref(execute)
-    const url = new URL(href)
-    const hash = isChatPath(url.pathname)
-      ? taskId
+    const url = getUrl(href)
+    if (!url) {
+      return
+    }
+    let hash = ''
+    if (taskId) {
+      hash = isChatPath(url.pathname)
         ? getChatTaskHash(taskId)
-        : ''
-      : taskId
-        ? `#chat-${encodeURIComponent(taskId)}`
-        : ''
+        : `#chat-${encodeURIComponent(taskId)}`
+    }
     await execute('Layout.setHash', hash)
   } catch {
     // Older editor builds do not expose the hash command.
@@ -259,10 +262,11 @@ const setWorkbenchLayoutUrl = async (
 ): Promise<void> => {
   try {
     const href = await getHref(execute)
-    if (!href) {
+    const url = getUrl(href)
+    if (!url) {
       return
     }
-    const url = new URL(href)
+    const wasChatPath = isChatPath(url.pathname)
     if (layout === 'ai-native') {
       const assetDir = await execute('Layout.getAssetDir')
       if (typeof assetDir !== 'string' || !assetDir) {
@@ -272,11 +276,14 @@ const setWorkbenchLayoutUrl = async (
       url.hash = taskId ? getChatTaskHash(taskId) : ''
     } else {
       url.pathname = getIdePath(href)
-      if (isChatPath(new URL(href).pathname)) {
+      if (wasChatPath) {
         url.hash = ''
       }
     }
-    await execute('Layout.setPathName', `${url.pathname}${url.search}${url.hash}`)
+    await execute(
+      'Layout.setPathName',
+      `${url.pathname}${url.search}${url.hash}`,
+    )
   } catch {
     // Older editor builds do not expose pathname updates.
   }
@@ -825,7 +832,11 @@ export const createInstance = async (
     state.focusMode = await getFocusMode(execute)
     state.focusMode = toggleFocusMode(state)
     pendingWorkbenchLayout = state.focusMode ? 'ai-native' : 'ide'
-    await setWorkbenchLayoutUrl(execute, pendingWorkbenchLayout, state.selectedTask?.id)
+    await setWorkbenchLayoutUrl(
+      execute,
+      pendingWorkbenchLayout,
+      state.selectedTask?.id,
+    )
     await syncWindowTitle()
     if (requestRerender) {
       await context?.requestRerender()

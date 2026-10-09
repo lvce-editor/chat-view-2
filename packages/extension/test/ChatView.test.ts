@@ -1007,11 +1007,13 @@ test('falls back to the saved task when the URL task no longer exists', async ()
 })
 
 test('direct chat-route navigation selects the AI-native layout without a task fragment', async () => {
-  const execute = jest.fn(async (command: string, ..._args: readonly unknown[]) => {
-    return command === 'Layout.getHref'
-      ? 'https://example.com/prefix/chat?workspace=project'
-      : undefined
-  })
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/prefix/chat?workspace=project'
+        : undefined
+    },
+  )
   const instance = await createInstance(
     undefined,
     createMockChatApi(),
@@ -1073,21 +1075,23 @@ test('syncs selected and cleared tasks to the URL fragment', async () => {
 
 test('switching to AI-native layout keeps the deployment prefix, query, and selected task', async () => {
   let focusMode = false
-  const execute = jest.fn(async (command: string, ..._args: readonly unknown[]) => {
-    if (command === 'Layout.getHref') {
-      return 'https://example.com/prefix/?workspace=project'
-    }
-    if (command === 'Layout.getAssetDir') {
-      return '/prefix/commit'
-    }
-    if (command === 'Layout.getSideBarFocusMode') {
-      return focusMode
-    }
-    if (command === 'Layout.setPathName') {
-      focusMode = !focusMode
-    }
-    return undefined
-  })
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      if (command === 'Layout.getHref') {
+        return 'https://example.com/prefix/?workspace=project'
+      }
+      if (command === 'Layout.getAssetDir') {
+        return '/prefix/commit'
+      }
+      if (command === 'Layout.getSideBarFocusMode') {
+        return focusMode
+      }
+      if (command === 'Layout.setPathName') {
+        focusMode = !focusMode
+      }
+      return undefined
+    },
+  )
   const instance = await createInstance(
     undefined,
     createMockChatApi(),

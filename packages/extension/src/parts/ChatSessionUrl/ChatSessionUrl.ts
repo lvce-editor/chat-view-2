@@ -1,15 +1,24 @@
 const legacyChatTaskHashPrefix = '#chat-'
+const chatPathRegex = /(?:^|\/)chat\/?$/
+const chatPathSuffixRegex = /\/chat\/?$/
 
 export type ChatTaskHash =
   | { readonly id: string; readonly type: 'task' }
   | { readonly type: 'invalid' | 'none' }
+
+export const getUrl = (href: string): URL | undefined => {
+  if (!URL.canParse(href)) {
+    return undefined
+  }
+  return new URL(href)
+}
 
 export const getChatTaskHash = (id: string): string => {
   return `#${encodeURIComponent(id)}`
 }
 
 export const isChatPath = (pathname: string): boolean => {
-  return /(?:^|\/)chat\/?$/.test(pathname)
+  return chatPathRegex.test(pathname)
 }
 
 export const getChatPath = (href: string, assetDir: string): string => {
@@ -25,8 +34,8 @@ export const getIdePath = (href: string): string => {
   if (!isChatPath(path)) {
     return path
   }
-  const withoutChat = path.replace(/\/chat\/?$/, '')
-  return `${withoutChat || ''}/` || '/'
+  const withoutChat = path.replace(chatPathSuffixRegex, '')
+  return withoutChat ? `${withoutChat}/` : '/'
 }
 
 export const parseChatTaskHash = (href: string): ChatTaskHash => {
@@ -41,7 +50,9 @@ export const parseChatTaskHash = (href: string): ChatTaskHash => {
   if (!isChatPath(pathname) && !legacy) {
     return { type: 'none' }
   }
-  const encodedId = legacy ? hash.slice(legacyChatTaskHashPrefix.length) : hash.slice(1)
+  const encodedId = legacy
+    ? hash.slice(legacyChatTaskHashPrefix.length)
+    : hash.slice(1)
   try {
     const id = decodeURIComponent(encodedId)
     return id ? { id, type: 'task' } : { type: 'invalid' }

@@ -5,6 +5,7 @@ import {
   registerView,
 } from '@lvce-editor/api'
 import {
+  getUrl,
   isChatPath,
   parseChatTaskHash,
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
@@ -94,10 +95,11 @@ export const activate = async (): Promise<void> => {
   })
   try {
     const href = await executeCommand('Layout.getHref')
+    const url = typeof href === 'string' ? getUrl(href) : undefined
     if (
       typeof href === 'string' &&
       (parseChatTaskHash(href).type === 'task' ||
-        (URL.canParse(href) && isChatPath(new URL(href).pathname)))
+        (url !== undefined && isChatPath(url.pathname)))
     ) {
       await executeCommand('SideBar.show', viewId, true)
     }
