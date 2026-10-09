@@ -12,6 +12,23 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
   displayName: 'Chat 2',
   eventListeners: [
     {
+      name: 'handleTaskClick',
+      params: [
+        'handleTaskClick',
+        'event.currentTarget.name',
+        'event.button',
+        'event.detail',
+      ],
+    },
+    {
+      name: 'handleTaskMouseDown',
+      params: [
+        'handleTaskMouseDown',
+        'event.currentTarget.name',
+        'event.button',
+      ],
+    },
+    {
       name: 'handleSessionsSashPointerDown',
       params: [
         'handleSessionsSashPointerDown',

@@ -43,6 +43,7 @@ import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
+import { readTaskOpenMode } from './TaskOpenMode.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
@@ -72,6 +73,15 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   ) => void
   readonly handleSessionsSashPointerMove: (clientX: number) => void
   readonly handleSessionsSashPointerUp: () => void
+  readonly handleTaskClick: (
+    name: unknown,
+    button: unknown,
+    detail: unknown,
+  ) => Promise<void>
+  readonly handleTaskMouseDown: (
+    name: unknown,
+    button: unknown,
+  ) => Promise<void>
   readonly newChat: (requestRerender?: boolean) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderFocus: (
@@ -344,6 +354,7 @@ export const createInstance = async (
   const fontFamily = await readFontFamily(readPreference)
   const fontSize = await readFontSize(readPreference)
   const aiNativeTheme = await readAiNativeTheme(readPreference)
+  const taskOpenMode = await readTaskOpenMode(readPreference)
   const selectedModelId = getSelectedModelId(models, preferredModelId)
   const href = await getHref(execute)
   const chatHash = parseChatTaskHash(href)
@@ -382,6 +393,7 @@ export const createInstance = async (
     selectedTask,
     sessionsListVisible: true,
     sessionsVisible: false,
+    taskOpenMode,
     tasks,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
@@ -629,6 +641,40 @@ export const createInstance = async (
       ...state.tasks.filter((item) => item.id !== task.id),
     ].slice(0, 20)
     void syncWindowTitle().catch(() => {})
+  }
+
+  let openingTaskId: string | undefined
+  const openTask = async (id: string): Promise<void> => {
+    if (state.selectedTask?.id === id || openingTaskId === id) {
+      return
+    }
+    openingTaskId = id
+    try {
+      const request = ++selectedTaskRequest
+      resetCopyFeedback()
+      const task = await api.getTask(id)
+      if (disposed || request !== selectedTaskRequest) {
+        return
+      }
+      state.selectedTask = task
+      scrollToLatestTurn = state.focusMode && Boolean(task)
+      syncWorkingTimer(state.selectedTask)
+      if (state.selectedTask) {
+        state.selectedModelId = state.selectedTask.modelId
+        await setChatTaskHash(execute, state.selectedTask.id)
+      } else {
+        await setChatTaskHash(execute)
+      }
+      state.draft = ''
+      state.composerImages = []
+      state.activityExpanded = false
+      state.changesExpanded = false
+      void syncWindowTitle().catch(() => {})
+    } finally {
+      if (openingTaskId === id) {
+        openingTaskId = undefined
+      }
+    }
   }
 
   const updateTask = async (
@@ -1020,29 +1066,6 @@ export const createInstance = async (
           state.modelPickerOpen = false
           await setPreference('chat2.selectedModelId', id)
         }
-        return
-      }
-      if (event.name?.startsWith('task:')) {
-        const request = ++selectedTaskRequest
-        resetCopyFeedback()
-        const task = await api.getTask(event.name.slice(5))
-        if (disposed || request !== selectedTaskRequest) {
-          return
-        }
-        state.selectedTask = task
-        scrollToLatestTurn = state.focusMode && Boolean(task)
-        syncWorkingTimer(state.selectedTask)
-        if (state.selectedTask) {
-          state.selectedModelId = state.selectedTask.modelId
-          await setChatTaskHash(execute, state.selectedTask.id)
-        } else {
-          await setChatTaskHash(execute)
-        }
-        state.draft = ''
-        state.composerImages = []
-        state.activityExpanded = false
-        state.changesExpanded = false
-        void syncWindowTitle().catch(() => {})
       }
     },
     async handleImageDrop(dropId: unknown): Promise<void> {
@@ -1164,6 +1187,33 @@ export const createInstance = async (
     },
     handleSessionsSashPointerUp(): void {
       sessionsSashDrag = undefined
+    },
+    async handleTaskClick(
+      name: unknown,
+      button: unknown,
+      detail: unknown,
+    ): Promise<void> {
+      if (
+        state.loginRequired ||
+        typeof name !== 'string' ||
+        !name.startsWith('task:') ||
+        (button !== 0 && detail !== 0)
+      ) {
+        return
+      }
+      await openTask(name.slice('task:'.length))
+    },
+    async handleTaskMouseDown(name: unknown, button: unknown): Promise<void> {
+      if (
+        state.loginRequired ||
+        state.taskOpenMode !== 'mousedown' ||
+        (button !== 0 && button !== undefined) ||
+        typeof name !== 'string' ||
+        !name.startsWith('task:')
+      ) {
+        return
+      }
+      await openTask(name.slice('task:'.length))
     },
     newChat,
     render(): readonly VirtualDomNode[] {

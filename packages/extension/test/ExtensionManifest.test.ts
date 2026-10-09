@@ -138,6 +138,19 @@ test('keeps backend streaming disabled by default', async () => {
   )
 })
 
+test('opens sidebar chats on mousedown by default', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.configuration['chat2.taskOpenMode']).toEqual({
+    default: 'mousedown',
+    description:
+      'Open a chat when pressing a sidebar item or after clicking it.',
+    enum: ['mousedown', 'click'],
+    type: 'string',
+  })
+})
+
 test('contributes every preference read by Chat 2', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
@@ -154,6 +167,7 @@ test('contributes every preference read by Chat 2', async () => {
       'chat2.openAiWebSearch',
       'chat2.selectedModelId',
       'chat2.supportsStreaming',
+      'chat2.taskOpenMode',
       'chat2.titleModelId',
       'chat2.useMockBackend',
     ].toSorted((a, b) => a.localeCompare(b)),

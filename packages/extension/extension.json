@@ -60,6 +60,12 @@
       "default": false,
       "description": "Use the Responses WebSocket streaming protocol for a custom chat backend. The editor backend enables it automatically."
     },
+    "chat2.taskOpenMode": {
+      "type": "string",
+      "enum": ["mousedown", "click"],
+      "default": "mousedown",
+      "description": "Open a chat when pressing a sidebar item or after clicking it."
+    },
     "chat2.useMockBackend": {
       "type": "boolean",
       "default": false,

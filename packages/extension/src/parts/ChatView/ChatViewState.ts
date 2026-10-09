@@ -4,6 +4,7 @@ import type {
   ChatTask,
 } from '../ChatApi/ChatApi.ts'
 import type { AiNativeTheme } from './AiNativeTheme.ts'
+import type { TaskOpenMode } from './TaskOpenMode.ts'
 
 export interface ChatComposerImage {
   readonly attachment?: ChatImageAttachment
@@ -34,6 +35,7 @@ export interface ChatViewState {
   readonly sessionsListVisible: boolean
   readonly sessionsVisible: boolean
   readonly sessionsWidth?: number
+  readonly taskOpenMode: TaskOpenMode
   readonly tasks: readonly ChatTask[]
   readonly workingSeconds: number
 }

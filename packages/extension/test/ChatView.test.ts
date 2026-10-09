@@ -54,6 +54,10 @@ const dispatch = async (
   instance: Awaited<ReturnType<typeof createInstance>>,
   event: ViewEvent,
 ): Promise<void> => {
+  if (event.type === 'click' && event.name?.startsWith('task:')) {
+    await instance.handleTaskClick(event.name, 0, 1)
+    return
+  }
   await instance.handleEvent?.(event)
 }
 
@@ -247,6 +251,88 @@ test('renders a focused task list, model control, and composer', async () => {
   const submitIndex = dom.findIndex((node) => node.name === 'submit')
   expect(spacerIndex).toBeLessThan(modelIndex)
   expect(modelIndex).toBeLessThan(submitIndex)
+})
+
+test('opens a task on primary mousedown by default', async () => {
+  const instance = await createTestInstance()
+  const taskButton = (instance.render() as readonly any[]).find(
+    (node) => node.name === 'task:mock-task-1',
+  )
+
+  try {
+    expect(taskButton).toEqual(
+      expect.objectContaining({ onMouseDown: 'handleTaskMouseDown' }),
+    )
+    expect(view.eventListeners).toContainEqual(
+      expect.objectContaining({
+        name: 'handleTaskClick',
+        params: [
+          'handleTaskClick',
+          'event.currentTarget.name',
+          'event.button',
+          'event.detail',
+        ],
+      }),
+    )
+    expect(view.eventListeners).toContainEqual(
+      expect.objectContaining({
+        name: 'handleTaskMouseDown',
+        params: [
+          'handleTaskMouseDown',
+          'event.currentTarget.name',
+          'event.button',
+        ],
+      }),
+    )
+    await instance.toggleFocusMode()
+    const focusModeTaskButton = (instance.render() as readonly any[]).find(
+      (node) => node.name === 'task:mock-task-1',
+    )
+    expect(focusModeTaskButton).toEqual(
+      expect.objectContaining({ onMouseDown: 'handleTaskMouseDown' }),
+    )
+
+    await instance.handleTaskMouseDown('task:mock-task-1', 1)
+    expect(instance.getState().selectedTask).toBeUndefined()
+
+    await instance.handleTaskMouseDown('task:mock-task-1', 0)
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+    await instance.handleTaskClick('task:mock-task-2', 1, 1)
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+
+    await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+    await instance.newChat()
+    await instance.handleTaskClick('task:mock-task-2', 0, 0)
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+  } finally {
+    instance.dispose?.()
+  }
+})
+
+test('opens a task on click when configured', async () => {
+  const instance = await createTestInstance(0, async (key) =>
+    key === 'chat2.taskOpenMode' ? 'click' : undefined,
+  )
+  const taskButton = (instance.render() as readonly any[]).find(
+    (node) => node.name === 'task:mock-task-1',
+  )
+
+  try {
+    expect(taskButton).not.toHaveProperty('onMouseDown')
+    await instance.handleTaskMouseDown('task:mock-task-1', 0)
+    expect(instance.getState().selectedTask).toBeUndefined()
+    await instance.handleTaskClick('task:mock-task-1', 1, 1)
+    expect(instance.getState().selectedTask).toBeUndefined()
+
+    await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+    await instance.newChat()
+    await instance.handleTaskClick('task:mock-task-2', 0, 0)
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+  } finally {
+    instance.dispose?.()
+  }
 })
 
 test('renames the selected chat from its title context menu', async () => {
