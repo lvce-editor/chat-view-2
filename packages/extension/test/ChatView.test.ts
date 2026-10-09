@@ -1006,6 +1006,27 @@ test('falls back to the saved task when the URL task no longer exists', async ()
   expect(execute).not.toHaveBeenCalledWith('Layout.setHash', '')
 })
 
+test('direct chat-route navigation selects the AI-native layout without a task fragment', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      return command === 'Layout.getHref'
+        ? 'https://example.com/prefix/chat?workspace=project'
+        : undefined
+    },
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+
+  expect(instance.getState().focusMode).toBe(true)
+  expect(instance.renderWorkbenchLayout()).toBe('ai-native')
+  expect(instance.getState().selectedTask).toBeUndefined()
+  instance.dispose?.()
+})
+
 test('clears malformed chat fragments while restoring the saved task', async () => {
   const execute = jest.fn(
     async (command: string, ..._args: readonly unknown[]) => {
@@ -1027,7 +1048,10 @@ test('clears malformed chat fragments while restoring the saved task', async () 
 
 test('syncs selected and cleared tasks to the URL fragment', async () => {
   const execute = jest.fn(
-    async (_command: string, ..._args: readonly unknown[]) => undefined,
+    async (command: string, ..._args: readonly unknown[]) =>
+      command === 'Layout.getHref'
+        ? 'https://example.com/static/#chat-old-task'
+        : undefined,
   )
   const instance = await createInstance(
     undefined,
@@ -1047,6 +1071,49 @@ test('syncs selected and cleared tasks to the URL fragment', async () => {
 
   await instance.newChat()
   expect(execute).toHaveBeenLastCalledWith('Layout.setHash', '')
+})
+
+test('switching to AI-native layout keeps the deployment prefix, query, and selected task', async () => {
+  let focusMode = false
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      if (command === 'Layout.getHref') {
+        return 'https://example.com/prefix/?workspace=project'
+      }
+      if (command === 'Layout.getAssetDir') {
+        return '/prefix/commit'
+      }
+      if (command === 'Layout.getSideBarFocusMode') {
+        return focusMode
+      }
+      if (command === 'Layout.setPathName') {
+        focusMode = !focusMode
+      }
+      return undefined
+    },
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+  const state = instance.getState() as { focusModeEnabled: boolean }
+  state.focusModeEnabled = true
+
+  await dispatch(instance, { name: 'task:mock-task-2', type: 'click' })
+  await instance.toggleFocusMode()
+
+  expect(execute).toHaveBeenCalledWith(
+    'Layout.setPathName',
+    '/prefix/chat?workspace=project#mock-task-2',
+  )
+  await instance.toggleFocusMode()
+  expect(execute).toHaveBeenCalledWith(
+    'Layout.setPathName',
+    '/prefix/?workspace=project',
+  )
+  instance.dispose?.()
 })
 
 test('exposes and applies live component state without replacing the chat instance', async () => {
