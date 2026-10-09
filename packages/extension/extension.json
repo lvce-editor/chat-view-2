@@ -75,7 +75,8 @@
     "onCommand:chat2.show",
     "onCommand:chat2.submit",
     "onCommand:chat2.toggleFocusMode",
-    "onCommand:chat2.toggleAiNativeLayout"
+    "onCommand:chat2.toggleAiNativeLayout",
+    "onCommand:chat2.toggleSessionsList"
   ],
   "rpc": [
     {
@@ -134,6 +135,10 @@
     {
       "id": "chat2.toggleFocusMode",
       "label": "Chat 2: Toggle Focus Mode"
+    },
+    {
+      "id": "chat2.toggleSessionsList",
+      "label": "Chat 2: Toggle Sessions List"
     }
   ],
   "views": [

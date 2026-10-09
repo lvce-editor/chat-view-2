@@ -1163,6 +1163,42 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   )
 }
 
+const renderAiNativeSessions = (
+  state: Readonly<ChatViewState>,
+): readonly Dom.TreeNode[] => {
+  const { fontFamily, fontSize, sessionsListVisible, sessionsWidth, tasks } =
+    state
+  if (!sessionsListVisible) {
+    return []
+  }
+  return [
+    Dom.div(
+      'ChatSessions',
+      [
+        Dom.div('ChatTaskListHeader', [
+          Dom.heading(1, 'ChatTitle', 'Sessions'),
+          Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
+        ]),
+        renderTaskList(tasks, fontFamily, fontSize),
+      ],
+      {
+        ...(sessionsWidth !== undefined && {
+          style: `--ChatSessionsWidth: ${sessionsWidth}px`,
+        }),
+      },
+    ),
+    Dom.node(VirtualDomElements.Div, {
+      ariaLabel: 'Resize sessions panel',
+      ariaOrientation: 'vertical',
+      className: 'ChatSessionsSash',
+      name: 'sessions-sash',
+      onPointerDown: 'handleSessionsSashPointerDown',
+      role: 'separator',
+      tabIndex: -1,
+    }),
+  ]
+}
+
 export const render = (
   state: Readonly<ChatViewState>,
 ): readonly VirtualDomNode[] => {
@@ -1170,14 +1206,10 @@ export const render = (
     aiNativeTheme,
     errorMessage,
     focusMode,
-    fontFamily,
-    fontSize,
     loginPending,
     loginRequired,
     selectedTask,
     sessionsVisible,
-    sessionsWidth,
-    tasks,
   } = state
   if (loginRequired) {
     return Dom.flatten(
@@ -1254,41 +1286,7 @@ export const render = (
     return Dom.flatten(
       Dom.div(
         getAiNativeLayoutViewClassName(aiNativeTheme, sessionsVisible),
-        [
-          Dom.div(
-            'ChatSessions',
-            [
-              Dom.div('ChatTaskListHeader', [
-                Dom.heading(1, 'ChatTitle', 'Sessions'),
-                Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
-                Dom.button(
-                  'toggle-sessions',
-                  'Close',
-                  'ChatSessionsToggleButton',
-                  {
-                    ariaExpanded: sessionsVisible,
-                  },
-                ),
-              ]),
-              renderTaskList(tasks, fontFamily, fontSize),
-            ],
-            {
-              ...(sessionsWidth !== undefined && {
-                style: `--ChatSessionsWidth: ${sessionsWidth}px`,
-              }),
-            },
-          ),
-          Dom.node(VirtualDomElements.Div, {
-            ariaLabel: 'Resize sessions panel',
-            ariaOrientation: 'vertical',
-            className: 'ChatSessionsSash',
-            name: 'sessions-sash',
-            onPointerDown: 'handleSessionsSashPointerDown',
-            role: 'separator',
-            tabIndex: -1,
-          }),
-          conversation,
-        ],
+        [...renderAiNativeSessions(state), conversation],
         {
           onClick: 'handleModelPickerOutsideClick',
           onDragOver: 'handleDragOver',

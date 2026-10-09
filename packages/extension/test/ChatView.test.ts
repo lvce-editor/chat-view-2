@@ -556,6 +556,33 @@ test('shows a session selector toggle in focus mode', async () => {
   instance.dispose?.()
 })
 
+test('toggles the AI-native sessions list without resetting its width or active task', async () => {
+  const instance = await createTestInstance()
+  instance.setState({
+    ...instance.getState(),
+    draft: 'preserved draft',
+    focusMode: true,
+    sessionsWidth: 360,
+  })
+
+  await instance.toggleSessionsList()
+
+  expect(getNodesByClass(instance.render(), 'ChatSessions')).toHaveLength(0)
+  expect(getNodesByClass(instance.render(), 'ChatSessionsSash')).toHaveLength(0)
+  expect(
+    getNodesByClass(instance.render(), 'ChatConversationBody'),
+  ).toHaveLength(1)
+  expect(instance.getState().draft).toBe('preserved draft')
+
+  await instance.toggleSessionsList()
+
+  expect(getNodesByClass(instance.render(), 'ChatSessions')).toHaveLength(1)
+  expect(getNodesByClass(instance.render(), 'ChatSessionsSash')).toHaveLength(1)
+  expect(instance.getState().sessionsWidth).toBe(360)
+  expect(instance.getState().draft).toBe('preserved draft')
+  instance.dispose?.()
+})
+
 test('keeps scrolling to the bottom for the ordinary chat layout', async () => {
   const instance = await createTestInstance()
 

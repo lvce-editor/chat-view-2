@@ -10,6 +10,7 @@ import {
   newChatInActiveChatViewInstance,
   submitActiveChatViewInstance,
   toggleActiveChatViewFocusMode,
+  toggleActiveChatViewSessionsList,
 } from '../ChatView/CreateInstance.ts'
 import { headlessChatCommands } from '../HeadlessChat/HeadlessChat.ts'
 
@@ -82,6 +83,12 @@ export const activate = async (): Promise<void> => {
       id,
     })
   }
+  registerCommand({
+    execute() {
+      return toggleActiveChatViewSessionsList()
+    },
+    id: 'chat2.toggleSessionsList',
+  })
   try {
     const href = await executeCommand('Layout.getHref')
     if (typeof href === 'string' && parseChatTaskHash(href).type === 'task') {

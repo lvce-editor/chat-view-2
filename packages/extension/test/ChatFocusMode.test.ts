@@ -21,6 +21,7 @@ const createState = (): ChatViewState => ({
   models: [],
   selectedModelId: '',
   selectedTask: undefined,
+  sessionsListVisible: true,
   sessionsVisible: false,
   tasks: [],
   workingSeconds: 0,
