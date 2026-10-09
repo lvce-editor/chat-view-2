@@ -1166,7 +1166,8 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 const renderAiNativeSessions = (
   state: Readonly<ChatViewState>,
 ): readonly Dom.TreeNode[] => {
-  const { fontFamily, fontSize, sessionsListVisible, sessionsWidth, tasks } = state
+  const { fontFamily, fontSize, sessionsListVisible, sessionsWidth, tasks } =
+    state
   if (!sessionsListVisible) {
     return []
   }
@@ -1209,8 +1210,6 @@ export const render = (
     loginRequired,
     selectedTask,
     sessionsVisible,
-    sessionsWidth,
-    tasks,
   } = state
   if (loginRequired) {
     return Dom.flatten(

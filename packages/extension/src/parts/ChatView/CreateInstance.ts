@@ -380,8 +380,8 @@ export const createInstance = async (
     models,
     selectedModelId,
     selectedTask,
-    sessionsVisible: false,
     sessionsListVisible: true,
+    sessionsVisible: false,
     tasks,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
