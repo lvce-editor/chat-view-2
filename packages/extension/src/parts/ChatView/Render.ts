@@ -912,6 +912,13 @@ const getAiNativeLayoutClassName = (
     : `ChatAiNativeLayout ChatAiNativeLayoutTheme-${theme}`
 }
 
+const getAiNativeLayoutViewClassName = (
+  theme: ChatViewState['aiNativeTheme'],
+  sessionsVisible: boolean,
+): string => {
+  return `ChatView ${getAiNativeLayoutClassName(theme)}${sessionsVisible ? ' ChatSessionsVisible' : ''}`
+}
+
 const getAiNativeThemeClassName = (
   theme: ChatViewState['aiNativeTheme'],
 ): string => {
@@ -1067,7 +1074,13 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 }
 
 const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const { copiedMessageId, errorMessage, focusMode, selectedTask: task } = state
+  const {
+    copiedMessageId,
+    errorMessage,
+    focusMode,
+    selectedTask: task,
+    sessionsVisible,
+  } = state
   if (!task) {
     return renderListView(state)
   }
@@ -1079,6 +1092,9 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       onContextMenu: 'handleContextMenu',
     }),
     ...renderFocusModeButton(state),
+    Dom.button('toggle-sessions', 'Sessions', 'ChatSessionsToggleButton', {
+      ariaExpanded: sessionsVisible,
+    }),
     ...(focusMode ? [] : [Dom.button('new-task', 'New', 'ChatNewTaskButton')]),
   ])
   const renderedMessages = summary.messages.map((message) =>
@@ -1159,6 +1175,7 @@ export const render = (
     loginPending,
     loginRequired,
     selectedTask,
+    sessionsVisible,
     sessionsWidth,
     tasks,
   } = state
@@ -1200,6 +1217,14 @@ export const render = (
           [
             Dom.div('ChatDetailHeader', [
               Dom.heading(1, 'ChatTitle', 'Chat'),
+              Dom.button(
+                'toggle-sessions',
+                'Sessions',
+                'ChatSessionsToggleButton',
+                {
+                  ariaExpanded: sessionsVisible,
+                },
+              ),
               ...renderFocusModeButton(state),
             ]),
             Dom.div('ChatConversationBody', [
@@ -1228,7 +1253,7 @@ export const render = (
         )
     return Dom.flatten(
       Dom.div(
-        `ChatView ${getAiNativeLayoutClassName(aiNativeTheme)}`,
+        getAiNativeLayoutViewClassName(aiNativeTheme, sessionsVisible),
         [
           Dom.div(
             'ChatSessions',
@@ -1236,6 +1261,14 @@ export const render = (
               Dom.div('ChatTaskListHeader', [
                 Dom.heading(1, 'ChatTitle', 'Sessions'),
                 Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
+                Dom.button(
+                  'toggle-sessions',
+                  'Close',
+                  'ChatSessionsToggleButton',
+                  {
+                    ariaExpanded: sessionsVisible,
+                  },
+                ),
               ]),
               renderTaskList(tasks, fontFamily, fontSize),
             ],
