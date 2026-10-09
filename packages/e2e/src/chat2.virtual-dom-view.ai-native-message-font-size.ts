@@ -21,7 +21,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(assistantMessage).toHaveCSS('font-size', '13px')
 
   await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
-  await expect(Locator('.ChatAiNativeLayout')).toBeVisible()
+  const aiNativeLayout = Locator('.ChatAiNativeLayout')
+  await expect(aiNativeLayout).toBeVisible()
   await expect(userMessage).toHaveCSS('font-size', '15px')
   await expect(assistantMessage).toHaveCSS('font-size', '15px')
 }
