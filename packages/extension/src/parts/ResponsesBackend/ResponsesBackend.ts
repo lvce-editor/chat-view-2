@@ -273,6 +273,11 @@ const getWebSocketUrl = (root: string, path: string): string => {
   return url.href
 }
 
+const getApiUrl = (root: string, path: string): string => {
+  const apiRoot = root.endsWith('/api') ? root : `${root}/api`
+  return `${apiRoot}${path}`
+}
+
 const runWebSocketRequest = (
   root: string,
   accessToken: string | undefined,
@@ -467,7 +472,7 @@ const runWebSocketStep = async (
       createWebSocket,
       options,
       openAiWebSearch,
-      '/v1/responses',
+      '/api/v1/responses',
     )
   } catch (error) {
     if (!(error instanceof WebSocketUpgradeError)) {
@@ -479,7 +484,7 @@ const runWebSocketStep = async (
       createWebSocket,
       options,
       openAiWebSearch,
-      '/v1/realtime',
+      '/api/v1/realtime',
     )
   }
 }
@@ -641,7 +646,7 @@ export const createResponsesBackend = ({
       if (!(error instanceof WebSocketUpgradeError) || !refreshAccessToken) {
         throw error
       }
-      const probe = await fetchImplementation(`${root}/v1/models`, {
+      const probe = await fetchImplementation(getApiUrl(root, '/v1/models'), {
         credentials: 'include',
         headers: getHeaders(rejectedToken),
         ...(options.signal && { signal: options.signal }),
@@ -663,11 +668,14 @@ export const createResponsesBackend = ({
         if (!(retryError instanceof WebSocketUpgradeError)) {
           throw retryError
         }
-        const retryProbe = await fetchImplementation(`${root}/v1/models`, {
-          credentials: 'include',
-          headers: getHeaders(currentAccessToken),
-          ...(options.signal && { signal: options.signal }),
-        })
+        const retryProbe = await fetchImplementation(
+          getApiUrl(root, '/v1/models'),
+          {
+            credentials: 'include',
+            headers: getHeaders(currentAccessToken),
+            ...(options.signal && { signal: options.signal }),
+          },
+        )
         if (retryProbe.status === 401) {
           requireLogin()
         }
@@ -677,25 +685,28 @@ export const createResponsesBackend = ({
   }
   return {
     async generateTitle(message, modelId) {
-      const response = await authenticatedFetch(`${root}/v1/responses`, {
-        body: JSON.stringify({
-          input: [
-            {
-              content: [{ text: message, type: 'input_text' }],
-              role: 'user',
-            },
-          ],
-          instructions:
-            'Create a concise, descriptive title for the user message. Correct spelling mistakes. Return only the title, with no quotes or explanation.',
-          max_output_tokens: 40,
-          model: modelId,
-          store: false,
-          stream: false,
-          tools: [],
-        }),
-        credentials: 'include',
-        method: 'POST',
-      })
+      const response = await authenticatedFetch(
+        getApiUrl(root, '/v1/responses'),
+        {
+          body: JSON.stringify({
+            input: [
+              {
+                content: [{ text: message, type: 'input_text' }],
+                role: 'user',
+              },
+            ],
+            instructions:
+              'Create a concise, descriptive title for the user message. Correct spelling mistakes. Return only the title, with no quotes or explanation.',
+            max_output_tokens: 40,
+            model: modelId,
+            store: false,
+            stream: false,
+            tools: [],
+          }),
+          credentials: 'include',
+          method: 'POST',
+        },
+      )
       if (!response.ok) {
         throw new Error(await getModelRequestErrorMessage(response, false))
       }
@@ -706,7 +717,7 @@ export const createResponsesBackend = ({
       return result.text
     },
     async listModels() {
-      const response = await authenticatedFetch(`${root}/v1/models`, {
+      const response = await authenticatedFetch(getApiUrl(root, '/v1/models'), {
         credentials: 'include',
         headers: getHeaders(accessToken),
       })
@@ -751,21 +762,24 @@ export const createResponsesBackend = ({
       if (supportsStreaming && !isOpenRouter) {
         return runAuthenticatedWebSocket(options)
       }
-      const response = await authenticatedFetch(`${root}/v1/responses`, {
-        body: JSON.stringify({
-          ...request,
-          ...(isOpenRouter && {
-            input: openRouterInput,
-            previous_response_id: undefined,
-            store: false,
+      const response = await authenticatedFetch(
+        getApiUrl(root, '/v1/responses'),
+        {
+          body: JSON.stringify({
+            ...request,
+            ...(isOpenRouter && {
+              input: openRouterInput,
+              previous_response_id: undefined,
+              store: false,
+            }),
+            stream: false,
           }),
-          stream: false,
-        }),
-        credentials: 'include',
-        headers: getHeaders(accessToken),
-        method: 'POST',
-        ...(options.signal && { signal: options.signal }),
-      })
+          credentials: 'include',
+          headers: getHeaders(accessToken),
+          method: 'POST',
+          ...(options.signal && { signal: options.signal }),
+        },
+      )
       if (!response.ok) {
         throw new Error(
           await getModelRequestErrorMessage(response, isOpenRouter),
