@@ -60,11 +60,30 @@ test('loads only OpenAI models from the authenticated catalog', async () => {
     },
   ])
   expect(fetchMock).toHaveBeenCalledWith(
-    'https://backend.example.com/v1/models',
+    'https://backend.example.com/api/v1/models',
     expect.objectContaining({
       credentials: 'include',
       headers: expect.objectContaining({ Authorization: 'Bearer token' }),
     }),
+  )
+})
+
+test('does not duplicate the API prefix when the backend URL includes it', async () => {
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(
+      Response.json({ models: [{ id: 'gpt-test', provider: 'openai' }] }),
+    )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com/api/',
+    fetch: fetchMock,
+  })
+
+  await backend.listModels()
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    'https://backend.example.com/api/v1/models',
+    expect.anything(),
   )
 })
 
@@ -428,7 +447,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
   })
   expect(fetchMock).not.toHaveBeenCalled()
   expect(createWebSocket).toHaveBeenCalledWith(
-    'wss://backend.example.com/v1/responses',
+    'wss://backend.example.com/api/v1/responses',
     ['lvce.responses.v1', 'access-token-123'],
   )
   expect(JSON.parse(socket.sent[0])).toEqual(
@@ -582,12 +601,12 @@ test('falls back to the realtime route when the responses upgrade fails', async 
   })
   expect(createWebSocket).toHaveBeenNthCalledWith(
     1,
-    'wss://backend.example.com/v1/responses',
+    'wss://backend.example.com/api/v1/responses',
     ['lvce.responses.v1', 'access-token-123'],
   )
   expect(createWebSocket).toHaveBeenNthCalledWith(
     2,
-    'wss://backend.example.com/v1/realtime',
+    'wss://backend.example.com/api/v1/realtime',
     ['lvce.responses.v1', 'access-token-123'],
   )
   expect(JSON.parse(fallbackSocket.sent[0])).toEqual(
@@ -875,7 +894,7 @@ test('routes OpenRouter through backend HTTP and preserves tool history across t
   expect(createWebSocket).not.toHaveBeenCalled()
   expect(second.text).toBe('Done')
   expect(fetchMock.mock.calls[1][0]).toBe(
-    'https://backend.example.com/v1/responses',
+    'https://backend.example.com/api/v1/responses',
   )
   const request = JSON.parse(fetchMock.mock.calls[1][1]?.body as string)
   expect(request.previous_response_id).toBeUndefined()
