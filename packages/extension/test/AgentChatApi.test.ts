@@ -1,4 +1,6 @@
 // cspell:words nemotron logprobs
+// cspell:words titlte
+// cspell:words über
 /* eslint-disable unicorn/max-nested-calls */
 import type { AgentToolHost } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { expect, jest, test } from '@jest/globals'
@@ -91,7 +93,13 @@ test('runs a multi-step tool loop and records a compact event history', async ()
     toolHost,
   })
 
+  const attachment = {
+    dataUrl: 'data:image/png;base64,aGVsbG8=',
+    mimeType: 'image/png',
+    name: 'sample.png',
+  }
   const task = await api.createTask('Inspect this repo', 'gpt-test', {
+    attachments: [attachment],
     onTrace(message) {
       trace.push(message)
     },
@@ -111,6 +119,12 @@ test('runs a multi-step tool loop and records a compact event history', async ()
       type: 'function_call',
     },
   ])
+  expect(runStep.mock.calls[0]?.[0].input[0]).toEqual(
+    expect.objectContaining({ attachments: [attachment] }),
+  )
+  expect(task.events[0]).toEqual(
+    expect.objectContaining({ attachments: [attachment] }),
+  )
   expect(task.responseHistory).toEqual([
     { content: 'Finished', role: 'assistant' },
   ])
@@ -177,6 +191,223 @@ test('runs a multi-step tool loop and records a compact event history', async ()
       role: 'assistant',
     }),
   ])
+})
+
+test('generates the title asynchronously and preserves it through later task saves', async () => {
+  const step =
+    Promise.withResolvers<Awaited<ReturnType<AgentBackend['runStep']>>>()
+  const stepPromise = step.promise
+  const titleUpdated = Promise.withResolvers<void>()
+  const generateTitle = jest
+    .fn<NonNullable<AgentBackend['generateTitle']>>()
+    .mockResolvedValue('fix the chat title')
+  const runStep = jest.fn<AgentBackend['runStep']>(() => stepPromise)
+  const backend: AgentBackend = {
+    generateTitle,
+    async listModels() {
+      return []
+    },
+    runStep,
+  }
+  const store = createMemoryTaskStore()
+  const updates: string[] = []
+  const toolHost: AgentToolHost = {
+    beginTurn() {},
+    async execute() {
+      return { content: '', isError: false }
+    },
+    getChangedFiles() {
+      return []
+    },
+    getDefinitions() {
+      return []
+    },
+    async getWorkspaceContext() {
+      return 'Workspace unavailable'
+    },
+    async revert() {
+      return []
+    },
+  }
+  const api = createAgentChatApi({
+    backend,
+    store,
+    titleModelId: 'gpt-5.6-luna',
+    toolHost,
+  })
+  const taskPromise = api.createTask(
+    'über please fix the titlte of this chat',
+    'gpt-test',
+    {
+      onUpdate(task) {
+        updates.push(task.title)
+        if (task.title === 'Fix the chat title') {
+          titleUpdated.resolve()
+        }
+      },
+    },
+  )
+
+  await titleUpdated.promise
+  expect(generateTitle).toHaveBeenCalledWith(
+    'über please fix the titlte of this chat',
+    'gpt-5.6-luna',
+  )
+  expect(updates[0]).toBe('Über please fix the titlte of this chat')
+  step.resolve({ responseId: 'response-1', text: 'Done.', toolCalls: [] })
+
+  const task = await taskPromise
+  expect(task).toMatchObject({
+    status: 'completed',
+    title: 'Fix the chat title',
+    titleGenerated: true,
+  })
+  expect(task.events).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        text: 'über please fix the titlte of this chat',
+        type: 'user-message',
+      }),
+      expect.objectContaining({ text: 'Done.', type: 'assistant-message' }),
+    ]),
+  )
+  await expect(store.get(task.id)).resolves.toMatchObject({
+    title: 'Fix the chat title',
+    titleGenerated: true,
+  })
+  expect(updates).toContain('Fix the chat title')
+})
+
+test('answers a general question and follow-up when no workspace is open', async () => {
+  const runStep = jest
+    .fn<AgentBackend['runStep']>()
+    .mockResolvedValueOnce({
+      responseId: 'response-1',
+      text: 'JSON is a text format for structured data.',
+      toolCalls: [],
+    })
+    .mockResolvedValueOnce({
+      responseId: 'response-2',
+      text: 'Use quotes around property names and strings.',
+      toolCalls: [],
+    })
+  const backend: AgentBackend = {
+    async listModels() {
+      return []
+    },
+    runStep,
+  }
+  const execute = jest.fn<AgentToolHost['execute']>()
+  const toolHost: AgentToolHost = {
+    beginTurn() {},
+    execute,
+    getChangedFiles() {
+      return []
+    },
+    getDefinitions() {
+      return []
+    },
+    async getWorkspaceContext() {
+      return 'Workspace context is unavailable. Answer general questions without workspace access.'
+    },
+    async revert() {
+      return []
+    },
+  }
+  const api = createAgentChatApi({
+    backend,
+    store: createMemoryTaskStore(),
+    toolHost,
+  })
+
+  const first = await api.createTask('whats json', 'gpt-test')
+  const followUp = await api.sendMessage(first, 'How do I write a JSON string?')
+
+  expect(first.status).toBe('completed')
+  expect(summarizeTask(first).messages.at(-1)?.text).toBe(
+    'JSON is a text format for structured data.',
+  )
+  expect(followUp.status).toBe('completed')
+  expect(summarizeTask(followUp).messages.at(-1)?.text).toBe(
+    'Use quotes around property names and strings.',
+  )
+  expect(runStep.mock.calls[0]?.[0].input).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        content: expect.stringContaining(
+          'Answer general questions without workspace access.',
+        ),
+      }),
+    ]),
+  )
+  expect(runStep.mock.calls[1]?.[0].previousResponseId).toBe('response-1')
+  expect(execute).not.toHaveBeenCalled()
+})
+
+test('creates uniquely identified tasks and preserves their IDs for follow-ups', async () => {
+  const uuids: [
+    ReturnType<typeof crypto.randomUUID>,
+    ReturnType<typeof crypto.randomUUID>,
+  ] = [
+    '7d107d77-56d6-458f-b17f-27dce196bb8b',
+    '9129e442-9488-4e3b-a263-e08f9b89b458',
+  ]
+  const randomUUID = jest
+    .spyOn(crypto, 'randomUUID')
+    .mockReturnValueOnce(uuids[0])
+    .mockReturnValueOnce(uuids[1])
+  try {
+    const backend: AgentBackend = {
+      async listModels() {
+        return []
+      },
+      async runStep() {
+        return {
+          responseId: 'response',
+          text: 'Done',
+          toolCalls: [],
+        }
+      },
+    }
+    const toolHost: AgentToolHost = {
+      beginTurn() {},
+      async execute() {
+        return { content: '', isError: false }
+      },
+      getChangedFiles() {
+        return []
+      },
+      getDefinitions() {
+        return []
+      },
+      async getWorkspaceContext() {
+        return 'Workspace context is unavailable.'
+      },
+      async revert() {
+        return []
+      },
+    }
+    const store = createMemoryTaskStore()
+    const api = createAgentChatApi({
+      backend,
+      store,
+      toolHost,
+    })
+
+    const first = await api.createTask('First task', 'gpt-test')
+    const followUp = await api.sendMessage(first, 'Continue')
+    const second = await api.createTask('Second task', 'gpt-test')
+
+    expect(first.id).toBe(uuids[0])
+    expect(followUp.id).toBe(first.id)
+    const restoredTask = await api.getTask(first.id)
+    expect(restoredTask?.id).toBe(first.id)
+    expect(second.id).toBe(uuids[1])
+    expect(second.id).not.toBe(first.id)
+    expect(randomUUID).toHaveBeenCalledTimes(2)
+  } finally {
+    randomUUID.mockRestore()
+  }
 })
 
 test('records a failed task when the backend rejects the request', async () => {

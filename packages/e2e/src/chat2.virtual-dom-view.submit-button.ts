@@ -17,4 +17,12 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const userMessage = Locator('.ChatMessageUser')
   await expect(detail).toBeVisible()
   await expect(userMessage).toContainText('Submit with the button')
+
+  const stop = Locator('button[name="stop"]')
+  await expect(stop).toContainText('■')
+  await expect(stop).toHaveAttribute('aria-label', 'Stop task')
+  await expect(submit).toBeHidden()
+  // eslint-disable-next-line e2e/no-direct-click
+  await stop.click()
+  await expect(submit).toBeVisible()
 }

@@ -98,6 +98,42 @@ test('get_workspace_uri returns the current workspace uri', async () => {
   expect(workspaceUriProvider).toHaveBeenCalledTimes(1)
 })
 
+test('provides useful context when workspace access is unavailable', async () => {
+  const readDirWithFileTypes = jest.fn(async () => [])
+  const host = createAgentToolHost({
+    fileSystem: {
+      exists: async () => false,
+      readDirWithFileTypes,
+      readFile: async () => '',
+      remove: async () => {},
+      writeFile: async () => {},
+    },
+  })
+
+  await expect(host.getWorkspaceContext()).resolves.toContain(
+    'Answer general questions without workspace access.',
+  )
+  await expect(host.getWorkspaceContext()).resolves.toContain(
+    'Workspace tools require an open workspace.',
+  )
+  expect(readDirWithFileTypes).not.toHaveBeenCalled()
+})
+
+test('reports a clear error when a workspace tool is used without a workspace', async () => {
+  const host = createAgentToolHost()
+
+  await expect(
+    host.execute({
+      arguments: JSON.stringify({ query: 'json' }),
+      callId: 'call-1',
+      name: 'search_workspace',
+    }),
+  ).resolves.toEqual({
+    content: 'Workspace access is unavailable',
+    isError: true,
+  })
+})
+
 test('removes commands and diagnostics from the catalog when their secure hosts are unavailable', async () => {
   const names = (await createAgentToolHost().getDefinitions()).map(
     (definition) => definition.name,

@@ -13,6 +13,9 @@ export interface ResponsesBackendOptions {
   readonly baseUrl: string
   readonly createWebSocket?: ResponsesWebSocketFactory
   readonly fetch?: typeof fetch
+  readonly onLoginRequired?: () => void
+  readonly openAiWebSearch?: boolean
+  readonly refreshAccessToken?: () => Promise<string>
   readonly supportsStreaming?: boolean
 }
 
@@ -62,7 +65,7 @@ const openRouterModelNotFoundCode = 'E_OPENROUTER_MODEL_NOT_FOUND'
 const openRouterApiBadResponseCode = 'E_OPENROUTER_API_BAD_RESPONSE'
 const computerUseToolPrefix = 'computer_use_'
 const defaultAgentInstructions =
-  'You are the Lvce coding agent. Inspect relevant files before editing. Keep changes scoped, use tools to modify the workspace, run available verification, and end with a concise result. Treat every tool registered with the request as an available capability.'
+  'You are the Lvce assistant. Answer general questions directly. When the user asks you to work on an open workspace, inspect relevant files before editing, keep changes scoped, use tools to modify the workspace, and run available verification. If workspace context is unavailable, continue with requests that do not need workspace access and explain clearly when a requested operation requires an open workspace. End with a concise result. Treat every tool registered with the request as an available capability.'
 const computerUseInstructions =
   'You have direct access to observe and control the local Linux desktop through the registered computer_use_* tools. You can launch installed desktop applications, inspect accessibility state and windows, take or save screenshots, focus apps, click, scroll, type text, and press keys. Do not say that computer use or GUI control is unavailable when these tools are registered. Invoke them like any other tool: start with computer_use_doctor when readiness is unknown. When an application must be opened, call computer_use_launch_app instead of using keyboard shortcuts or typing into an application launcher. Inspect windows or app state, prefer semantic accessibility selectors over pixel coordinates, and perform the requested action. When clicking coordinates from a window-cropped screenshot, pass the same window target and relative: true so the click uses the screenshot coordinate space. When a screenshot must be written to a path, call computer_use_save_screenshot because computer_use_screenshot does not save files. Inspect state again to verify the result. Ask before consequential actions that submit, send, purchase, delete, overwrite, or publish.'
 
@@ -102,7 +105,14 @@ const mapInput = (input: AgentInput): Readonly<Record<string, unknown>> => {
     }
   }
   return {
-    content: [{ text: input.content, type: 'input_text' }],
+    content: [
+      { text: input.content, type: 'input_text' },
+      ...(input.attachments || []).map((attachment) => ({
+        detail: 'auto',
+        image_url: attachment.dataUrl,
+        type: 'input_image',
+      })),
+    ],
     role: input.role,
   }
 }
@@ -114,6 +124,7 @@ const getAgentInstructions = (options: AgentStepOptions): string =>
 
 const createResponseRequest = (
   options: AgentStepOptions,
+  openAiWebSearch: boolean,
 ): Readonly<Record<string, unknown>> => ({
   input: options.input.map(mapInput),
   instructions: getAgentInstructions(options),
@@ -121,12 +132,18 @@ const createResponseRequest = (
   ...(options.previousResponseId && {
     previous_response_id: options.previousResponseId,
   }),
-  tools: options.tools.map((tool) => ({
-    description: tool.description,
-    name: tool.name,
-    parameters: tool.inputSchema,
-    type: 'function',
-  })),
+  tools: [
+    ...options.tools.map((tool) => ({
+      description: tool.description,
+      name: tool.name,
+      parameters: tool.inputSchema,
+      type: 'function',
+    })),
+    ...(openAiWebSearch &&
+    !options.modelId.toLowerCase().startsWith('openrouter/')
+      ? [{ type: 'web_search' }]
+      : []),
+  ],
 })
 
 const parseModels = (value: unknown): readonly ChatModel[] => {
@@ -256,11 +273,17 @@ const getWebSocketUrl = (root: string, path: string): string => {
   return url.href
 }
 
+const getApiUrl = (root: string, path: string): string => {
+  const apiRoot = root.endsWith('/api') ? root : `${root}/api`
+  return `${apiRoot}${path}`
+}
+
 const runWebSocketRequest = (
   root: string,
   accessToken: string | undefined,
   createWebSocket: ResponsesWebSocketFactory,
   options: AgentStepOptions,
+  openAiWebSearch: boolean,
   path: string,
 ): Promise<AgentStepResult> => {
   const { promise, reject, resolve } = Promise.withResolvers<AgentStepResult>()
@@ -408,7 +431,7 @@ const runWebSocketRequest = (
       options.signal?.throwIfAborted()
       socket.send(
         JSON.stringify({
-          ...createResponseRequest(options),
+          ...createResponseRequest(options, openAiWebSearch),
           type: 'response.create',
         }),
       )
@@ -440,6 +463,7 @@ const runWebSocketStep = async (
   accessToken: string | undefined,
   createWebSocket: ResponsesWebSocketFactory,
   options: AgentStepOptions,
+  openAiWebSearch: boolean,
 ): Promise<AgentStepResult> => {
   try {
     return await runWebSocketRequest(
@@ -447,7 +471,8 @@ const runWebSocketStep = async (
       accessToken,
       createWebSocket,
       options,
-      '/v1/responses',
+      openAiWebSearch,
+      '/api/v1/responses',
     )
   } catch (error) {
     if (!(error instanceof WebSocketUpgradeError)) {
@@ -458,7 +483,8 @@ const runWebSocketStep = async (
       accessToken,
       createWebSocket,
       options,
-      '/v1/realtime',
+      openAiWebSearch,
+      '/api/v1/realtime',
     )
   }
 }
@@ -542,12 +568,156 @@ export const createResponsesBackend = ({
   baseUrl,
   createWebSocket = defaultCreateWebSocket,
   fetch: fetchImplementation = globalThis.fetch,
+  onLoginRequired,
+  openAiWebSearch = true,
+  refreshAccessToken,
   supportsStreaming = false,
 }: ResponsesBackendOptions): AgentBackend => {
   const root = trimTrailingSlash(baseUrl)
+  let currentAccessToken = accessToken
+  let refreshPending: Promise<string> | undefined
+  const requireLogin = (): never => {
+    onLoginRequired?.()
+    throw new ResponsesBackendError(
+      loginRequiredMessage,
+      noAccessTokenProvidedCode,
+    )
+  }
+  const recoverAccessToken = async (
+    rejectedToken: string | undefined,
+  ): Promise<void> => {
+    if (currentAccessToken && currentAccessToken !== rejectedToken) {
+      return
+    }
+    const refresh = async (): Promise<string> => {
+      try {
+        return refreshAccessToken ? await refreshAccessToken() : ''
+      } finally {
+        refreshPending = undefined
+      }
+    }
+    refreshPending ||= refresh()
+    try {
+      currentAccessToken = await refreshPending
+    } catch {
+      requireLogin()
+    }
+    if (!currentAccessToken) {
+      requireLogin()
+    }
+  }
+  const authenticatedFetch = async (
+    url: string,
+    init: RequestInit,
+  ): Promise<Response> => {
+    const rejectedToken = currentAccessToken
+    let response = await fetchImplementation(url, {
+      ...init,
+      headers: getHeaders(currentAccessToken),
+    })
+    if (response.status === 401 && refreshAccessToken) {
+      await recoverAccessToken(rejectedToken)
+      init.signal?.throwIfAborted()
+      response = await fetchImplementation(url, {
+        ...init,
+        headers: getHeaders(currentAccessToken),
+      })
+      if (response.status === 401) {
+        requireLogin()
+      }
+    }
+    return response
+  }
+  const runAuthenticatedWebSocket = async (
+    options: AgentStepOptions,
+  ): Promise<AgentStepResult> => {
+    const rejectedToken = currentAccessToken
+    try {
+      return await runWebSocketStep(
+        root,
+        currentAccessToken,
+        createWebSocket,
+        options,
+        openAiWebSearch,
+      )
+    } catch (error) {
+      // Browser WebSocket errors hide the upgrade status. Confirm an auth
+      // rejection with a read-only request before refreshing or retrying.
+      if (!(error instanceof WebSocketUpgradeError) || !refreshAccessToken) {
+        throw error
+      }
+      const probe = await fetchImplementation(getApiUrl(root, '/v1/models'), {
+        credentials: 'include',
+        headers: getHeaders(rejectedToken),
+        ...(options.signal && { signal: options.signal }),
+      })
+      if (probe.status !== 401) {
+        throw error
+      }
+      await recoverAccessToken(rejectedToken)
+      options.signal?.throwIfAborted()
+      try {
+        return await runWebSocketStep(
+          root,
+          currentAccessToken,
+          createWebSocket,
+          options,
+          openAiWebSearch,
+        )
+      } catch (retryError) {
+        if (!(retryError instanceof WebSocketUpgradeError)) {
+          throw retryError
+        }
+        const retryProbe = await fetchImplementation(
+          getApiUrl(root, '/v1/models'),
+          {
+            credentials: 'include',
+            headers: getHeaders(currentAccessToken),
+            ...(options.signal && { signal: options.signal }),
+          },
+        )
+        if (retryProbe.status === 401) {
+          requireLogin()
+        }
+        throw retryError
+      }
+    }
+  }
   return {
+    async generateTitle(message, modelId) {
+      const response = await authenticatedFetch(
+        getApiUrl(root, '/v1/responses'),
+        {
+          body: JSON.stringify({
+            input: [
+              {
+                content: [{ text: message, type: 'input_text' }],
+                role: 'user',
+              },
+            ],
+            instructions:
+              'Create a concise, descriptive title for the user message. Correct spelling mistakes. Return only the title, with no quotes or explanation.',
+            max_output_tokens: 40,
+            model: modelId,
+            store: false,
+            stream: false,
+            tools: [],
+          }),
+          credentials: 'include',
+          method: 'POST',
+        },
+      )
+      if (!response.ok) {
+        throw new Error(await getModelRequestErrorMessage(response, false))
+      }
+      const result = await readResponse(response)
+      if (result.toolCalls.length > 0) {
+        throw new Error('Title generation returned an unexpected tool call')
+      }
+      return result.text
+    },
     async listModels() {
-      const response = await fetchImplementation(`${root}/v1/models`, {
+      const response = await authenticatedFetch(getApiUrl(root, '/v1/models'), {
         credentials: 'include',
         headers: getHeaders(accessToken),
       })
@@ -585,28 +755,31 @@ export const createResponsesBackend = ({
           'OpenRouter conversation history is unavailable. Start a new chat.',
         )
       }
-      const request = createResponseRequest(options)
+      const request = createResponseRequest(options, openAiWebSearch)
       const openRouterInput = isOpenRouter
         ? [...(options.responseHistory || []), ...options.input.map(mapInput)]
         : []
       if (supportsStreaming && !isOpenRouter) {
-        return runWebSocketStep(root, accessToken, createWebSocket, options)
+        return runAuthenticatedWebSocket(options)
       }
-      const response = await fetchImplementation(`${root}/v1/responses`, {
-        body: JSON.stringify({
-          ...request,
-          ...(isOpenRouter && {
-            input: openRouterInput,
-            previous_response_id: undefined,
-            store: false,
+      const response = await authenticatedFetch(
+        getApiUrl(root, '/v1/responses'),
+        {
+          body: JSON.stringify({
+            ...request,
+            ...(isOpenRouter && {
+              input: openRouterInput,
+              previous_response_id: undefined,
+              store: false,
+            }),
+            stream: false,
           }),
-          stream: false,
-        }),
-        credentials: 'include',
-        headers: getHeaders(accessToken),
-        method: 'POST',
-        ...(options.signal && { signal: options.signal }),
-      })
+          credentials: 'include',
+          headers: getHeaders(accessToken),
+          method: 'POST',
+          ...(options.signal && { signal: options.signal }),
+        },
+      )
       if (!response.ok) {
         throw new Error(
           await getModelRequestErrorMessage(response, isOpenRouter),

@@ -8,7 +8,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Command.executeExtensionCommand('chat2.show')
 
   await Locator('textarea[name="composer"]').type('Make a scoped change')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const changes = Locator('.ChatChanges')
   await expect(changes).toContainText('Edited 5 files')

@@ -20,12 +20,19 @@ export interface ChatChangedFile {
   readonly status: 'added' | 'deleted' | 'modified'
 }
 
+export interface ChatImageAttachment {
+  readonly dataUrl: string
+  readonly mimeType: string
+  readonly name: string
+}
+
 interface ChatTaskEventBase {
   readonly id: string
   readonly timestamp: string
 }
 
 export interface ChatUserMessageEvent extends ChatTaskEventBase {
+  readonly attachments?: readonly ChatImageAttachment[]
   readonly text: string
   readonly type: 'user-message'
 }
@@ -126,10 +133,12 @@ export interface ChatTask {
   readonly status: ChatTaskStatus
   readonly streamingText?: string
   readonly title: string
+  readonly titleGenerated?: boolean
   readonly updatedAt: string
 }
 
 export interface ChatRunOptions {
+  readonly attachments?: readonly ChatImageAttachment[]
   readonly onTrace?: (message: ChatTraceMessage) => void | Promise<void>
   readonly onUpdate?: (task: ChatTask) => void | Promise<void>
   readonly signal?: AbortSignal
@@ -145,11 +154,19 @@ export interface ChatApi {
   readonly getTask: (id: string) => Promise<ChatTask | undefined>
   readonly listModels: () => Promise<readonly ChatModel[]>
   readonly listTasks: (limit: number) => Promise<readonly ChatTask[]>
+  readonly renameTask: (
+    id: string,
+    title: string,
+  ) => Promise<ChatTask | undefined>
   readonly revertTask: (task: ChatTask) => Promise<ChatTask>
   readonly sendMessage: (
     task: ChatTask,
     message: string,
     options?: ChatRunOptions,
   ) => Promise<ChatTask>
-  readonly steer: (taskId: string, message: string) => Promise<void>
+  readonly steer: (
+    taskId: string,
+    message: string,
+    attachments?: readonly ChatImageAttachment[],
+  ) => Promise<void>
 }

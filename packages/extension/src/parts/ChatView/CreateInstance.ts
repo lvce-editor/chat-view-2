@@ -4,12 +4,15 @@ import {
   executeCommand,
   getPreference,
   setPreference,
+  type MenuEntry,
   type ViewContext,
   type ViewEvent,
   type VirtualDomViewInstance,
 } from '@lvce-editor/api'
+import { DragAndDropWorker, RendererWorker } from '@lvce-editor/rpc-registry'
 import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
+import type { ChatComposerImage } from './ChatViewState.ts'
 import type { ReadPreference } from './FontSize.ts'
 import {
   type BackendConfiguration,
@@ -20,30 +23,84 @@ import {
   getFocusModeEnabled,
   toggleFocusMode,
 } from '../ChatFocusMode/ChatFocusMode.ts'
+import {
+  isImageFile,
+  loadImageAttachment,
+} from '../ChatImageAttachments/ChatImageAttachments.ts'
+import {
+  getUrl,
+  getChatTaskHash,
+  getChatPath,
+  getIdePath,
+  isChatPath,
+  parseChatTaskHash,
+} from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { setStatus } from '../ChatTask/ChatTask.ts'
 import {
   createDefaultChatApi,
   type DefaultChatApiOptions,
 } from '../DefaultChatApi/DefaultChatApi.ts'
+import { initializeImageTransfer } from '../InitializeImageTransfer/InitializeImageTransfer.ts'
+import { taskStoreChannelName } from '../TaskStore/TaskStore.ts'
+import { readAiNativeTheme } from './AiNativeTheme.ts'
 import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
+import { readTaskOpenMode } from './TaskOpenMode.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
+  readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
   readonly getState: () => Readonly<ChatViewState>
+  readonly handleDragOver: () => void
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
+  readonly handleImageDrop: (dropId: unknown) => Promise<void>
+  readonly handleImagePaste: (
+    fileIds: unknown,
+    text?: unknown,
+    selectionStart?: unknown,
+    selectionEnd?: unknown,
+  ) => Promise<void>
+  readonly handleKeyDown: (key: unknown) => void
+  readonly handleModelPickerOutsideClick: (
+    name: unknown,
+    value: unknown,
+  ) => void
+  readonly handleRenameTask: () => void
+  readonly handleSessionsSashPointerDown: (
+    clientX: number,
+    containerWidth: number,
+    containerLeft: number,
+    sessionsLeft: number,
+    sessionsWidth: number,
+  ) => void
+  readonly handleSessionsSashPointerMove: (clientX: number) => void
+  readonly handleSessionsSashPointerUp: () => void
+  readonly handleTaskClick: (
+    name: unknown,
+    button: unknown,
+    detail: unknown,
+  ) => Promise<void>
+  readonly handleTaskMouseDown: (
+    name: unknown,
+    button: unknown,
+  ) => Promise<void>
   readonly newChat: (requestRerender?: boolean) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
-  readonly renderScrollPosition: () => readonly [
-    selector: string,
-    scrollTop: number,
-  ]
+  readonly renderFocus: (
+    oldContext: Readonly<Record<string, boolean>>,
+    newContext: Readonly<Record<string, boolean>>,
+  ) => string
+  readonly renderScrollPosition: () =>
+    | readonly []
+    | readonly [selector: string, scrollTop: number]
   readonly renderTitle: () => string
+  readonly renderWorkbenchLayout: () => 'ide' | 'ai-native' | undefined
   readonly setState: (state: unknown) => void
   readonly submit: (requestRerender?: boolean) => Promise<void>
   readonly toggleFocusMode: (requestRerender?: boolean) => Promise<void>
+  readonly toggleSessionsList: (requestRerender?: boolean) => Promise<void>
 }
 
 interface SavedState {
@@ -61,9 +118,43 @@ type ExecuteCommand = (
   ...args: readonly unknown[]
 ) => Promise<unknown>
 
+interface SessionsSashDrag {
+  readonly containerWidth: number
+  readonly isRight: boolean
+  readonly startPointerX: number
+  readonly startWidth: number
+}
+
 interface DefaultChatApiHost {
   readonly createApi: (options: DefaultChatApiOptions) => Promise<ChatApi>
   readonly resolveConfiguration: () => Promise<BackendConfiguration>
+}
+
+interface ImageTransferHost {
+  readonly discardDrop: (dropId: number) => Promise<void>
+  readonly getClipboardFiles: (
+    fileIds: readonly number[],
+  ) => Promise<readonly File[]>
+  readonly getDroppedFiles: (dropId: number) => Promise<readonly File[]>
+}
+
+const defaultImageTransferHost: ImageTransferHost = {
+  async discardDrop(dropId) {
+    await initializeImageTransfer()
+    await DragAndDropWorker.discardDrop(dropId)
+  },
+  async getClipboardFiles(fileIds) {
+    await initializeImageTransfer()
+    const items = await RendererWorker.getFileHandles(fileIds)
+    const files = await Promise.all(
+      items.map((item) => toImageFile(item.value)),
+    )
+    return files.filter((file): file is File => Boolean(file))
+  },
+  async getDroppedFiles(dropId) {
+    await initializeImageTransfer()
+    return DragAndDropWorker.getDroppedFilesByDropId(dropId)
+  },
 }
 
 const defaultChatApiHost: DefaultChatApiHost = {
@@ -76,6 +167,30 @@ const copyFeedbackDuration = 2000
 const messagesSelector = '.ChatMessages'
 const maxScrollTop = 9_999_999
 const workingTimerInterval = 1000
+const defaultWindowTitle = 'Lvce Editor'
+const defaultChatTitle = 'Chat 2'
+const titleMenuId = 'chat2.title'
+const maxTaskTitleLength = 80
+const pathSeparatorRegex = /[\\/]/
+const localImagePathRegex =
+  /^(?:file:\/\/|\/|~\/|[a-z]:[\\/]).+\.(?:avif|bmp|gif|jpe?g|png|webp)$/i
+const toImageFile = async (value: unknown): Promise<File | undefined> => {
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+  if ('arrayBuffer' in value && typeof value.arrayBuffer === 'function') {
+    return value as File
+  }
+  if (
+    'kind' in value &&
+    value.kind === 'file' &&
+    'getFile' in value &&
+    typeof value.getFile === 'function'
+  ) {
+    return (value as FileSystemFileHandle).getFile()
+  }
+  return undefined
+}
 
 const isWorking = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'
@@ -107,6 +222,71 @@ const getEventString = (event: Readonly<ViewEvent>): string => {
 
 const getSavedState = (value: unknown): SavedState => {
   return value && typeof value === 'object' ? value : {}
+}
+
+const getHref = async (execute: ExecuteCommand): Promise<string> => {
+  try {
+    const href = await execute('Layout.getHref')
+    return typeof href === 'string' ? href : ''
+  } catch {
+    return ''
+  }
+}
+
+const setChatTaskHash = async (
+  execute: ExecuteCommand,
+  taskId?: string,
+): Promise<void> => {
+  try {
+    const href = await getHref(execute)
+    const url = getUrl(href)
+    if (!url) {
+      return
+    }
+    let hash = ''
+    if (taskId) {
+      hash = isChatPath(url.pathname)
+        ? getChatTaskHash(taskId)
+        : `#chat-${encodeURIComponent(taskId)}`
+    }
+    await execute('Layout.setHash', hash)
+  } catch {
+    // Older editor builds do not expose the hash command.
+  }
+}
+
+const setWorkbenchLayoutUrl = async (
+  execute: ExecuteCommand,
+  layout: 'ide' | 'ai-native',
+  taskId?: string,
+): Promise<void> => {
+  try {
+    const href = await getHref(execute)
+    const url = getUrl(href)
+    if (!url) {
+      return
+    }
+    const wasChatPath = isChatPath(url.pathname)
+    if (layout === 'ai-native') {
+      const assetDir = await execute('Layout.getAssetDir')
+      if (typeof assetDir !== 'string' || !assetDir) {
+        return
+      }
+      url.pathname = getChatPath(href, assetDir)
+      url.hash = taskId ? getChatTaskHash(taskId) : ''
+    } else {
+      url.pathname = getIdePath(href)
+      if (wasChatPath) {
+        url.hash = ''
+      }
+    }
+    await execute(
+      'Layout.setPathName',
+      `${url.pathname}${url.search}${url.hash}`,
+    )
+  } catch {
+    // Older editor builds do not expose pathname updates.
+  }
 }
 
 const activeInstances = new Set<ActiveChatViewInstance>()
@@ -145,6 +325,8 @@ const isSameBackendConfiguration = (
   return (
     oldConfiguration.accessToken === newConfiguration.accessToken &&
     oldConfiguration.loginRequired === newConfiguration.loginRequired &&
+    oldConfiguration.openAiWebSearch === newConfiguration.openAiWebSearch &&
+    oldConfiguration.titleModelId === newConfiguration.titleModelId &&
     oldConfiguration.baseUrl === newConfiguration.baseUrl &&
     oldConfiguration.supportsStreaming === newConfiguration.supportsStreaming
   )
@@ -168,13 +350,29 @@ export const toggleActiveChatViewFocusMode = async (): Promise<void> => {
   await getActiveInstance()?.toggleFocusMode(true)
 }
 
+export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
+  await getActiveInstance()?.toggleSessionsList(true)
+}
+
 export const createInstance = async (
   context?: ViewContext,
   providedApi?: ChatApi,
   readPreference?: ReadPreference,
   execute: ExecuteCommand = executeCommand,
   defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
+  imageTransferHost: ImageTransferHost = defaultImageTransferHost,
 ): Promise<ActiveChatViewInstance> => {
+  let pendingWorkbenchLayout: 'ide' | 'ai-native' | undefined
+  let authenticationRejected = false
+  let currentState: MutableChatViewState | undefined
+  const onLoginRequired = (): void => {
+    authenticationRejected = true
+    if (currentState) {
+      currentState.loginRequired = true
+      currentState.errorMessage = ''
+      void context?.requestRerender()
+    }
+  }
   let api: ChatApi
   let backendConfiguration: BackendConfiguration | undefined
   if (providedApi) {
@@ -183,6 +381,7 @@ export const createInstance = async (
     backendConfiguration = await defaultApiHost.resolveConfiguration()
     api = await defaultApiHost.createApi({
       configuration: backendConfiguration,
+      onLoginRequired,
     })
   }
   const saved = getSavedState(context?.state)
@@ -193,49 +392,157 @@ export const createInstance = async (
         errorMessage = getModelLoadingError(error)
         return []
       })
-  const tasks = await api.listTasks(20).catch((error: unknown) => {
-    errorMessage = error instanceof Error ? error.message : String(error)
-    return []
-  })
+  const tasks = backendConfiguration?.loginRequired
+    ? []
+    : await api.listTasks(20).catch((error: unknown) => {
+        errorMessage = error instanceof Error ? error.message : String(error)
+        return []
+      })
   const preferredModelId =
     saved.selectedModelId || (await getPreferredModelId())
   const fontFamily = await readFontFamily(readPreference)
   const fontSize = await readFontSize(readPreference)
+  const aiNativeTheme = await readAiNativeTheme(readPreference)
+  const taskOpenMode = await readTaskOpenMode(readPreference)
   const selectedModelId = getSelectedModelId(models, preferredModelId)
-  const selectedTask = saved.selectedTaskId
-    ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
-    : undefined
-  const focusModeEnabled = await getFocusModeEnabled()
+  const href = await getHref(execute)
+  const chatRoute = URL.canParse(href) && isChatPath(new URL(href).pathname)
+  const chatHash = parseChatTaskHash(href)
+  const urlTask =
+    chatHash.type === 'task'
+      ? await api.getTask(chatHash.id).catch(() => undefined)
+      : undefined
+  const selectedTask =
+    urlTask ||
+    (saved.selectedTaskId
+      ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
+      : undefined)
+  if (chatHash.type === 'invalid') {
+    await setChatTaskHash(execute)
+  }
+  const focusModeEnabled = chatRoute || (await getFocusModeEnabled())
+  pendingWorkbenchLayout = chatRoute ? 'ai-native' : undefined
   const state: MutableChatViewState = {
     activityExpanded: false,
+    aiNativeTheme,
     changesExpanded: false,
     composerFocused: false,
+    composerImages: [],
     copiedMessageId: '',
     draft: typeof saved.draft === 'string' ? saved.draft : '',
     errorMessage,
-    focusMode: focusModeEnabled && (await getFocusMode()),
+    focusMode: chatRoute || (focusModeEnabled && (await getFocusMode())),
     focusModeEnabled,
     fontFamily,
     fontSize,
     loginPending: false,
-    loginRequired: backendConfiguration?.loginRequired === true,
+    loginRequired:
+      authenticationRejected || backendConfiguration?.loginRequired === true,
     modelPickerOpen: false,
     models,
     selectedModelId,
     selectedTask,
+    sessionsListVisible: true,
+    sessionsVisible: false,
+    taskOpenMode,
     tasks,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
         ? getWorkingSeconds(selectedTask)
         : 0,
   }
+  let selectedTaskRequest = 0
+  let focusComposerRequest = false
+  let windowTitleQueue = Promise.resolve()
+  let windowTitleActive = false
+  const getWorkspaceTitle = async (): Promise<string> => {
+    try {
+      const workspacePath = await execute('Workspace.getPath')
+      if (typeof workspacePath !== 'string' || !workspacePath) {
+        return defaultWindowTitle
+      }
+      return (
+        workspacePath.split(pathSeparatorRegex).at(-1) || defaultWindowTitle
+      )
+    } catch {
+      return defaultWindowTitle
+    }
+  }
+  const syncWindowTitle = (): Promise<void> => {
+    if (state.focusMode) {
+      windowTitleActive = true
+    } else if (!windowTitleActive) {
+      return Promise.resolve()
+    }
+    const title = state.focusMode
+      ? `${state.selectedTask?.title || defaultChatTitle} - Lvce Editor`
+      : undefined
+    windowTitleQueue = windowTitleQueue
+      .catch(() => {})
+      .then(async () => {
+        await execute('WindowTitle.set', title || (await getWorkspaceTitle()))
+      })
+    if (!state.focusMode) {
+      windowTitleActive = false
+    }
+    return windowTitleQueue
+  }
+  currentState = state
   let activeController: AbortController | undefined
   let authStatePoll: ReturnType<typeof setInterval> | undefined
   let authStateSyncing = false
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
   let disposed = false
+  let taskRefreshRequest = 0
+  let taskRefreshTimeout: ReturnType<typeof setTimeout> | undefined
+  const taskChangeChannel =
+    typeof BroadcastChannel === 'undefined'
+      ? undefined
+      : new BroadcastChannel(taskStoreChannelName)
+  let contextMenuTaskId: string | undefined
+  let sessionsSashDrag: SessionsSashDrag | undefined
   let workingTimer: ReturnType<typeof setInterval> | undefined
   const archivedTaskIds = new Set<string>()
+  let scrollToLatestTurn = state.focusMode && Boolean(state.selectedTask)
+
+  const addImageFiles = async (files: readonly File[]): Promise<void> => {
+    const imageFiles = files.filter(isImageFile)
+    if (imageFiles.length === 0) {
+      return
+    }
+    const loadingImages = imageFiles.map(
+      (file): ChatComposerImage => ({
+        id: `chat-image-${crypto.randomUUID()}`,
+        name: file.name,
+        status: 'loading',
+      }),
+    )
+    state.composerImages = [...state.composerImages, ...loadingImages]
+    await context?.requestRerender()
+    await Promise.all(
+      imageFiles.map(async (file, index) => {
+        const loadingImage = loadingImages[index]
+        if (!loadingImage) {
+          return
+        }
+        try {
+          const attachment = await loadImageAttachment(file)
+          state.composerImages = state.composerImages.map((image) =>
+            image.id === loadingImage.id
+              ? { ...image, attachment, status: 'ready' }
+              : image,
+          )
+        } catch {
+          state.composerImages = state.composerImages.map((image) =>
+            image.id === loadingImage.id
+              ? { ...image, status: 'error' }
+              : image,
+          )
+        }
+        await context?.requestRerender()
+      }),
+    )
+  }
 
   const stopWorkingTimer = (): void => {
     if (workingTimer === undefined) {
@@ -284,8 +591,17 @@ export const createInstance = async (
     }, copyFeedbackDuration)
   }
 
-  const syncAuthState = async (): Promise<void> => {
-    if (!backendConfiguration || authStateSyncing || disposed) {
+  const syncAuthState = async (
+    retryLogin = false,
+    requestRerender = true,
+  ): Promise<void> => {
+    if (
+      !backendConfiguration ||
+      (state.loginRequired && !retryLogin) ||
+      authStateSyncing ||
+      activeController ||
+      disposed
+    ) {
       return
     }
     authStateSyncing = true
@@ -293,12 +609,15 @@ export const createInstance = async (
       const nextConfiguration = await defaultApiHost.resolveConfiguration()
       if (
         disposed ||
-        isSameBackendConfiguration(backendConfiguration, nextConfiguration)
+        (!retryLogin &&
+          isSameBackendConfiguration(backendConfiguration, nextConfiguration))
       ) {
         return
       }
+      authenticationRejected = false
       const nextApi = await defaultApiHost.createApi({
         configuration: nextConfiguration,
+        onLoginRequired,
       })
       const nextModels = nextConfiguration.loginRequired
         ? []
@@ -311,7 +630,8 @@ export const createInstance = async (
       }
       api = nextApi
       backendConfiguration = nextConfiguration
-      state.loginRequired = nextConfiguration.loginRequired === true
+      state.loginRequired =
+        authenticationRejected || nextConfiguration.loginRequired === true
       if (state.loginRequired) {
         state.errorMessage = ''
       }
@@ -323,11 +643,15 @@ export const createInstance = async (
       if (nextModels.length > 0) {
         state.errorMessage = ''
       }
-      await context?.requestRerender()
+      if (requestRerender) {
+        await context?.requestRerender()
+      }
     } catch (error) {
       if (!disposed) {
         state.errorMessage = getModelLoadingError(error)
-        await context?.requestRerender()
+        if (requestRerender) {
+          await context?.requestRerender()
+        }
       }
     } finally {
       authStateSyncing = false
@@ -335,58 +659,165 @@ export const createInstance = async (
   }
 
   const newChat = async (requestRerender = false): Promise<void> => {
+    taskRefreshRequest++
+    selectedTaskRequest++
     resetCopyFeedback()
     state.selectedTask = undefined
+    await setChatTaskHash(execute)
     state.draft = ''
+    state.composerImages = []
     state.activityExpanded = false
     state.changesExpanded = false
     syncWorkingTimer(undefined)
+    void syncWindowTitle().catch(() => {})
+    focusComposerRequest = !focusComposerRequest
     if (requestRerender) {
       await context?.requestRerender()
     }
   }
 
-  const updateTask = async (task: ChatTask): Promise<void> => {
+  const setTask = async (task: ChatTask): Promise<void> => {
     if (archivedTaskIds.has(task.id)) {
-      await context?.requestRerender()
       return
     }
+    taskRefreshRequest++
+    const taskChanged = state.selectedTask?.id !== task.id
     state.selectedTask = task
+    if (taskChanged) {
+      await setChatTaskHash(execute, task.id)
+    }
     syncWorkingTimer(task)
     state.tasks = [
       task,
       ...state.tasks.filter((item) => item.id !== task.id),
     ].slice(0, 20)
+    void syncWindowTitle().catch(() => {})
+  }
+
+  let openingTaskId: string | undefined
+  const openTask = async (id: string): Promise<void> => {
+    if (state.selectedTask?.id === id || openingTaskId === id) {
+      return
+    }
+    openingTaskId = id
+    try {
+      const request = ++selectedTaskRequest
+      resetCopyFeedback()
+      const task = await api.getTask(id)
+      if (disposed || request !== selectedTaskRequest) {
+        return
+      }
+      state.selectedTask = task
+      scrollToLatestTurn = state.focusMode && Boolean(task)
+      syncWorkingTimer(state.selectedTask)
+      if (state.selectedTask) {
+        state.selectedModelId = state.selectedTask.modelId
+        await setChatTaskHash(execute, state.selectedTask.id)
+      } else {
+        await setChatTaskHash(execute)
+      }
+      state.draft = ''
+      state.composerImages = []
+      state.activityExpanded = false
+      state.changesExpanded = false
+      void syncWindowTitle().catch(() => {})
+    } finally {
+      if (openingTaskId === id) {
+        openingTaskId = undefined
+      }
+    }
+  }
+
+  const updateTask = async (
+    task: ChatTask,
+    request = selectedTaskRequest,
+  ): Promise<void> => {
+    if (disposed || request !== selectedTaskRequest) {
+      return
+    }
+    await setTask(task)
+    await context?.requestRerender()
+  }
+
+  const refreshTasks = async (): Promise<void> => {
+    const request = ++taskRefreshRequest
+    const selectedTaskId = state.selectedTask?.id
+    const selectedTaskRequestAtStart = selectedTaskRequest
+    const [tasks, selectedTask] = await Promise.all([
+      api.listTasks(20),
+      selectedTaskId ? api.getTask(selectedTaskId) : Promise.resolve(undefined),
+    ])
+    if (disposed || request !== taskRefreshRequest) {
+      return
+    }
+    state.tasks = tasks
+    if (
+      selectedTaskId &&
+      selectedTaskRequestAtStart === selectedTaskRequest &&
+      state.selectedTask?.id === selectedTaskId
+    ) {
+      if (!selectedTask || selectedTask.archived) {
+        archivedTaskIds.add(selectedTaskId)
+        selectedTaskRequest++
+        state.selectedTask = undefined
+        syncWorkingTimer(undefined)
+        await setChatTaskHash(execute)
+      } else {
+        state.selectedTask = selectedTask
+        syncWorkingTimer(selectedTask)
+      }
+      void syncWindowTitle().catch(() => {})
+    }
     await context?.requestRerender()
   }
 
   const submit = async (requestRerender = false): Promise<void> => {
     const message = state.draft.trim()
-    if (state.loginRequired || !message || !state.selectedModelId) {
+    const attachments = state.composerImages.flatMap((image) =>
+      image.status === 'ready' && image.attachment ? [image.attachment] : [],
+    )
+    if (
+      state.loginRequired ||
+      (!message && attachments.length === 0) ||
+      state.composerImages.some((image) => image.status !== 'ready') ||
+      !state.selectedModelId
+    ) {
       return
     }
+    if (activeController && state.selectedTask?.status !== 'running') {
+      return
+    }
+    if (state.focusMode) {
+      scrollToLatestTurn = true
+    }
     state.draft = ''
+    state.composerImages = []
     state.modelPickerOpen = false
     if (state.selectedTask?.status === 'running') {
-      await api.steer(state.selectedTask.id, message)
+      await api.steer(state.selectedTask.id, message, attachments)
       if (requestRerender) {
         await context?.requestRerender()
       }
       return
     }
     activeController = new AbortController()
+    const request = selectedTaskRequest
     const options = {
-      onUpdate: updateTask,
+      attachments,
+      onUpdate: (task: ChatTask): Promise<void> => updateTask(task, request),
       signal: activeController.signal,
     }
     const selectedTask = state.selectedTask
       ? { ...state.selectedTask, modelId: state.selectedModelId }
       : undefined
-    const task = selectedTask
-      ? await api.sendMessage(selectedTask, message, options)
-      : await api.createTask(message, state.selectedModelId, options)
-    activeController = undefined
-    await updateTask(task)
+    try {
+      const task = selectedTask
+        ? await api.sendMessage(selectedTask, message, options)
+        : await api.createTask(message, state.selectedModelId, options)
+      await updateTask(task, request)
+    } finally {
+      activeController = undefined
+    }
     if (requestRerender) {
       await context?.requestRerender()
     }
@@ -395,15 +826,115 @@ export const createInstance = async (
   const handleToggleFocusMode = async (
     requestRerender = false,
   ): Promise<void> => {
-    state.focusMode = await toggleFocusMode(state)
+    if (!state.focusModeEnabled) {
+      return
+    }
+    state.focusMode = await getFocusMode(execute)
+    state.focusMode = toggleFocusMode(state)
+    pendingWorkbenchLayout = state.focusMode ? 'ai-native' : 'ide'
+    await setWorkbenchLayoutUrl(
+      execute,
+      pendingWorkbenchLayout,
+      state.selectedTask?.id,
+    )
+    await syncWindowTitle()
     if (requestRerender) {
       await context?.requestRerender()
+    }
+  }
+
+  const handleToggleSessionsList = async (
+    requestRerender = false,
+  ): Promise<void> => {
+    state.sessionsListVisible = !state.sessionsListVisible
+    if (requestRerender) {
+      await context?.requestRerender()
+    }
+  }
+
+  const renameTask = async (): Promise<void> => {
+    const id = contextMenuTaskId
+    contextMenuTaskId = undefined
+    if (!id) {
+      return
+    }
+    const task =
+      state.tasks.find((item) => item.id === id) ||
+      (state.selectedTask?.id === id ? state.selectedTask : undefined)
+    if (!task) {
+      return
+    }
+    const value = await execute('ExtensionHostQuickPick.showQuickInput', {
+      placeholder: 'Enter a chat name',
+      value: task.title,
+    })
+    if (typeof value !== 'string') {
+      return
+    }
+    const title = value.trim()
+    if (!title || title.length > maxTaskTitleLength) {
+      return
+    }
+    const renamedTask = await api.renameTask(id, title)
+    if (!renamedTask || disposed) {
+      return
+    }
+    state.tasks = state.tasks.some((item) => item.id === id)
+      ? state.tasks.map((item) => (item.id === id ? renamedTask : item))
+      : [renamedTask, ...state.tasks].slice(0, 20)
+    if (state.selectedTask?.id === id) {
+      state.selectedTask = renamedTask
+      void syncWindowTitle().catch(() => {})
+    }
+    await context?.requestRerender()
+  }
+
+  const handleRenameTask = (): void => {
+    void renameTask().catch(async (error: unknown) => {
+      if (disposed) {
+        return
+      }
+      state.errorMessage =
+        error instanceof Error ? error.message : String(error)
+      try {
+        await context?.requestRerender()
+      } catch {
+        // The event response already renders the error state.
+      }
+    })
+  }
+
+  const completeLogin = async (): Promise<void> => {
+    try {
+      await execute('Layout.signIn')
+      await syncAuthState(true, false)
+    } catch (error) {
+      state.errorMessage =
+        error instanceof Error ? error.message : String(error)
+    } finally {
+      state.loginPending = false
+      if (!disposed) {
+        try {
+          await context?.requestRerender()
+        } catch {
+          // The event response already renders the pending state.
+        }
+      }
     }
   }
 
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       disposed = true
+      taskChangeChannel?.close()
+      if (taskRefreshTimeout !== undefined) {
+        clearTimeout(taskRefreshTimeout)
+        taskRefreshTimeout = undefined
+      }
+      if (state.focusMode) {
+        void syncWindowTitle().catch(() => {})
+      }
+      currentState = undefined
       activeController?.abort()
       if (authStatePoll !== undefined) {
         clearInterval(authStatePoll)
@@ -416,33 +947,53 @@ export const createInstance = async (
     getContext(): Readonly<Record<string, boolean>> {
       return {
         'chat2.composerFocus': state.composerFocused,
+        'chat2.focusComposerRequest': focusComposerRequest,
         'chat2.focusMode': state.focusMode,
         'chat2.taskRunning': state.selectedTask?.status === 'running',
       }
     },
+    getMenuEntries(menuId: string): readonly MenuEntry[] {
+      if (menuId !== titleMenuId || !state.selectedTask) {
+        return []
+      }
+      contextMenuTaskId ??= state.selectedTask.id
+      return [
+        {
+          args: [context?.uid, 'handleViewCommand', 'handleRenameTask'],
+          command: 'Viewlet.executeViewletCommand',
+          flags: 6,
+          id: 'rename-chat',
+          label: 'Rename',
+        },
+      ]
+    },
     getState(): Readonly<ChatViewState> {
       return state
     },
+    handleDragOver(): void {},
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
+      if (event.type === 'contextmenu') {
+        if (
+          state.selectedTask &&
+          typeof event.x === 'number' &&
+          Number.isFinite(event.x) &&
+          typeof event.y === 'number' &&
+          Number.isFinite(event.y)
+        ) {
+          contextMenuTaskId = state.selectedTask.id
+          await context?.showContextMenu(titleMenuId, event.x, event.y)
+        }
+        return
+      }
       if (event.type === 'click' && event.name === 'login') {
         if (!state.loginRequired || state.loginPending) {
           return
         }
         state.loginPending = true
         state.errorMessage = ''
-        await context?.requestRerender()
-        try {
-          await execute('Layout.signIn')
-          await syncAuthState()
-        } catch (error) {
-          state.errorMessage =
-            error instanceof Error ? error.message : String(error)
-        } finally {
-          state.loginPending = false
-          if (!disposed) {
-            await context?.requestRerender()
-          }
-        }
+        // The host serializes view commands. Finish the event first so a
+        // rerender requested after sign-in can run without queuing behind it.
+        void completeLogin()
         return
       }
       if (state.loginRequired) {
@@ -453,6 +1004,13 @@ export const createInstance = async (
         state.draft = getEventString(event)
         return
       }
+      if (event.type === 'click' && event.name?.startsWith('remove-image:')) {
+        const imageId = event.name.slice('remove-image:'.length)
+        state.composerImages = state.composerImages.filter(
+          (image) => image.id !== imageId,
+        )
+        return
+      }
       if (event.type === 'focus' && event.name === 'composer') {
         state.composerFocused = true
         return
@@ -461,20 +1019,38 @@ export const createInstance = async (
         state.composerFocused = false
         return
       }
+      if (event.type === 'blur' && event.name === undefined) {
+        state.modelPickerOpen = false
+        return
+      }
       if (event.type !== 'click') {
         return
       }
       if (event.name === 'submit') {
-        await submit()
+        // Rendering is serialized behind this event by the host.
+        void submit()
+          .catch(async (error: unknown) => {
+            if (disposed) {
+              return
+            }
+            state.errorMessage =
+              error instanceof Error ? error.message : String(error)
+            await context?.requestRerender()
+          })
+          .catch(() => {})
         return
       }
       if (event.name === 'toggle-focus-mode') {
         await handleToggleFocusMode()
         return
       }
+      if (event.name === 'toggle-sessions') {
+        state.sessionsVisible = !state.sessionsVisible
+        return
+      }
       if (event.name === 'stop') {
         if (state.selectedTask?.status === 'running') {
-          await updateTask(setStatus(state.selectedTask, 'stopping'))
+          await setTask(setStatus(state.selectedTask, 'stopping'))
         }
         activeController?.abort()
         return
@@ -497,12 +1073,11 @@ export const createInstance = async (
       }
       if (event.name === 'revert' && state.selectedTask) {
         try {
-          await updateTask(await api.revertTask(state.selectedTask))
+          await setTask(await api.revertTask(state.selectedTask))
           state.errorMessage = ''
         } catch (error) {
           state.errorMessage =
             error instanceof Error ? error.message : String(error)
-          await context?.requestRerender()
         }
         return
       }
@@ -529,6 +1104,7 @@ export const createInstance = async (
         }
         try {
           await api.archiveTask(id)
+          taskRefreshRequest++
           archivedTaskIds.add(id)
           state.tasks = state.tasks.filter((task) => task.id !== id)
           state.errorMessage = ''
@@ -546,31 +1122,188 @@ export const createInstance = async (
           state.modelPickerOpen = false
           await setPreference('chat2.selectedModelId', id)
         }
+      }
+    },
+    async handleImageDrop(dropId: unknown): Promise<void> {
+      if (typeof dropId !== 'number') {
         return
       }
-      if (event.name?.startsWith('task:')) {
-        resetCopyFeedback()
-        state.selectedTask = await api.getTask(event.name.slice(5))
-        syncWorkingTimer(state.selectedTask)
-        if (state.selectedTask) {
-          state.selectedModelId = state.selectedTask.modelId
-        }
-        state.draft = ''
-        state.activityExpanded = false
-        state.changesExpanded = false
+      try {
+        const files = await imageTransferHost.getDroppedFiles(dropId)
+        await addImageFiles(files)
+      } catch (error) {
+        state.errorMessage =
+          error instanceof Error ? error.message : String(error)
+        await context?.requestRerender()
+      } finally {
+        await imageTransferHost.discardDrop(dropId).catch(() => {})
       }
+    },
+    async handleImagePaste(
+      fileIds: unknown,
+      text?: unknown,
+      selectionStart?: unknown,
+      selectionEnd?: unknown,
+    ): Promise<void> {
+      if (Array.isArray(fileIds) && fileIds.length > 0) {
+        if (fileIds.some((id) => typeof id !== 'number')) {
+          return
+        }
+        try {
+          const files = await imageTransferHost.getClipboardFiles(fileIds)
+          await addImageFiles(files)
+        } catch (error) {
+          state.errorMessage =
+            error instanceof Error ? error.message : String(error)
+          await context?.requestRerender()
+        }
+        return
+      }
+      if (typeof text !== 'string' || text.length === 0) {
+        return
+      }
+      if (localImagePathRegex.test(text.trim())) {
+        state.errorMessage =
+          'This browser only provided the image file path. Copy the image itself or drag the image into the chat.'
+        await context?.requestRerender()
+        return
+      }
+      const start =
+        typeof selectionStart === 'number'
+          ? Math.max(0, Math.min(selectionStart, state.draft.length))
+          : state.draft.length
+      const end =
+        typeof selectionEnd === 'number'
+          ? Math.max(start, Math.min(selectionEnd, state.draft.length))
+          : start
+      state.draft = `${state.draft.slice(0, start)}${text}${state.draft.slice(end)}`
+      state.errorMessage = ''
+      await context?.requestRerender()
+    },
+    handleKeyDown(key: unknown): void {
+      if (key === 'Escape' && state.modelPickerOpen) {
+        state.modelPickerOpen = false
+      }
+    },
+    handleModelPickerOutsideClick(name: unknown, value: unknown): void {
+      if (name === 'composer' && typeof value === 'string') {
+        state.draft = value
+      }
+      if (
+        state.modelPickerOpen &&
+        name !== 'model-picker' &&
+        name !== 'model-picker-popup' &&
+        !(typeof name === 'string' && name.startsWith('model:'))
+      ) {
+        state.modelPickerOpen = false
+      }
+    },
+    handleRenameTask,
+    handleSessionsSashPointerDown(
+      clientX: number,
+      containerWidth: number,
+      containerLeft: number,
+      sessionsLeft: number,
+      sessionsWidth: number,
+    ): void {
+      if (
+        !Number.isFinite(clientX) ||
+        !Number.isFinite(containerWidth) ||
+        containerWidth <= 0 ||
+        !Number.isFinite(containerLeft) ||
+        !Number.isFinite(sessionsLeft) ||
+        !Number.isFinite(sessionsWidth)
+      ) {
+        return
+      }
+      sessionsSashDrag = {
+        containerWidth,
+        isRight: sessionsLeft - containerLeft > containerWidth / 2,
+        startPointerX: clientX,
+        startWidth: sessionsWidth,
+      }
+    },
+    handleSessionsSashPointerMove(clientX: number): void {
+      const drag = sessionsSashDrag
+      if (!drag || !Number.isFinite(clientX)) {
+        return
+      }
+      const minimumWidth = Math.min(160, drag.containerWidth / 2)
+      const maximumWidth = Math.max(
+        minimumWidth,
+        drag.containerWidth - Math.min(320, drag.containerWidth / 2),
+      )
+      const pointerDelta = clientX - drag.startPointerX
+      const width =
+        drag.startWidth + (drag.isRight ? -pointerDelta : pointerDelta)
+      state.sessionsWidth = Math.max(
+        minimumWidth,
+        Math.min(maximumWidth, width),
+      )
+    },
+    handleSessionsSashPointerUp(): void {
+      sessionsSashDrag = undefined
+    },
+    async handleTaskClick(
+      name: unknown,
+      button: unknown,
+      detail: unknown,
+    ): Promise<void> {
+      if (
+        state.loginRequired ||
+        typeof name !== 'string' ||
+        !name.startsWith('task:') ||
+        (button !== 0 && detail !== 0)
+      ) {
+        return
+      }
+      await openTask(name.slice('task:'.length))
+    },
+    async handleTaskMouseDown(name: unknown, button: unknown): Promise<void> {
+      if (
+        state.loginRequired ||
+        state.taskOpenMode !== 'mousedown' ||
+        (button !== 0 && button !== undefined) ||
+        typeof name !== 'string' ||
+        !name.startsWith('task:')
+      ) {
+        return
+      }
+      await openTask(name.slice('task:'.length))
     },
     newChat,
     render(): readonly VirtualDomNode[] {
       return render(state)
     },
-    renderScrollPosition(): readonly [selector: string, scrollTop: number] {
+    renderFocus(
+      oldContext: Readonly<Record<string, boolean>>,
+      newContext: Readonly<Record<string, boolean>>,
+    ): string {
+      return (oldContext['chat2.focusComposerRequest'] ?? false) ===
+        (newContext['chat2.focusComposerRequest'] ?? false)
+        ? ''
+        : 'textarea[name="composer"]'
+    },
+    renderScrollPosition():
+      | readonly []
+      | readonly [selector: string, scrollTop: number] {
+      if (state.focusMode) {
+        if (!scrollToLatestTurn) {
+          return []
+        }
+        scrollToLatestTurn = false
+      }
       return [messagesSelector, maxScrollTop]
     },
     renderTitle(): string {
       return state.selectedTask
         ? `Chat 2: ${state.selectedTask.title}`
         : 'Chat 2'
+    },
+    renderWorkbenchLayout() {
+      const layout = pendingWorkbenchLayout
+      pendingWorkbenchLayout = undefined
+      return layout
     },
     saveState(): unknown {
       return {
@@ -585,18 +1318,53 @@ export const createInstance = async (
       }
       Object.assign(state, {
         ...newState,
+        composerImages: newState.composerImages || [],
         selectedTask: newState.selectedTask,
       })
       syncWorkingTimer(state.selectedTask)
     },
     submit,
     toggleFocusMode: handleToggleFocusMode,
+    toggleSessionsList: handleToggleSessionsList,
   }
   syncWorkingTimer(selectedTask)
+  void syncWindowTitle().catch(() => {})
   if (backendConfiguration?.baseUrl) {
     authStatePoll = setInterval(() => {
       void syncAuthState()
     }, authStatePollInterval)
+  }
+  if (taskChangeChannel) {
+    const handleTaskRefreshError = (error: Readonly<unknown>): void => {
+      if (disposed) {
+        return
+      }
+      let message = 'Unable to refresh chat tasks'
+      if (error instanceof Error || typeof error === 'string') {
+        message = error instanceof Error ? error.message : error
+      }
+      state.errorMessage = message
+      void context?.requestRerender()
+    }
+    taskChangeChannel.onmessage = (
+      event: Readonly<{ data: Readonly<Record<string, unknown>> }>,
+    ): void => {
+      if (
+        !event.data ||
+        typeof event.data !== 'object' ||
+        !('type' in event.data) ||
+        event.data.type !== 'tasks-changed'
+      ) {
+        return
+      }
+      if (taskRefreshTimeout !== undefined) {
+        return
+      }
+      taskRefreshTimeout = setTimeout(() => {
+        taskRefreshTimeout = undefined
+        void refreshTasks().catch(handleTaskRefreshError)
+      }, 25)
+    }
   }
   activeInstances.add(instance)
   return instance

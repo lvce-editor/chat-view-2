@@ -686,7 +686,8 @@ export const createAgentToolHost = ({
         }
         return contextParts.join('\n\n')
       } catch (error) {
-        return error instanceof Error ? error.message : String(error)
+        const detail = error instanceof Error ? error.message : String(error)
+        return `Workspace context is unavailable: ${detail}\nAnswer general questions without workspace access. Workspace tools require an open workspace.`
       }
     },
     async revert() {

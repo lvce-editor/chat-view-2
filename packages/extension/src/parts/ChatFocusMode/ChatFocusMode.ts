@@ -8,30 +8,23 @@ type ExecuteCommand = (
 
 export const getFocusModeEnabled = async (): Promise<boolean> => {
   try {
-    return (await getPreference('chat2.experimentalFocusMode')) === true
+    return (await getPreference('chat2.experimentalFocusMode')) !== false
   } catch {
     return false
   }
 }
 
-export const getFocusMode = async (): Promise<boolean> => {
-  try {
-    return (await executeCommand('Layout.getSideBarFocusMode')) === true
-  } catch {
-    return false
-  }
-}
-
-export const toggleFocusMode = async (
-  state: Readonly<ChatViewState>,
+export const getFocusMode = async (
   execute: ExecuteCommand = executeCommand,
 ): Promise<boolean> => {
-  if (!state.focusModeEnabled) {
-    return state.focusMode
+  try {
+    return (await execute('Layout.getSideBarFocusMode')) === true
+  } catch {
+    return false
   }
-  const focusMode = !state.focusMode
-  await execute(
-    focusMode ? 'Layout.enterSideBarFocusMode' : 'Layout.leaveSideBarFocusMode',
-  )
-  return focusMode
+}
+
+// The host carries the requested layout alongside the next DOM render.
+export const toggleFocusMode = (state: Readonly<ChatViewState>): boolean => {
+  return state.focusModeEnabled ? !state.focusMode : state.focusMode
 }

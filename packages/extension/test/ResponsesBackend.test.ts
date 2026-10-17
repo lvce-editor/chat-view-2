@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
+// cspell:words titlte
 import { expect, jest, test } from '@jest/globals'
 import { createResponsesBackend } from '../src/parts/ResponsesBackend/ResponsesBackend.ts'
 
@@ -59,12 +60,253 @@ test('loads only OpenAI models from the authenticated catalog', async () => {
     },
   ])
   expect(fetchMock).toHaveBeenCalledWith(
-    'https://backend.example.com/v1/models',
+    'https://backend.example.com/api/v1/models',
     expect.objectContaining({
       credentials: 'include',
       headers: expect.objectContaining({ Authorization: 'Bearer token' }),
     }),
   )
+})
+
+test('does not duplicate the API prefix when the backend URL includes it', async () => {
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(
+      Response.json({ models: [{ id: 'gpt-test', provider: 'openai' }] }),
+    )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com/api/',
+    fetch: fetchMock,
+  })
+
+  await backend.listModels()
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    'https://backend.example.com/api/v1/models',
+    expect.anything(),
+  )
+})
+
+test('instructs the assistant to answer questions without requiring a workspace', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      error: null,
+      id: 'response-1',
+      object: 'response',
+      output: [
+        {
+          content: [{ text: 'JSON is a data format.', type: 'output_text' }],
+          role: 'assistant',
+          status: 'completed',
+          type: 'message',
+        },
+      ],
+      status: 'completed',
+    }),
+  )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await backend.runStep({
+    input: [
+      {
+        content: `Workspace context is unavailable: Workspace access is unavailable
+Answer general questions without workspace access. Workspace tools require an open workspace.
+
+User task:
+whats json`,
+        role: 'user',
+      },
+    ],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+
+  const requestBody = fetchMock.mock.calls[0]?.[1]?.body
+  if (typeof requestBody !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  const request = JSON.parse(requestBody) as Readonly<{
+    readonly input: readonly Readonly<{
+      readonly content: readonly Readonly<{ readonly text: string }>[]
+    }>[]
+    readonly instructions: string
+  }>
+  expect(request.instructions).toContain('Answer general questions directly.')
+  expect(request.instructions).toContain(
+    'continue with requests that do not need workspace access',
+  )
+  expect(request.input[0]?.content[0]?.text).toContain(
+    'Answer general questions without workspace access.',
+  )
+})
+
+test('generates a title with the selected model, a single message, and no tools', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      id: 'response-title',
+      output: [
+        {
+          content: [{ text: 'Fix Chat Title Typos', type: 'output_text' }],
+          role: 'assistant',
+          type: 'message',
+        },
+      ],
+    }),
+  )
+  const backend = createResponsesBackend({
+    accessToken: 'editor-token',
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+    openAiWebSearch: true,
+    supportsStreaming: true,
+  })
+
+  await expect(
+    backend.generateTitle?.('fix typo in chat titlte', 'gpt-5.6-luna'),
+  ).resolves.toBe('Fix Chat Title Typos')
+
+  const requestBody = fetchMock.mock.calls[0]?.[1]?.body
+  if (typeof requestBody !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  const request = JSON.parse(requestBody) as Readonly<{
+    readonly input: readonly Readonly<Record<string, unknown>>[]
+    readonly instructions: string
+    readonly max_output_tokens: number
+    readonly model: string
+    readonly tools: readonly unknown[]
+  }>
+  expect(request).toMatchObject({
+    input: [
+      {
+        content: [{ text: 'fix typo in chat titlte', type: 'input_text' }],
+        role: 'user',
+      },
+    ],
+    max_output_tokens: 40,
+    model: 'gpt-5.6-luna',
+    store: false,
+    tools: [],
+  })
+  expect(request.instructions).toContain('Return only the title')
+  expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual(
+    expect.objectContaining({ Authorization: 'Bearer editor-token' }),
+  )
+})
+
+test('rejects title response tool calls without running them', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      id: 'response-title-tool',
+      output: [
+        {
+          arguments: '{}',
+          call_id: 'call-1',
+          name: 'run_command',
+          type: 'function_call',
+        },
+      ],
+    }),
+  )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await expect(backend.generateTitle?.('hello', 'gpt-6-luna')).rejects.toThrow(
+    'unexpected tool call',
+  )
+})
+
+test('sends image attachments with their MIME-aware data URLs', async () => {
+  const fetchMock = jest.fn<typeof fetch>().mockResolvedValue(
+    Response.json({
+      id: 'response-image',
+      output: [],
+      status: 'completed',
+    }),
+  )
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+  const dataUrl = 'data:image/png;base64,aGVsbG8='
+
+  await backend.runStep({
+    input: [
+      {
+        attachments: [{ dataUrl, mimeType: 'image/png', name: 'sample.png' }],
+        content: 'What is in this image?',
+        role: 'user',
+      },
+    ],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+
+  const requestBody = fetchMock.mock.calls[0]?.[1]?.body
+  if (typeof requestBody !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  const request = JSON.parse(requestBody) as {
+    input: readonly { content: readonly Readonly<Record<string, unknown>>[] }[]
+  }
+  expect(request.input[0]?.content).toEqual([
+    { text: 'What is in this image?', type: 'input_text' },
+    { detail: 'auto', image_url: dataUrl, type: 'input_image' },
+  ])
+})
+
+test('enables OpenAI web search by default and omits it when disabled', async () => {
+  for (const [openAiWebSearch, modelId, expectedTools] of [
+    [true, 'gpt-test', [{ type: 'web_search' }]],
+    [false, 'gpt-test', []],
+    [true, 'openrouter/anthropic/claude', []],
+  ] as const) {
+    const fetchMock = jest
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ id: 'response-search', output: [] }))
+    const backend = createResponsesBackend({
+      baseUrl: 'https://backend.example.com',
+      fetch: fetchMock,
+      openAiWebSearch,
+    })
+
+    await backend.runStep({
+      input: [{ content: 'What is current?', role: 'user' }],
+      modelId,
+      onTextDelta() {},
+      tools: [
+        {
+          description: 'Read a file.',
+          inputSchema: { properties: {}, type: 'object' },
+          name: 'read_file',
+        },
+      ],
+    })
+
+    const body = fetchMock.mock.calls[0]?.[1]?.body
+    if (typeof body !== 'string') {
+      throw new TypeError('Expected a JSON request body')
+    }
+    const request = JSON.parse(body) as {
+      readonly tools: readonly Readonly<Record<string, unknown>>[]
+    }
+    expect(request.tools).toEqual([
+      {
+        description: 'Read a file.',
+        name: 'read_file',
+        parameters: { properties: {}, type: 'object' },
+        type: 'function',
+      },
+      ...expectedTools,
+    ])
+  }
 })
 
 test('uses the backend message when loading models is unauthorized', async () => {
@@ -84,6 +326,41 @@ test('uses the backend message when loading models is unauthorized', async () =>
 
   await expect(backend.listModels()).rejects.toThrow(
     'Your session expired. Please log in again.',
+  )
+})
+
+test('refreshes and retries once when the backend rejects a stored token', async () => {
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      Response.json(
+        { code: 'E_INVALID_TOKEN', error: 'Invalid or expired token' },
+        { status: 401 },
+      ),
+    )
+    .mockResolvedValueOnce(
+      Response.json({ models: [{ id: 'gpt-test' }] }, { status: 200 }),
+    )
+  const refreshAccessToken = jest.fn(async () => 'fresh-token')
+  const backend = createResponsesBackend({
+    accessToken: 'stale-token',
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+    refreshAccessToken,
+  })
+
+  await expect(backend.listModels()).resolves.toEqual([
+    {
+      available: true,
+      id: 'gpt-test',
+      label: 'gpt-test',
+      planEligible: true,
+    },
+  ])
+  expect(refreshAccessToken).toHaveBeenCalledTimes(1)
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(fetchMock.mock.calls[1]?.[1]?.headers).toEqual(
+    expect.objectContaining({ Authorization: 'Bearer fresh-token' }),
   )
 })
 
@@ -170,7 +447,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
   })
   expect(fetchMock).not.toHaveBeenCalled()
   expect(createWebSocket).toHaveBeenCalledWith(
-    'wss://backend.example.com/v1/responses',
+    'wss://backend.example.com/api/v1/responses',
     ['lvce.responses.v1', 'access-token-123'],
   )
   expect(JSON.parse(socket.sent[0])).toEqual(
@@ -196,7 +473,33 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
       type: 'response.create',
     }),
   )
+  expect(JSON.parse(socket.sent[0]).tools).toEqual([{ type: 'web_search' }])
   expect(JSON.parse(socket.sent[0])).not.toHaveProperty('stream')
+})
+
+test('omits web search from Responses WebSocket requests when disabled', async () => {
+  const socket = new MockResponsesWebSocket()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    openAiWebSearch: false,
+    supportsStreaming: true,
+  })
+  const resultPromise = backend.runStep({
+    input: [{ content: 'Answer from model knowledge.', role: 'user' }],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+
+  socket.open()
+  socket.receive({
+    response: { id: 'response-no-search' },
+    type: 'response.completed',
+  })
+  await resultPromise
+
+  expect(JSON.parse(socket.sent[0] || '{}').tools).toEqual([])
 })
 
 test('explicitly describes registered computer-use access to the agent', async () => {
@@ -298,12 +601,12 @@ test('falls back to the realtime route when the responses upgrade fails', async 
   })
   expect(createWebSocket).toHaveBeenNthCalledWith(
     1,
-    'wss://backend.example.com/v1/responses',
+    'wss://backend.example.com/api/v1/responses',
     ['lvce.responses.v1', 'access-token-123'],
   )
   expect(createWebSocket).toHaveBeenNthCalledWith(
     2,
-    'wss://backend.example.com/v1/realtime',
+    'wss://backend.example.com/api/v1/realtime',
     ['lvce.responses.v1', 'access-token-123'],
   )
   expect(JSON.parse(fallbackSocket.sent[0])).toEqual(
@@ -591,7 +894,7 @@ test('routes OpenRouter through backend HTTP and preserves tool history across t
   expect(createWebSocket).not.toHaveBeenCalled()
   expect(second.text).toBe('Done')
   expect(fetchMock.mock.calls[1][0]).toBe(
-    'https://backend.example.com/v1/responses',
+    'https://backend.example.com/api/v1/responses',
   )
   const request = JSON.parse(fetchMock.mock.calls[1][1]?.body as string)
   expect(request.previous_response_id).toBeUndefined()
@@ -624,4 +927,223 @@ test('does not silently lose an OpenRouter conversation whose history is unavail
     }),
   ).rejects.toThrow('history is unavailable')
   expect(fetchMock).not.toHaveBeenCalled()
+})
+
+test.each(['missing', 'rejected', 'invalid'])(
+  'requires Login after %s refresh without looping',
+  async (failure) => {
+    const fetchMock = jest
+      .fn<typeof fetch>()
+      .mockImplementation(async () =>
+        Response.json({ error: 'Invalid token' }, { status: 401 }),
+      )
+    const refreshAccessToken = jest.fn(async () => {
+      if (failure === 'rejected') {
+        throw new Error('refresh denied')
+      }
+      return failure === 'missing' ? '' : 'also-invalid'
+    })
+    const onLoginRequired = jest.fn()
+    const backend = createResponsesBackend({
+      accessToken: 'rejected-token',
+      baseUrl: 'https://backend.example.com',
+      fetch: fetchMock,
+      onLoginRequired,
+      refreshAccessToken,
+    })
+    await expect(backend.listModels()).rejects.toMatchObject({
+      code: 'E_NO_ACCESS_TOKEN_PROVIDED',
+    })
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1)
+    expect(onLoginRequired).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(failure === 'invalid' ? 2 : 1)
+  },
+)
+
+test('recovers a rejected WebSocket handshake without duplicating response.create', async () => {
+  const sockets: MockResponsesWebSocket[] = []
+  const createWebSocket = jest.fn(
+    (_url: string, protocols: readonly string[]) => {
+      const socket = new MockResponsesWebSocket()
+      sockets.push(socket)
+      queueMicrotask(() => {
+        if (protocols[1] === 'stale') {
+          socket.failConnection()
+        } else {
+          socket.open()
+          socket.receive({
+            response: { id: 'response-1' },
+            type: 'response.completed',
+          })
+        }
+      })
+      return socket
+    },
+  )
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(
+      Response.json({ error: 'Invalid token' }, { status: 401 }),
+    )
+  const refreshAccessToken = jest.fn(async () => 'fresh')
+  const backend = createResponsesBackend({
+    accessToken: 'stale',
+    baseUrl: 'https://backend.example.com',
+    createWebSocket,
+    fetch: fetchMock,
+    refreshAccessToken,
+    supportsStreaming: true,
+  })
+  await expect(
+    backend.runStep({
+      input: [{ content: 'hello', role: 'user' }],
+      modelId: 'gpt-test',
+      onTextDelta() {},
+      tools: [],
+    }),
+  ).resolves.toMatchObject({ responseId: 'response-1' })
+  expect(refreshAccessToken).toHaveBeenCalledTimes(1)
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(sockets.flatMap((socket) => socket.sent)).toHaveLength(1)
+})
+
+test('does not refresh or resubmit after an opened stream fails', async () => {
+  const socket = new MockResponsesWebSocket()
+  const refreshAccessToken = jest.fn(async () => 'fresh')
+  const fetchMock = jest.fn<typeof fetch>()
+  const backend = createResponsesBackend({
+    accessToken: 'token',
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    fetch: fetchMock,
+    refreshAccessToken,
+    supportsStreaming: true,
+  })
+  const result = backend.runStep({
+    input: [{ content: 'hello', role: 'user' }],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+  socket.open()
+  socket.failConnection()
+  await expect(result).rejects.toThrow('The model response stream failed')
+  expect(socket.sent).toHaveLength(1)
+  expect(refreshAccessToken).not.toHaveBeenCalled()
+  expect(fetchMock).not.toHaveBeenCalled()
+})
+
+test('retries an HTTP response request only after authentication rejection', async () => {
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      Response.json({ error: 'invalid token' }, { status: 401 }),
+    )
+    .mockResolvedValueOnce(
+      Response.json({ id: 'response-1', output_text: 'done' }),
+    )
+  const refreshAccessToken = jest.fn(async () => 'fresh')
+  const backend = createResponsesBackend({
+    accessToken: 'stale',
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+    refreshAccessToken,
+  })
+  await expect(
+    backend.runStep({
+      input: [{ content: 'hello', role: 'user' }],
+      modelId: 'gpt-test',
+      onTextDelta() {},
+      tools: [],
+    }),
+  ).resolves.toMatchObject({ text: 'done' })
+  expect(fetchMock).toHaveBeenCalledTimes(2)
+  expect(fetchMock.mock.calls[1][1]?.body).toBe(
+    fetchMock.mock.calls[0][1]?.body,
+  )
+  expect(fetchMock.mock.calls[1][1]?.headers).toEqual(
+    expect.objectContaining({ Authorization: 'Bearer fresh' }),
+  )
+})
+
+test('does not resubmit a cancelled request after refreshing', async () => {
+  const controller = new AbortController()
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(Response.json({}, { status: 401 }))
+  const backend = createResponsesBackend({
+    accessToken: 'stale',
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+    refreshAccessToken: async () => {
+      controller.abort()
+      return 'fresh'
+    },
+  })
+  await expect(
+    backend.runStep({
+      input: [],
+      modelId: 'gpt-test',
+      onTextDelta() {},
+      signal: controller.signal,
+      tools: [],
+    }),
+  ).rejects.toMatchObject({ name: 'AbortError' })
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+test('coalesces simultaneous rejections and reuses the rotated token', async () => {
+  const refresh = Promise.withResolvers<string>()
+  const started = Promise.withResolvers<void>()
+  const refreshAccessToken = jest.fn(() => {
+    started.resolve()
+    return refresh.promise
+  })
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockImplementation(async (_url, options) => {
+      return new Headers(options?.headers).get('Authorization') ===
+        'Bearer fresh'
+        ? Response.json({ models: [{ id: 'gpt-test' }] })
+        : Response.json({}, { status: 401 })
+    })
+  const backend = createResponsesBackend({
+    accessToken: 'stale',
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+    refreshAccessToken,
+  })
+  const requests = Promise.all([backend.listModels(), backend.listModels()])
+  await started.promise
+  refresh.resolve('fresh')
+  await requests
+  expect(refreshAccessToken).toHaveBeenCalledTimes(1)
+})
+
+test('does not refresh on non-authentication WebSocket connection failures', async () => {
+  const createWebSocket = jest.fn((): MockResponsesWebSocket => {
+    const socket = new MockResponsesWebSocket()
+    queueMicrotask(() => socket.failConnection())
+    return socket
+  })
+  const refreshAccessToken = jest.fn(async () => 'fresh')
+  const backend = createResponsesBackend({
+    accessToken: 'token',
+    baseUrl: 'https://backend.example.com',
+    createWebSocket,
+    fetch: jest
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ models: [] })),
+    refreshAccessToken,
+    supportsStreaming: true,
+  })
+  await expect(
+    backend.runStep({
+      input: [],
+      modelId: 'gpt-test',
+      onTextDelta() {},
+      tools: [],
+    }),
+  ).rejects.toThrow('Could not connect')
+  expect(refreshAccessToken).not.toHaveBeenCalled()
 })

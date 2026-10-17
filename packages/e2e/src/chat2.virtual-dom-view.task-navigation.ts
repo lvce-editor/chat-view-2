@@ -14,8 +14,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const list = Locator('.ChatListView')
   const tasks = Locator('.ChatTaskButton')
   await expect(task).toContainText('Add worker memory usage')
-  // eslint-disable-next-line e2e/no-direct-click
-  await task.click()
+  await task.dispatchEvent('mousedown', { button: 0 } as unknown as string)
 
   await expect(detail).toBeVisible()
   await expect(detailTitle).toContainText('Add worker memory usage')

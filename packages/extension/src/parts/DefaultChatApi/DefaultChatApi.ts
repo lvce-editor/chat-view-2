@@ -14,16 +14,24 @@ export interface DefaultChatApiOptions {
   readonly accessToken?: string
   readonly configuration?: BackendConfiguration
   readonly fileSystemAccess?: AgentFileSystemAccess
+  readonly onLoginRequired?: () => void
 }
 
 export const createDefaultChatApi = async ({
   accessToken: providedAccessToken,
   configuration: providedConfiguration,
   fileSystemAccess,
+  onLoginRequired,
 }: DefaultChatApiOptions = {}): Promise<ChatApi> => {
-  const { accessToken, baseUrl, supportsStreaming } =
-    providedConfiguration ||
-    (await resolveBackendConfiguration(undefined, providedAccessToken))
+  const {
+    accessToken,
+    baseUrl,
+    openAiWebSearch = true,
+    refreshAccessToken,
+    supportsStreaming,
+    titleModelId = 'gpt-6-luna',
+  } = providedConfiguration ||
+  (await resolveBackendConfiguration(undefined, providedAccessToken))
   if (!baseUrl) {
     return createMockChatApi(120)
   }
@@ -31,9 +39,13 @@ export const createDefaultChatApi = async ({
     backend: createResponsesBackend({
       accessToken,
       baseUrl,
+      openAiWebSearch,
+      ...(onLoginRequired && { onLoginRequired }),
+      ...(refreshAccessToken && { refreshAccessToken }),
       supportsStreaming,
     }),
     store: createIndexedDbTaskStore(),
+    titleModelId,
     toolHost: await createRemoteAgentToolHost(fileSystemAccess),
   })
 }

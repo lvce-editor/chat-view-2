@@ -46,7 +46,18 @@ const isChatTaskEvent = (value: unknown): value is ChatTaskEvent => {
       )
     case 'assistant-message':
     case 'user-message':
-      return typeof value.text === 'string'
+      return (
+        typeof value.text === 'string' &&
+        (value.attachments === undefined ||
+          (Array.isArray(value.attachments) &&
+            value.attachments.every(
+              (attachment) =>
+                isRecord(attachment) &&
+                typeof attachment.dataUrl === 'string' &&
+                typeof attachment.mimeType === 'string' &&
+                typeof attachment.name === 'string',
+            )))
+      )
     case 'changes':
       return (
         typeof value.checksPassed === 'number' &&
@@ -97,6 +108,7 @@ const booleanStateKeys = [
   'loginPending',
   'loginRequired',
   'modelPickerOpen',
+  'sessionsVisible',
 ] as const
 
 const stringStateKeys = [
@@ -118,12 +130,30 @@ export const isChatViewState = (value: unknown): value is ChatViewState => {
   if (stringStateKeys.some((key) => typeof value[key] !== 'string')) {
     return false
   }
+  if (
+    value.composerImages !== undefined &&
+    (!Array.isArray(value.composerImages) ||
+      value.composerImages.some(
+        (image) =>
+          !isRecord(image) ||
+          typeof image.id !== 'string' ||
+          typeof image.name !== 'string' ||
+          !['error', 'loading', 'ready'].includes(String(image.status)),
+      ))
+  ) {
+    return false
+  }
   return (
+    (value.sessionsWidth === undefined ||
+      (typeof value.sessionsWidth === 'number' &&
+        Number.isFinite(value.sessionsWidth) &&
+        value.sessionsWidth > 0)) &&
     Array.isArray(value.models) &&
     value.models.every(isChatModel) &&
     (value.selectedTask === undefined || isChatTask(value.selectedTask)) &&
     Array.isArray(value.tasks) &&
     value.tasks.every(isChatTask) &&
+    (value.taskOpenMode === 'click' || value.taskOpenMode === 'mousedown') &&
     typeof value.workingSeconds === 'number' &&
     Number.isFinite(value.workingSeconds) &&
     value.workingSeconds >= 0

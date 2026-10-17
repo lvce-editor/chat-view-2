@@ -251,7 +251,13 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
       )
       const initial: ChatTask = {
         ...task,
-        events: [createEvent({ text: message, type: 'user-message' })],
+        events: [
+          createEvent({
+            ...(options?.attachments && { attachments: options.attachments }),
+            text: message,
+            type: 'user-message',
+          }),
+        ],
         status: 'idle',
       }
       tasks = [initial, ...tasks].slice(0, 20)
@@ -268,6 +274,21 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
       return tasks
         .filter((task) => !archivedTaskIds.has(task.id))
         .slice(0, Math.max(0, limit))
+    },
+    async renameTask(id, title) {
+      const index = tasks.findIndex((task) => task.id === id)
+      if (index === -1 || archivedTaskIds.has(id)) {
+        return undefined
+      }
+      const task = tasks[index]
+      const renamed = {
+        ...task,
+        title,
+        titleGenerated: true,
+        updatedAt: new Date().toISOString(),
+      }
+      tasks = [...tasks.slice(0, index), renamed, ...tasks.slice(index + 1)]
+      return renamed
     },
     async revertTask(task) {
       const changedFileCount =
@@ -289,7 +310,11 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
     async sendMessage(task, message, options) {
       const updated = appendEvent(
         task,
-        createEvent({ text: message, type: 'user-message' }),
+        createEvent({
+          ...(options?.attachments && { attachments: options.attachments }),
+          text: message,
+          type: 'user-message',
+        }),
       )
       return run(updated, options)
     },

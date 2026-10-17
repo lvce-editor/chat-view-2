@@ -9,13 +9,17 @@ const createHost = ({
   accessToken = 'editor-token',
   backendUrl = 'https://lvce-editor.dev',
   configuredBackendUrl = '',
+  openAiWebSearch = true,
   supportsStreaming = false,
+  titleModelId = 'gpt-6-luna',
   useMockBackend = false,
 }: {
   readonly accessToken?: string
   readonly backendUrl?: string
   readonly configuredBackendUrl?: string
+  readonly openAiWebSearch?: boolean
   readonly supportsStreaming?: boolean
+  readonly titleModelId?: string
   readonly useMockBackend?: boolean
 } = {}): BackendConfigurationHost => {
   const executeCommand = jest.fn(async (id: string): Promise<unknown> => {
@@ -31,6 +35,12 @@ const createHost = ({
       if (key === 'chat2.supportsStreaming') {
         return supportsStreaming
       }
+      if (key === 'chat2.openAiWebSearch') {
+        return openAiWebSearch
+      }
+      if (key === 'chat2.titleModelId') {
+        return titleModelId
+      }
       return key === 'chat2.useMockBackend'
         ? useMockBackend
         : configuredBackendUrl
@@ -44,7 +54,10 @@ test('uses the editor backend and authentication by default', async () => {
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
     baseUrl: 'https://lvce-editor.dev',
+    openAiWebSearch: true,
+    refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.backendUrl')
   expect(host.executeCommand).toHaveBeenCalledWith('Layout.getBackendUrl')
@@ -62,7 +75,10 @@ test('uses editor authentication for an equivalent configured backend URL', asyn
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
     baseUrl: 'https://lvce-editor.dev',
+    openAiWebSearch: true,
+    refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
 })
 
@@ -74,7 +90,10 @@ test('prefers prompt authentication for the editor backend', async () => {
   ).resolves.toEqual({
     accessToken: 'prompt-access-token',
     baseUrl: 'https://lvce-editor.dev',
+    openAiWebSearch: true,
+    refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
 })
@@ -89,7 +108,9 @@ test('does not expose editor authentication to a custom backend', async () => {
   ).resolves.toEqual({
     accessToken: '',
     baseUrl: 'https://backend.example.com',
+    openAiWebSearch: true,
     supportsStreaming: false,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
 })
@@ -100,7 +121,9 @@ test('uses the deterministic mock backend when explicitly configured', async () 
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: '',
     baseUrl: '',
+    openAiWebSearch: true,
     supportsStreaming: false,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
 })
@@ -121,7 +144,9 @@ test('falls back to the mock backend when editor configuration is unavailable', 
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: '',
     baseUrl: '',
+    openAiWebSearch: true,
     supportsStreaming: false,
+    titleModelId: 'gpt-6-luna',
   })
 })
 
@@ -129,12 +154,15 @@ test('enables streaming for a custom backend only when explicitly configured', a
   const host = createHost({
     configuredBackendUrl: 'https://backend.example.com',
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
 
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: '',
     baseUrl: 'https://backend.example.com',
+    openAiWebSearch: true,
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
   expect(host.getPreference).toHaveBeenCalledWith('chat2.supportsStreaming')
 })
@@ -146,6 +174,39 @@ test('requires login only for the editor backend without an access token', async
     accessToken: '',
     baseUrl: 'https://lvce-editor.dev',
     loginRequired: true,
+    openAiWebSearch: true,
+    refreshAccessToken: expect.any(Function),
     supportsStreaming: true,
+    titleModelId: 'gpt-6-luna',
   })
+})
+
+test('forces refresh only through the editor backend configuration', async () => {
+  const host = createHost()
+  const configuration = await resolveBackendConfiguration(host)
+  await expect(configuration.refreshAccessToken?.()).resolves.toBe(
+    'editor-token',
+  )
+  expect(host.getAccessToken).toHaveBeenLastCalledWith({ refresh: 'always' })
+  const custom = await resolveBackendConfiguration(
+    createHost({ configuredBackendUrl: 'https://custom.example' }),
+  )
+  expect(custom.refreshAccessToken).toBeUndefined()
+})
+
+test('preserves an explicit false web-search preference', async () => {
+  const configuration = await resolveBackendConfiguration(
+    createHost({ openAiWebSearch: false }),
+  )
+
+  expect(configuration.openAiWebSearch).toBe(false)
+})
+
+test('uses the selected title model and rejects unsupported model values', async () => {
+  await expect(
+    resolveBackendConfiguration(createHost({ titleModelId: 'gpt-5.6-luna' })),
+  ).resolves.toMatchObject({ titleModelId: 'gpt-5.6-luna' })
+  await expect(
+    resolveBackendConfiguration(createHost({ titleModelId: 'gpt-5.6-sol' })),
+  ).resolves.toMatchObject({ titleModelId: 'gpt-6-luna' })
 })

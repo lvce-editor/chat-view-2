@@ -9,6 +9,15 @@ export interface TreeNode {
   readonly node: VirtualDomNode
 }
 
+const headingTypes = [
+  VirtualDomElements.H1,
+  VirtualDomElements.H2,
+  VirtualDomElements.H3,
+  VirtualDomElements.H4,
+  VirtualDomElements.H5,
+  VirtualDomElements.H6,
+]
+
 export const textNode = (value: string): TreeNode => ({
   children: [],
   node: text(value),
@@ -30,13 +39,25 @@ export const node = (
 export const div = (
   className: string,
   children: readonly TreeNode[],
-  options: Readonly<{ style?: string }> = {},
+  options: Readonly<{
+    onClick?: string
+    onDragOver?: string
+    onDrop?: string
+    onKeyDown?: string
+    name?: string
+    style?: string
+  }> = {},
 ): TreeNode => {
   return node(
     VirtualDomElements.Div,
     {
       className,
+      ...(options.onClick && { onClick: options.onClick }),
       ...(options.style && { style: options.style }),
+      ...(options.onDragOver && { onDragOver: options.onDragOver }),
+      ...(options.onDrop && { onDrop: options.onDrop }),
+      ...(options.onKeyDown && { onKeyDown: options.onKeyDown }),
+      ...(options.name && { name: options.name }),
     },
     children,
   )
@@ -68,6 +89,8 @@ export const button = (
     ariaLabel?: string
     ariaExpanded?: boolean
     disabled?: boolean
+    onClick?: string
+    onMouseDown?: string
     title?: string
   }> = {},
 ): TreeNode => {
@@ -82,7 +105,8 @@ export const button = (
       }),
       ...(options.disabled && { disabled: true }),
       name,
-      onClick: 'handleClick',
+      onClick: options.onClick || 'handleClick',
+      ...(options.onMouseDown && { onMouseDown: options.onMouseDown }),
       ...(options.title && { title: options.title }),
     },
     [textNode(label)],
@@ -127,15 +151,28 @@ export const form = (
 }
 
 export const heading = (
-  level: 1 | 2,
+  level: 1 | 2 | 3 | 4 | 5 | 6,
   className: string,
-  value: string,
+  value: string | readonly TreeNode[],
+  options: Readonly<{ name?: string; onContextMenu?: string }> = {},
 ): TreeNode => {
-  const type = level === 1 ? VirtualDomElements.H1 : VirtualDomElements.H2
-  return node(type, { className }, [textNode(value)])
+  const type = headingTypes[level - 1]
+  return node(
+    type,
+    {
+      className,
+      ...(options.name && { name: options.name }),
+      ...(options.onContextMenu && { onContextMenu: options.onContextMenu }),
+    },
+    typeof value === 'string' ? [textNode(value)] : value,
+  )
 }
 
-export const textArea = (value: string, placeholder: string): TreeNode => {
+export const textArea = (
+  value: string,
+  placeholder: string,
+  options: Readonly<{ onPaste?: string }> = {},
+): TreeNode => {
   return node(VirtualDomElements.TextArea, {
     ariaLabel: 'Message',
     className: 'ChatComposerInput',
@@ -143,6 +180,7 @@ export const textArea = (value: string, placeholder: string): TreeNode => {
     onBlur: 'handleBlur',
     onFocus: 'handleFocus',
     onInput: 'handleInput',
+    ...(options.onPaste && { onPaste: options.onPaste }),
     placeholder,
     rows: 1,
     spellcheck: true,

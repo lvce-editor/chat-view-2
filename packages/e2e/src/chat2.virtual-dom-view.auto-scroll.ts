@@ -2,17 +2,30 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.auto-scroll'
 
-// The browser test condition runner does not support negated JS-property assertions.
-export const skip = 1
-
 export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Main.closeAllEditors()
-  await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
+  await Command.execute('Preferences.update', {
+    'chat2.experimentalFocusMode': true,
+    'chat2.useMockBackend': true,
+  })
   await Command.executeExtensionCommand('chat2.show')
+  await Command.executeExtensionCommand('chat2.toggleFocusMode')
 
-  await Locator('textarea[name="composer"]').type('Long message '.repeat(400))
-  await Command.executeExtensionCommand('chat2.submit')
+  await Locator('textarea[name="composer"]').type(
+    'Keep this message at the top',
+  )
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const messages = Locator('.ChatMessages')
-  await expect(messages).not.toHaveJSProperty('scrollTop', 0)
+  const latestTurn = Locator('.ChatTurnLatest')
+  const messageContent = Locator('.ChatMessagesContent')
+  const userMessage = Locator('.ChatMessageUser')
+  const composerArea = Locator('.ChatComposerArea')
+  await expect(latestTurn).toBeVisible()
+  await expect(messageContent).toHaveCSS('flex-shrink', '1')
+  await expect(latestTurn).toHaveCSS('flex-shrink', '1')
+  await expect(userMessage).toBeVisible()
+  await expect(messages).toHaveJSProperty('scrollTop', 0)
+  await expect(composerArea).toBeVisible()
 }

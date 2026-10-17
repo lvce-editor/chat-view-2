@@ -91,17 +91,39 @@ test('contributes the headless chat commands for browser evaluations', async () 
   }
 })
 
-test('keeps experimental focus mode disabled by default', async () => {
+test('makes AI-native layout switching available by default', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
 
   expect(manifest.configuration['chat2.experimentalFocusMode']).toEqual(
     expect.objectContaining({
-      default: false,
+      default: true,
       type: 'boolean',
     }),
   )
   expect(manifest.activation).toContain('onCommand:chat2.toggleFocusMode')
+  expect(manifest.commands).toContainEqual({
+    id: 'chat2.toggleAiNativeLayout',
+    label: 'View: Toggle AI-Native / IDE Layout',
+  })
+  expect(manifest.activation).toContain('onCommand:chat2.toggleAiNativeLayout')
+  expect(manifest.commands).toContainEqual({
+    id: 'chat2.toggleSessionsList',
+    label: 'Chat 2: Toggle Sessions List',
+  })
+  expect(manifest.activation).toContain('onCommand:chat2.toggleSessionsList')
+})
+
+test('contributes selectable AI-native theme presets', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.configuration['chat2.aiNativeTheme']).toEqual({
+    default: 'default',
+    description: 'Color and typography preset for the AI-native Chat 2 layout.',
+    enum: ['default', 'openai', 'claude'],
+    type: 'string',
+  })
 })
 
 test('keeps backend streaming disabled by default', async () => {
@@ -116,6 +138,19 @@ test('keeps backend streaming disabled by default', async () => {
   )
 })
 
+test('opens sidebar chats on mousedown by default', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.configuration['chat2.taskOpenMode']).toEqual({
+    default: 'mousedown',
+    description:
+      'Open a chat when pressing a sidebar item or after clicking it.',
+    enum: ['mousedown', 'click'],
+    type: 'string',
+  })
+})
+
 test('contributes every preference read by Chat 2', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
@@ -125,11 +160,15 @@ test('contributes every preference read by Chat 2', async () => {
   ).toEqual(
     [
       'chat2.backendUrl',
+      'chat2.aiNativeTheme',
       'chat2.experimentalFocusMode',
       'chat2.fontFamily',
       'chat2.fontSize',
+      'chat2.openAiWebSearch',
       'chat2.selectedModelId',
       'chat2.supportsStreaming',
+      'chat2.taskOpenMode',
+      'chat2.titleModelId',
       'chat2.useMockBackend',
     ].toSorted((a, b) => a.localeCompare(b)),
   )

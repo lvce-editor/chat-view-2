@@ -17,7 +17,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await toggle.click()
 
   const option = Locator('button[name="model:gpt-5.4-mini"]')
-  const picker = Locator('.ChatModelPicker')
+  const picker = Locator('.Chat2ModelPicker')
   await expect(option).toContainText('GPT-5.4 Mini')
   // eslint-disable-next-line e2e/no-direct-click
   await option.click()
