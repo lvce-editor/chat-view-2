@@ -2028,7 +2028,8 @@ test('keeps the latest task selected when an older task refresh finishes later',
 
 test('keeps a new chat selected when the previous submission finishes', async () => {
   const api = createMockChatApi()
-  const task = (await api.listTasks(1))[0]
+  const tasks = await api.listTasks(1)
+  const task = tasks[0]
   const completed = Promise.withResolvers<ChatTask>()
   const started = Promise.withResolvers<void>()
   const instance = await createInstance(undefined, {
