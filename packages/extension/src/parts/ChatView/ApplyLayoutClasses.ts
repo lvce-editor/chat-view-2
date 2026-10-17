@@ -38,7 +38,7 @@ export const applyLayoutClasses = (
     ChatView: `ChatTheme-${aiNativeTheme}`,
   }
   return dom.map((node) => {
-    if (!node.className) {
+    if (typeof node.className !== 'string') {
       return node
     }
     const additions = node.className
