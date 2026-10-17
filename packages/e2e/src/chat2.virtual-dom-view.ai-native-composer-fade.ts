@@ -18,7 +18,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(chat).toBeVisible()
   await expect(composer).toBeVisible()
   await composer.type('Make a scoped change')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const userMessage = Locator('.ChatMessageUser')
   await expect(userMessage).toBeVisible()

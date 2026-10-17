@@ -19,7 +19,8 @@ export const test: Test = async ({
   })
   await Command.executeExtensionCommand('chat2.show')
   await Locator('textarea[name="composer"]').type('Copy this message')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const metadata = Locator('.ChatMessageUser .ChatMessageMetadata')
   const copyButton = Locator('.ChatMessageUser .ChatMessageCopyButton')

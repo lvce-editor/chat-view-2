@@ -19,7 +19,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
     'A literal <img src=x onerror=alert(1)> stays text.',
   ].join('\n')
   await Locator('textarea[name="composer"]').type(tableText)
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const table = Locator('.ChatMessageUser .ChatMessageTable')
   const container = Locator('.ChatMessageUser .ChatMessageTableContainer')

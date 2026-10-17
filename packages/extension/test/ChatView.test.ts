@@ -2026,6 +2026,34 @@ test('keeps the latest task selected when an older task refresh finishes later',
   expect(instance.getState().selectedTask?.id).toBe(secondTask.id)
 })
 
+test('keeps a new chat selected when the previous submission finishes', async () => {
+  const api = createMockChatApi()
+  const task = (await api.listTasks(1))[0]
+  const completed = Promise.withResolvers<ChatTask>()
+  const started = Promise.withResolvers<void>()
+  const instance = await createInstance(undefined, {
+    ...api,
+    createTask: async () => {
+      started.resolve()
+      return completed.promise
+    },
+  })
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Start a task',
+  })
+  const submission = instance.submit()
+  await started.promise
+  await instance.newChat()
+  completed.resolve(task)
+  await submission
+
+  expect(instance.getState().selectedTask).toBeUndefined()
+  expect(instance.renderTitle()).toBe('Chat 2')
+  instance.dispose?.()
+})
+
 test('opens a new chat from the active task', async () => {
   const instance = await createTestInstance()
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })

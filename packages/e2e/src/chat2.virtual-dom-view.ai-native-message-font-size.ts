@@ -11,7 +11,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
 
   const composer = Locator('textarea[name="composer"]')
   await composer.type('What is the latest version?')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const userMessage = Locator('.ChatMessageUser')
   const assistantMessage = Locator('.ChatMessageAssistant')

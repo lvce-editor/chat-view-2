@@ -71,7 +71,8 @@ export const test: Test = async ({ Command, expect, KeyBoard, Locator }) => {
     await expect(sessions).toBeVisible()
     await expect(sash).toBeVisible()
     await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
-    await Command.executeExtensionCommand('chat2.submit')
+    // eslint-disable-next-line e2e/no-direct-click
+    await Locator('button[name="submit"]').click()
     const messages = Locator('.ChatMessages')
     const messageContent = Locator('.ChatMessagesContent')
     const composerArea = Locator('.ChatMessages > .ChatComposerArea')

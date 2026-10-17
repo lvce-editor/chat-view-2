@@ -13,12 +13,14 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const composer = Locator('textarea[name="composer"]')
   const error = Locator('.ChatErrorBanner')
   await composer.type('Trigger an OpenRouter rate limit')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   await expect(error).toHaveText(
     'OpenRouter is rate limiting requests. Please wait a moment and try again. (E_OPENROUTER_TOO_MANY_REQUESTS, 429)',
   )
   await composer.type('Try again')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
   await expect(error).toHaveCount(0)
 }

@@ -13,12 +13,14 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const composer = Locator('textarea[name="composer"]')
   const error = Locator('.ChatErrorBanner')
   await composer.type('Trigger an invalid OpenRouter response error')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   await expect(error).toHaveText(
     "Openrouter reports request as invalid: [ApiIdParam] [previous_response_id] [invalid_id_prefix] Invalid 'previous_response_id': 'gen-123'. Expected an ID that begins with 'resp'. (E_OPENROUTER_API_BAD_RESPONSE, 400)",
   )
   await composer.type('Try again')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
   await expect(error).toHaveCount(0)
 }
