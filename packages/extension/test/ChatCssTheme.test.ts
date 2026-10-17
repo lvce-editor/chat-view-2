@@ -19,3 +19,18 @@ test('chat messages use a theme-aware native scrollbar', async () => {
   expect(css).toContain('.ChatMessages::-webkit-scrollbar-thumb:hover {')
   expect(css).toContain('.ChatMessages::-webkit-scrollbar-thumb:active {')
 })
+
+test('chat styles use single class selectors without structural nesting', async () => {
+  const css = await readChatCss()
+  for (const match of css.matchAll(/([^{}]+)\{/gu)) {
+    const selectorList = match[1].trim()
+    if (selectorList.startsWith('@') || selectorList === 'to') {
+      continue
+    }
+    for (const selector of selectorList.split(',')) {
+      expect(selector.trim()).toMatch(
+        /^\.[\w-]+(?::[\w:-]+(?:\(:disabled\))?)*$/u,
+      )
+    }
+  }
+})

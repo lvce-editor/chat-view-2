@@ -35,6 +35,8 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(emptyTitle).toBeVisible()
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
   await expect(newConversationMessages).toHaveCSS('flex', '0 0 auto')
+  await expect(newConversationMessages).toHaveCSS('overflow-y', 'visible')
+  await expect(Locator('.ChatComposerArea')).toHaveCSS('position', 'relative')
   const composerInput = Locator('textarea[name="composer"]')
   await composerInput.type('Center the new chat composer')
   await expect(composerInput).toHaveValue('Center the new chat composer')
@@ -48,6 +50,8 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(emptyTitle).toHaveCount(0)
   const detailComposer = Locator('.ChatDetailView .ChatComposer')
   await expect(detailComposer).toBeVisible()
+  await expect(Locator('.ChatComposerArea')).toHaveCSS('position', 'sticky')
+  await expect(newConversationMessages).toHaveCSS('overflow-y', 'auto')
   await expect(newConversationBody).toHaveCSS('justify-content', 'flex-start')
   const task = Locator('.ChatTaskButton').nth(2)
   // eslint-disable-next-line e2e/no-direct-click
