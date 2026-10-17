@@ -1336,7 +1336,7 @@ test('renders the experimental focus mode control when enabled', async () => {
   const focusedDom = instance.render()
   expect(focusedDom[0]).toEqual(
     expect.objectContaining({
-      className: 'ChatView ChatAiNativeLayout',
+      className: 'ChatView ChatAiNativeLayout ChatTheme-default',
     }),
   )
   expect(getNodesByClass(focusedDom, 'ChatConversationBody')).toHaveLength(1)
@@ -1584,7 +1584,8 @@ test('renders Markdown tables in messages while keeping malformed streaming text
     ).toHaveLength(42)
     expect(dom).toContainEqual(
       expect.objectContaining({
-        className: 'ChatMessageTableCell ChatMessageTableCell-left',
+        className:
+          'ChatMessageTableCell ChatMessageTableCell-left ChatMessageTableHeader',
         scope: 'col',
         type: VirtualDomElements.Th,
       }),
@@ -1597,7 +1598,8 @@ test('renders Markdown tables in messages while keeping malformed streaming text
     )
     expect(dom).toContainEqual(
       expect.objectContaining({
-        className: 'ChatMessageTableCell ChatMessageTableCell-center',
+        className:
+          'ChatMessageTableCell ChatMessageTableCell-center ChatMessageTableHeader',
         type: VirtualDomElements.Th,
       }),
     )
@@ -2519,4 +2521,49 @@ test('focus toggles return matching view markup and layout metadata without comm
     ),
   ).toBe(false)
   instance.dispose?.()
+})
+
+test('focus layout classes track new conversations and place one fade above changes', async () => {
+  const instance = await createTestInstance()
+  const state = instance.getState() as { focusMode: boolean }
+  state.focusMode = true
+  const emptyDom = instance.render()
+  expect(getNodesByClass(emptyDom, 'ChatConversationBodyEmpty')).toHaveLength(1)
+  expect(getNodesByClass(emptyDom, 'ChatMessagesEmpty')).toHaveLength(1)
+  expect(getNodesByClass(emptyDom, 'ChatComposerFade')).toHaveLength(0)
+
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Make a scoped change',
+  })
+  await instance.submit()
+  const activeDom = instance.render()
+  expect(getNodesByClass(activeDom, 'ChatConversationBodyEmpty')).toHaveLength(
+    0,
+  )
+  expect(getNodesByClass(activeDom, 'ChatMessagesActive')).toHaveLength(1)
+  expect(getNodesByClass(activeDom, 'ChatComposerAreaActive')).toHaveLength(1)
+  expect(getNodesByClass(activeDom, 'ChatComposerFade')).toEqual(
+    getNodesByClass(activeDom, 'ChatChanges'),
+  )
+
+  const submittedState = instance.getState()
+  const task = submittedState.selectedTask!
+  instance.setState({
+    ...submittedState,
+    selectedTask: {
+      ...task,
+      events: task.events.filter((event) => event.type !== 'changes'),
+    },
+  })
+  const withoutChanges = instance.render()
+  expect(getNodesByClass(withoutChanges, 'ChatComposerFade')).toEqual(
+    getNodesByClass(withoutChanges, 'ChatComposerArea'),
+  )
+
+  instance.setState({ ...instance.getState(), selectedTask: undefined })
+  const newConversation = instance.render()
+  expect(getNodesByClass(newConversation, 'ChatMessagesEmpty')).toHaveLength(1)
+  expect(getNodesByClass(newConversation, 'ChatComposerFade')).toHaveLength(0)
 })

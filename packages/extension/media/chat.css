@@ -66,19 +66,6 @@
   background: var(--ChatBackground);
 }
 
-.ChatFocusMode > .ChatTaskListHeader,
-.ChatFocusMode > .ChatTaskList,
-.ChatFocusMode > .ChatEmptyState,
-.ChatFocusMode > .ChatDetailHeader,
-.ChatFocusMode > .ChatMessages,
-.ChatFocusMode > .ChatChanges,
-.ChatFocusMode > .ChatComposerArea,
-.ChatFocusMode > .ChatErrorBanner {
-  box-sizing: border-box;
-  width: min(100%, 960px);
-  margin-inline: auto;
-}
-
 .ChatTaskListHeader,
 .ChatDetailHeader {
   display: flex;
@@ -186,14 +173,14 @@
   background: transparent;
   border: 0;
   border-radius: 4px;
-  opacity: 0;
-  pointer-events: none;
+  opacity: var(--ChatArchiveOpacity, 0);
+  pointer-events: var(--ChatArchivePointerEvents, none);
 }
 
-.ChatTaskItem:hover .ChatTaskArchiveButton,
-.ChatTaskItem:focus-within .ChatTaskArchiveButton {
-  opacity: 1;
-  pointer-events: auto;
+.ChatTaskItem:hover,
+.ChatTaskItem:focus-within {
+  --ChatArchiveOpacity: 1;
+  --ChatArchivePointerEvents: auto;
 }
 
 .ChatTaskArchiveButton:hover {
@@ -319,7 +306,7 @@
   font-size: 11px;
 }
 
-.ChatComposerImage-loading .ChatComposerImageStatus::before {
+.ChatComposerImageStatusLoading::before {
   display: inline-block;
   width: 10px;
   height: 10px;
@@ -577,14 +564,13 @@
   border-collapse: collapse;
 }
 
-.ChatMessageTable th,
-.ChatMessageTable td {
+.ChatMessageTableCell {
   padding: 6px 10px;
   border: 1px solid color-mix(in srgb, var(--ChatForeground) 20%, transparent);
   vertical-align: top;
 }
 
-.ChatMessageTable th {
+.ChatMessageTableHeader {
   font-weight: 600;
 }
 
@@ -613,7 +599,7 @@
   border-radius: 6px;
 }
 
-.ChatCodeBlock code {
+.ChatCodeContent {
   font-family: var(--vscode-editor-font-family, monospace);
   font-size: 0.92em;
 }
@@ -657,7 +643,7 @@
   padding-inline: 1px;
 }
 
-.ChatAiNativeLayout .ChatMessage {
+.ChatMessageAiNative {
   font-size: 15px;
 }
 
@@ -671,15 +657,15 @@
   min-height: 18px;
   padding-top: 3px;
   color: var(--ChatMutedForeground);
-  pointer-events: none;
-  opacity: 0;
+  pointer-events: var(--ChatMetadataPointerEvents, none);
+  opacity: var(--ChatMetadataOpacity, 0);
   transition: opacity 80ms ease-out;
 }
 
-.ChatMessage:hover > .ChatMessageMetadata,
-.ChatMessage:focus-within > .ChatMessageMetadata {
-  pointer-events: auto;
-  opacity: 1;
+.ChatMessage:hover,
+.ChatMessage:focus-within {
+  --ChatMetadataPointerEvents: auto;
+  --ChatMetadataOpacity: 1;
 }
 
 .ChatMessageTimestamp {
@@ -869,7 +855,7 @@
   color: var(--ChatMutedForeground);
 }
 
-.ChatChangedFile + .ChatChangedFile {
+.ChatChangedFileFollowing {
   border-top: 1px solid color-mix(in srgb, var(--ChatBorder) 70%, transparent);
 }
 
@@ -963,9 +949,7 @@
   cursor: default;
 }
 
-.ChatAiNativeLayout,
-.ChatAiNativeLayout .ChatView,
-.ChatLoggedOut.ChatFocusMode {
+.ChatTheme-default {
   --ChatBackground: #ffffff;
   --ChatForeground: #202124;
   --ChatMutedForeground: #666666;
@@ -986,9 +970,9 @@
   --ChatScrollbarTrack: #ffffff;
   color-scheme: light;
 }
-.ChatAiNativeLayoutTheme-openai,
-.ChatAiNativeLayoutTheme-openai .ChatView,
-.ChatLoggedOut.ChatFocusMode.ChatAiNativeLayoutTheme-openai {
+
+.ChatTheme-openai {
+  --ChatSessionsBackground: #f7f7f8;
   --ChatBackground: #ffffff;
   --ChatForeground: #0d0d0d;
   --ChatMutedForeground: #6e6e80;
@@ -1016,12 +1000,9 @@
     'Segoe UI',
     sans-serif;
 }
-.ChatAiNativeLayoutTheme-openai .ChatSessions {
-  background: #f7f7f8;
-}
-.ChatAiNativeLayoutTheme-claude,
-.ChatAiNativeLayoutTheme-claude .ChatView,
-.ChatLoggedOut.ChatFocusMode.ChatAiNativeLayoutTheme-claude {
+
+.ChatTheme-claude {
+  --ChatSessionsBackground: #f4f2ed;
   --ChatBackground: #faf9f6;
   --ChatForeground: #292723;
   --ChatMutedForeground: #77736c;
@@ -1049,18 +1030,16 @@
     'Segoe UI',
     sans-serif;
 }
-.ChatAiNativeLayoutTheme-claude .ChatSessions {
-  background: #f4f2ed;
-}
-.ChatAiNativeLayoutTheme-claude .ChatMessagesContent,
-.ChatAiNativeLayoutTheme-claude .ChatEmptyTitle,
-.ChatAiNativeLayoutTheme-claude .ChatEmptyText {
+
+.ChatTextTheme-claude {
   font-family: Georgia, 'Times New Roman', serif;
 }
+
 .ChatAiNativeLayout {
-  flex-direction: row;
+  flex-direction: var(--ChatLayoutDirection, row);
   width: 100%;
 }
+
 .ChatSessions {
   display: flex;
   flex-direction: column;
@@ -1071,9 +1050,11 @@
     );
   min-width: 0;
   min-height: 0;
-  background: #fafafa;
-  border-right: 1px solid var(--ChatBorder);
+  background: var(--ChatSessionsBackground, #fafafa);
+  border-right: var(--ChatSessionsBorderRightWidth, 1px) solid var(--ChatBorder);
+  border-left: var(--ChatSessionsBorderLeftWidth, 0px) solid var(--ChatBorder);
 }
+
 .ChatSessionsSash {
   z-index: 1;
   flex: 0 0 4px;
@@ -1081,14 +1062,17 @@
   cursor: col-resize;
   touch-action: none;
 }
+
 .ChatSessionsSash:hover,
 .ChatSessionsSash:active {
   background: var(--ChatBorder);
 }
-.ChatAiNativeLayout > .ChatDetailView {
+
+.ChatDetailViewAiNative {
   flex: 1;
   min-width: 0;
 }
+
 .ChatConversationBody {
   display: flex;
   flex: 1 1 auto;
@@ -1097,55 +1081,47 @@
   min-height: 0;
   overflow: hidden;
 }
-.ChatConversationBody:has(.ChatEmptyTitle) {
+
+.ChatConversationBodyEmpty {
   justify-content: center;
   overflow: auto;
 }
-.ChatConversationBody:has(.ChatEmptyTitle) > .ChatMessages {
+
+.ChatMessagesEmpty {
   flex: 0 0 auto;
   align-items: center;
   overflow: visible;
 }
-.ChatAiNativeLayout .ChatBackButton {
+
+.ChatBackButtonAiNative {
   display: none;
 }
-.ChatAiNativeLayout
-  .ChatDetailView
-  > :not(.ChatMessages, .ChatConversationBody) {
+
+.ChatDetailHeaderAiNative {
   width: min(100%, 960px);
   margin-inline: auto;
   box-sizing: border-box;
 }
-.ChatAiNativeLayout .ChatDetailView > .ChatMessages,
-.ChatAiNativeLayout .ChatConversationBody > .ChatMessages {
+
+.ChatMessagesAiNative {
   width: 100%;
   padding-inline: 0;
+  gap: 0;
 }
-.ChatAiNativeLayout .ChatDetailView > .ChatConversationBody {
+
+.ChatConversationBodyAiNative {
   width: 100%;
   max-width: none;
   margin-inline: 0;
 }
-.ChatAiNativeLayout .ChatConversationBody > :not(.ChatMessages) {
+
+.ChatChangesActive {
+  position: relative;
   width: min(100%, 960px);
   margin-inline: auto;
-  box-sizing: border-box;
 }
-.ChatAiNativeLayout .ChatMessages {
-  gap: 0;
-}
-.ChatAiNativeLayout .ChatMessages:not(:has(.ChatEmptyTitle)) > .ChatChanges {
-  position: relative;
-}
-.ChatAiNativeLayout
-  .ChatMessages:not(:has(.ChatEmptyTitle)):not(:has(> .ChatChanges))
-  > .ChatComposerArea::before,
-.ChatAiNativeLayout
-  .ChatMessages:not(:has(.ChatEmptyTitle))
-  > .ChatChanges::before,
-.ChatAiNativeLayout
-  .ChatDetailView:not(:has(.ChatEmptyTitle, .ChatChanges))
-  > .ChatComposerArea::before {
+
+.ChatComposerFade::before {
   position: absolute;
   inset-inline: 0;
   top: -40px;
@@ -1154,33 +1130,25 @@
   content: '';
   background: linear-gradient(to bottom, transparent, var(--ChatBackground));
 }
-.ChatAiNativeLayout
-  .ChatConversationBody:not(:has(.ChatEmptyTitle))
-  > .ChatMessages {
+
+.ChatMessagesActive {
   padding-bottom: 0;
 }
-.ChatAiNativeLayout .ChatConversationBody > .ChatMessages > .ChatComposerArea {
+
+.ChatComposerAreaAiNative {
   box-sizing: border-box;
   width: min(100%, 960px);
   margin-inline: auto;
 }
-.ChatAiNativeLayout
-  .ChatConversationBody:not(:has(.ChatEmptyTitle))
-  > .ChatMessages
-  > .ChatComposerArea {
+
+.ChatComposerAreaActive {
   position: sticky;
   bottom: 0;
   flex: 0 0 auto;
   margin-top: auto;
 }
-.ChatAiNativeLayout
-  .ChatConversationBody:not(:has(.ChatEmptyTitle))
-  > .ChatMessages
-  > .ChatChanges {
-  width: min(100%, 960px);
-  margin-inline: auto;
-}
-.ChatAiNativeLayout .ChatMessagesContent {
+
+.ChatMessagesContentAiNative {
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -1190,13 +1158,13 @@
   padding-inline: 18px;
   margin-inline: auto;
 }
-.ChatAiNativeLayout
-  .ChatConversationBody:not(:has(.ChatEmptyTitle))
-  .ChatMessagesContent {
+
+.ChatMessagesContentActive {
   flex: 1 1 auto;
   min-height: 0;
 }
-.ChatAiNativeLayout .ChatTurnLatest {
+
+.ChatTurnLatestAiNative {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
@@ -1204,19 +1172,17 @@
   min-height: 0;
 }
 
-.AiNativeLayout .ActivityBarLayout {
+.AiNativeLayout {
   --ActivityBarActiveBackground: #e6e6e6;
   --ActivityBarActiveForeground: #202124;
   --ActivityBarBorder: #e5e5e5;
 }
 
-.AiNativeLayoutRight .ChatAiNativeLayout {
-  flex-direction: row-reverse;
-}
-
-.AiNativeLayoutRight .ChatSessions {
-  border-right: 0;
-  border-left: 1px solid var(--ChatBorder);
+.AiNativeLayoutRight {
+  --ChatLayoutDirection: row-reverse;
+  --ChatSessionsBorderRightWidth: 0px;
+  --ChatSessionsBorderLeftWidth: 1px;
+  --ChatSessionsInset: 0 0 0 auto;
 }
 
 .ChatSessionsToggleButton {
@@ -1229,44 +1195,33 @@
     max-width: 100vw;
     overflow: hidden;
   }
-
-  .ChatAiNativeLayout .ChatSessions {
+  .ChatSessions {
     display: none;
   }
-
-  .ChatAiNativeLayout.ChatSessionsVisible .ChatSessions {
+  .ChatSessionsOverlay {
     position: absolute;
     z-index: 2;
-    inset: 0 auto 0 0;
+    inset: var(--ChatSessionsInset, 0 auto 0 0);
     display: flex;
     width: min(85%, 320px);
     max-width: calc(100% - 48px);
     flex: 0 0 min(85%, 320px);
     box-shadow: 0 0 24px #0004;
   }
-
-  .AiNativeLayoutRight .ChatAiNativeLayout.ChatSessionsVisible .ChatSessions {
-    inset-inline: auto 0;
-  }
-
-  .ChatAiNativeLayout .ChatSessionsSash {
+  .ChatSessionsSash {
     display: none;
   }
-
-  .ChatFocusMode .ChatSessionsToggleButton {
+  .ChatSessionsToggleButtonFocus {
     display: inline-flex;
     flex: 0 0 auto;
   }
-
-  .ChatFocusMode .ChatDetailHeader {
+  .ChatDetailHeaderFocus {
     padding-inline: 12px;
   }
-
-  .ChatAiNativeLayout .ChatMessages {
+  .ChatMessagesAiNative {
     padding-inline: 0;
   }
-
-  .ChatFocusMode .ChatComposer {
+  .ChatComposerFocus {
     margin: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
 }
