@@ -56,3 +56,7 @@ jobs:
         run: node packages/build/src/build-static.ts
         env:
           PATH_PREFIX: auto
+      - name: Run exported headless tests
+        run: npm run e2e:static
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: 0

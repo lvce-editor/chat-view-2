@@ -10,7 +10,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Locator('textarea[name="composer"]').type(
     'Inspect **bold** <img src=x onerror=alert(1)> [VS Code download page](https://code.visualstudio.com/Download), then https://example.com',
   )
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const bold = Locator('.ChatMessageUser .ChatMessageText strong')
   await expect(bold).toHaveText('bold')

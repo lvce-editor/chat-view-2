@@ -38,7 +38,8 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   const composerInput = Locator('textarea[name="composer"]')
   await composerInput.type('Center the new chat composer')
   await expect(composerInput).toHaveValue('Center the new chat composer')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
   await expect(browserTabTitle).toHaveText(
     'Center the new chat composer - Lvce Editor',
   )

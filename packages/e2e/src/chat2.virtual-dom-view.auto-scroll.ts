@@ -14,7 +14,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Locator('textarea[name="composer"]').type(
     'Keep this message at the top',
   )
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const messages = Locator('.ChatMessages')
   const latestTurn = Locator('.ChatTurnLatest')
