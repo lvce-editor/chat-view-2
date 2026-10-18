@@ -790,10 +790,7 @@ const renderModel = (model: ChatModel): Dom.TreeNode => {
 }
 
 const renderModelPicker = (state: Readonly<ChatViewState>): Dom.TreeNode => {
-  const { modelPickerOpen, models } = state
-  if (!modelPickerOpen) {
-    return Dom.div('ChatModelPickerHidden', [])
-  }
+  const { models } = state
   return Dom.div(
     'Chat2ModelPicker',
     [
@@ -829,7 +826,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
       ? 'Ask for a follow-up change'
       : 'Describe a programming task'
   return Dom.div('ChatComposerArea', [
-    renderModelPicker(state),
+    ...(modelPickerOpen ? [renderModelPicker(state)] : []),
     Dom.form('composer', 'ChatComposer', [
       ...(composerImages.length > 0
         ? [

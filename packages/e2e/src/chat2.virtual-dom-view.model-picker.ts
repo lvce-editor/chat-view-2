@@ -14,10 +14,14 @@ export const test: Test = async ({
   await Command.executeExtensionCommand('chat2.show')
 
   const toggle = Locator('button[name="model-picker"]')
+  const hiddenPicker = Locator('.ChatModelPickerHidden')
+  const picker = Locator('.Chat2ModelPicker')
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(hiddenPicker).toHaveCount(0)
+  await expect(picker).toHaveCount(0)
   // eslint-disable-next-line e2e/no-direct-click
   await toggle.click()
 
-  const picker = Locator('.Chat2ModelPicker')
   const options = Locator('.ChatModelOption')
   const title = Locator('text=Models')
   await expect(picker).toBeVisible()
@@ -30,12 +34,14 @@ export const test: Test = async ({
   await expect(options.first()).toHaveCSS('white-space', 'nowrap')
   await expect(options.first()).toHaveAttribute('title', 'GPT-5.4')
   await expect(title).toBeVisible()
+  await expect(hiddenPicker).toHaveCount(0)
 
   // Locator.type focuses the control without committing a click event.
   await toggle.type('')
   await expect(toggle).toBeFocused()
   await KeyBoard.press('Escape')
   await expect(picker).toHaveCount(0)
+  await expect(hiddenPicker).toHaveCount(0)
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
   // Escape also works while focus is on a model option.
@@ -49,6 +55,7 @@ export const test: Test = async ({
   await expect(lastOption).toBeFocused()
   await KeyBoard.press('Escape')
   await expect(picker).toHaveCount(0)
+  await expect(hiddenPicker).toHaveCount(0)
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
   // Escape works with focus in the composer and leaves its contents intact.
@@ -60,6 +67,7 @@ export const test: Test = async ({
   await expect(composer).toBeFocused()
   await KeyBoard.press('Escape')
   await expect(picker).toHaveCount(0)
+  await expect(hiddenPicker).toHaveCount(0)
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(composer).toHaveValue('keep this draft')
 
@@ -70,6 +78,7 @@ export const test: Test = async ({
   // eslint-disable-next-line e2e/no-direct-click
   await composer.click()
   await expect(picker).toHaveCount(0)
+  await expect(hiddenPicker).toHaveCount(0)
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(composer).toHaveValue('keep this draft')
 
@@ -83,4 +92,5 @@ export const test: Test = async ({
   await expect(picker).toHaveCount(0)
   await Command.executeExtensionCommand('chat2.show')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(hiddenPicker).toHaveCount(0)
 }
