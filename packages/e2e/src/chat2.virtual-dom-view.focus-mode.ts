@@ -7,10 +7,22 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
     'chat2.experimentalFocusMode': true,
     'chat2.useMockBackend': true,
   })
+
+  // The command is contributed by the extension manifest, so it should be
+  // available before Chat 2 has been opened and activated.
+  const focusMode = Locator('.ChatAiNativeLayout')
+  await QuickPick.open()
+  await QuickPick.setValue('>toggle ai')
+  await QuickPick.selectItem('View: Toggle AI-Native / IDE Layout')
+  await expect(focusMode).toBeVisible()
+  await QuickPick.open()
+  await QuickPick.setValue('>toggle ai')
+  await QuickPick.selectItem('View: Toggle AI-Native / IDE Layout')
+  await expect(focusMode).toHaveCount(0)
+
   await Command.executeExtensionCommand('chat2.show')
 
   const browserTabTitle = Locator('head title')
-  const focusMode = Locator('.ChatAiNativeLayout')
   const toggle = Locator('button[name="toggle-focus-mode"]')
   await expect(toggle).toHaveAttribute('title', 'Focus entirely on chat')
   await Command.executeExtensionCommand('chat2.toggleFocusMode')
