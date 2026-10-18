@@ -1800,10 +1800,18 @@ test('renders user message actions and shows feedback after copying', async () =
 
 test('opens the model picker without adding model controls to the header', async () => {
   const instance = await createTestInstance()
+  const closedDom = instance.render() as readonly any[]
+  expect(getNodesByClass(closedDom, 'Chat2ModelPicker')).toHaveLength(0)
+  expect(getNodesByClass(closedDom, 'ChatModelPickerHidden')).toHaveLength(0)
+  expect(getNodesByClass(closedDom, 'ChatModelButton')[0]).toEqual(
+    expect.objectContaining({ ariaExpanded: false }),
+  )
+
   await dispatch(instance, { name: 'model-picker', type: 'click' })
 
   const dom = instance.render() as readonly any[]
   expect(getNodesByClass(dom, 'Chat2ModelPicker')).toHaveLength(1)
+  expect(getNodesByClass(dom, 'ChatModelPickerHidden')).toHaveLength(0)
   expect(getText(dom)).toContain('Models')
   expect(getText(dom)).toContain('GPT-5.4')
 })
@@ -1825,6 +1833,9 @@ test('closes the model picker when clicking outside it', async () => {
   expect(instance.getState().modelPickerOpen).toBe(false)
   expect(instance.getState().draft).toBe('keep this draft')
   expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+  expect(
+    getNodesByClass(instance.render(), 'ChatModelPickerHidden'),
+  ).toHaveLength(0)
 
   instance.setState({ ...instance.getState(), modelPickerOpen: true })
   instance.handleModelPickerOutsideClick(undefined, undefined)
@@ -1832,6 +1843,9 @@ test('closes the model picker when clicking outside it', async () => {
   expect(instance.getState().modelPickerOpen).toBe(false)
   expect(instance.getState().draft).toBe('keep this draft')
   expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+  expect(
+    getNodesByClass(instance.render(), 'ChatModelPickerHidden'),
+  ).toHaveLength(0)
 
   await dispatch(instance, { type: 'blur' })
   expect(instance.getState().modelPickerOpen).toBe(false)
@@ -1855,6 +1869,9 @@ test('closes the model picker on Escape without changing the model or draft', as
   expect(instance.getState().selectedModelId).toBe('gpt-5.4')
   expect(instance.getState().draft).toBe('keep this draft')
   expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+  expect(
+    getNodesByClass(instance.render(), 'ChatModelPickerHidden'),
+  ).toHaveLength(0)
 
   instance.handleKeyDown('Escape')
   expect(instance.getState().modelPickerOpen).toBe(false)
