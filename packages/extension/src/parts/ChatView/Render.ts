@@ -13,6 +13,7 @@ import type {
 import type { ChatViewState } from './ChatViewState.ts'
 import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
+import { applyLayoutClasses } from './ApplyLayoutClasses.ts'
 
 const getMessageDateFormatter = (() => {
   let messageDateFormatter: Intl.DateTimeFormat | undefined
@@ -342,6 +343,7 @@ const renderTableCell = (
       className: mergeClassNames(
         'ChatMessageTableCell',
         `ChatMessageTableCell-${alignment}`,
+        type === VirtualDomElements.Th ? 'ChatMessageTableHeader' : '',
       ),
       ...(type === VirtualDomElements.Th && { scope: 'col' }),
     },
@@ -548,7 +550,11 @@ const renderCodeBlock = (text: string, language: string): Dom.TreeNode => {
       ? renderJsonCode(text)
       : [Dom.textNode(text)]
   return Dom.node(VirtualDomElements.Pre, { className: 'ChatCodeBlock' }, [
-    Dom.node(VirtualDomElements.Code, {}, children),
+    Dom.node(
+      VirtualDomElements.Code,
+      { className: 'ChatCodeContent' },
+      children,
+    ),
   ])
 }
 
@@ -840,13 +846,16 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
                         }),
                       ]
                     : [
-                        Dom.div('ChatComposerImageStatus', [
-                          Dom.textNode(
-                            image.status === 'loading'
-                              ? 'Loading image…'
-                              : 'Could not load image',
-                          ),
-                        ]),
+                        Dom.div(
+                          `ChatComposerImageStatus${image.status === 'loading' ? ' ChatComposerImageStatusLoading' : ''}`,
+                          [
+                            Dom.textNode(
+                              image.status === 'loading'
+                                ? 'Loading image…'
+                                : 'Could not load image',
+                            ),
+                          ],
+                        ),
                       ]),
                   Dom.button(
                     `remove-image:${image.id}`,
@@ -1010,18 +1019,24 @@ const renderActivity = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 
 const visibleChangedFileCount = 3
 
-const renderChangedFile = (file: ChatChangedFile): Dom.TreeNode => {
-  return Dom.div(`ChatChangedFile ChatChangedFile-${file.status}`, [
-    Dom.div('ChatChangedFileName', [Dom.textNode(file.path)]),
-    Dom.div('ChatChangedFileStats', [
-      Dom.div('ChatChangedFileAdditions', [
-        Dom.textNode(`+${file.additions || 0}`),
+const renderChangedFile = (
+  file: ChatChangedFile,
+  index: number,
+): Dom.TreeNode => {
+  return Dom.div(
+    `ChatChangedFile ChatChangedFile-${file.status}${index > 0 ? ' ChatChangedFileFollowing' : ''}`,
+    [
+      Dom.div('ChatChangedFileName', [Dom.textNode(file.path)]),
+      Dom.div('ChatChangedFileStats', [
+        Dom.div('ChatChangedFileAdditions', [
+          Dom.textNode(`+${file.additions || 0}`),
+        ]),
+        Dom.div('ChatChangedFileDeletions', [
+          Dom.textNode(`-${file.deletions || 0}`),
+        ]),
       ]),
-      Dom.div('ChatChangedFileDeletions', [
-        Dom.textNode(`-${file.deletions || 0}`),
-      ]),
-    ]),
-  ])
+    ],
+  )
 }
 
 const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
@@ -1219,7 +1234,7 @@ const renderAiNativeSessions = (
   ]
 }
 
-export const render = (
+const renderDom = (
   state: Readonly<ChatViewState>,
 ): readonly VirtualDomNode[] => {
   const {
@@ -1319,4 +1334,10 @@ export const render = (
   return Dom.flatten(
     selectedTask ? renderDetailView(state) : renderListView(state),
   )
+}
+
+export const render = (
+  state: Readonly<ChatViewState>,
+): readonly VirtualDomNode[] => {
+  return applyLayoutClasses(state, renderDom(state))
 }
