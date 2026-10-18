@@ -1,6 +1,8 @@
 import { expect, test } from '@jest/globals'
 import { readFile } from 'node:fs/promises'
 
+const singleClassSelectorPattern = /^\.[\w-]+(?::[\w:-]+(?:\(:disabled\))?)*$/u
+
 const readChatCss = async (): Promise<string> => {
   return readFile(new URL('../media/chat.css', import.meta.url), 'utf8')
 }
@@ -22,15 +24,14 @@ test('chat messages use a theme-aware native scrollbar', async () => {
 
 test('chat styles use single class selectors without structural nesting', async () => {
   const css = await readChatCss()
-  for (const match of css.matchAll(/([^{}]+)\{/gu)) {
-    const selectorList = match[1].trim()
+  const ruleParts = css.split('{').slice(0, -1)
+  for (const part of ruleParts) {
+    const selectorList = part.slice(part.lastIndexOf('}') + 1).trim()
     if (selectorList.startsWith('@') || selectorList === 'to') {
       continue
     }
     for (const selector of selectorList.split(',')) {
-      expect(selector.trim()).toMatch(
-        /^\.[\w-]+(?::[\w:-]+(?:\(:disabled\))?)*$/u,
-      )
+      expect(selector.trim()).toMatch(singleClassSelectorPattern)
     }
   }
 })
