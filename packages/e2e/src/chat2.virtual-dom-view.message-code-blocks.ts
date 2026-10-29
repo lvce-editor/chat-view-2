@@ -10,7 +10,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Locator('textarea[name="composer"]').type(
     'Show this JSON:\n```json\n{"jsonrpc":"2.0","id":1}\n```',
   )
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const codeBlock = Locator('.ChatMessageUser .ChatCodeBlock')
   const key = Locator('.ChatMessageUser .ChatCodeTokenKey')

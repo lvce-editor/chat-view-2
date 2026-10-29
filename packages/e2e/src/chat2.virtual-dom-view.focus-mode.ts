@@ -7,10 +7,22 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
     'chat2.experimentalFocusMode': true,
     'chat2.useMockBackend': true,
   })
+
+  // The command is contributed by the extension manifest, so it should be
+  // available before Chat 2 has been opened and activated.
+  const focusMode = Locator('.ChatAiNativeLayout')
+  await QuickPick.open()
+  await QuickPick.setValue('>toggle ai')
+  await QuickPick.selectItem('View: Toggle AI-Native / IDE Layout')
+  await expect(focusMode).toBeVisible()
+  await QuickPick.open()
+  await QuickPick.setValue('>toggle ai')
+  await QuickPick.selectItem('View: Toggle AI-Native / IDE Layout')
+  await expect(focusMode).toHaveCount(0)
+
   await Command.executeExtensionCommand('chat2.show')
 
   const browserTabTitle = Locator('head title')
-  const focusMode = Locator('.ChatAiNativeLayout')
   const toggle = Locator('button[name="toggle-focus-mode"]')
   await expect(toggle).toHaveAttribute('title', 'Focus entirely on chat')
   await Command.executeExtensionCommand('chat2.toggleFocusMode')
@@ -28,6 +40,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(headerFocusButton).toHaveCount(0)
   await expect(headerNewChatButton).toHaveCount(0)
   const composer = Locator('.ChatComposer')
+  const composerArea = Locator('.ChatComposerArea')
   await expect(composer).toHaveCount(1)
   const newConversationBody = Locator('.ChatConversationBody')
   const emptyTitle = Locator('.ChatDetailView .ChatEmptyTitle')
@@ -35,10 +48,13 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(emptyTitle).toBeVisible()
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
   await expect(newConversationMessages).toHaveCSS('flex', '0 0 auto')
+  await expect(newConversationMessages).toHaveCSS('overflow-y', 'visible')
+  await expect(composerArea).toHaveCSS('position', 'relative')
   const composerInput = Locator('textarea[name="composer"]')
   await composerInput.type('Center the new chat composer')
   await expect(composerInput).toHaveValue('Center the new chat composer')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
   await expect(browserTabTitle).toHaveText(
     'Center the new chat composer - Lvce Editor',
   )
@@ -47,6 +63,8 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(emptyTitle).toHaveCount(0)
   const detailComposer = Locator('.ChatDetailView .ChatComposer')
   await expect(detailComposer).toBeVisible()
+  await expect(composerArea).toHaveCSS('position', 'sticky')
+  await expect(newConversationMessages).toHaveCSS('overflow-y', 'auto')
   await expect(newConversationBody).toHaveCSS('justify-content', 'flex-start')
   const task = Locator('.ChatTaskButton').nth(2)
   // eslint-disable-next-line e2e/no-direct-click

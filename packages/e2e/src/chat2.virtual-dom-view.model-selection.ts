@@ -11,13 +11,16 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Command.executeExtensionCommand('chat2.show')
 
   const toggle = Locator('button[name="model-picker"]')
+  const hiddenPicker = Locator('.ChatModelPickerHidden')
+  const picker = Locator('.Chat2ModelPicker')
   await expect(toggle).toContainText('GPT-5.4')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(hiddenPicker).toHaveCount(0)
+  await expect(picker).toHaveCount(0)
   // eslint-disable-next-line e2e/no-direct-click
   await toggle.click()
 
   const option = Locator('button[name="model:gpt-5.4-mini"]')
-  const picker = Locator('.Chat2ModelPicker')
   await expect(option).toContainText('GPT-5.4 Mini')
   // eslint-disable-next-line e2e/no-direct-click
   await option.click()
@@ -25,4 +28,5 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(toggle).toContainText('GPT-5.4 Mini')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(picker).toHaveCount(0)
+  await expect(hiddenPicker).toHaveCount(0)
 }

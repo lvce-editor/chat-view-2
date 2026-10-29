@@ -11,7 +11,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Locator('textarea[name="composer"]').type(
     '# Heading one\n## Heading two\n### João Gonçalves Zarco\n#### Heading four\n##### Heading five\n###### Heading six\n\n```md\n### Literal code heading\n```',
   )
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const headings = Locator('.ChatMessageUser .ChatMessageHeading')
   const thirdHeading = Locator('.ChatMessageUser h3')

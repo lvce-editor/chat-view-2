@@ -814,7 +814,7 @@ export const createInstance = async (
       const task = selectedTask
         ? await api.sendMessage(selectedTask, message, options)
         : await api.createTask(message, state.selectedModelId, options)
-      await updateTask(task)
+      await updateTask(task, request)
     } finally {
       activeController = undefined
     }

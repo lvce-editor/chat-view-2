@@ -1336,7 +1336,7 @@ test('renders the experimental focus mode control when enabled', async () => {
   const focusedDom = instance.render()
   expect(focusedDom[0]).toEqual(
     expect.objectContaining({
-      className: 'ChatView ChatAiNativeLayout',
+      className: 'ChatView ChatAiNativeLayout ChatTheme-default',
     }),
   )
   expect(getNodesByClass(focusedDom, 'ChatConversationBody')).toHaveLength(1)
@@ -1584,7 +1584,8 @@ test('renders Markdown tables in messages while keeping malformed streaming text
     ).toHaveLength(42)
     expect(dom).toContainEqual(
       expect.objectContaining({
-        className: 'ChatMessageTableCell ChatMessageTableCell-left',
+        className:
+          'ChatMessageTableCell ChatMessageTableCell-left ChatMessageTableHeader',
         scope: 'col',
         type: VirtualDomElements.Th,
       }),
@@ -1597,7 +1598,8 @@ test('renders Markdown tables in messages while keeping malformed streaming text
     )
     expect(dom).toContainEqual(
       expect.objectContaining({
-        className: 'ChatMessageTableCell ChatMessageTableCell-center',
+        className:
+          'ChatMessageTableCell ChatMessageTableCell-center ChatMessageTableHeader',
         type: VirtualDomElements.Th,
       }),
     )
@@ -1800,10 +1802,18 @@ test('renders user message actions and shows feedback after copying', async () =
 
 test('opens the model picker without adding model controls to the header', async () => {
   const instance = await createTestInstance()
+  const closedDom = instance.render() as readonly any[]
+  expect(getNodesByClass(closedDom, 'Chat2ModelPicker')).toHaveLength(0)
+  expect(getNodesByClass(closedDom, 'ChatModelPickerHidden')).toHaveLength(0)
+  expect(getNodesByClass(closedDom, 'ChatModelButton')[0]).toEqual(
+    expect.objectContaining({ ariaExpanded: false }),
+  )
+
   await dispatch(instance, { name: 'model-picker', type: 'click' })
 
   const dom = instance.render() as readonly any[]
   expect(getNodesByClass(dom, 'Chat2ModelPicker')).toHaveLength(1)
+  expect(getNodesByClass(dom, 'ChatModelPickerHidden')).toHaveLength(0)
   expect(getText(dom)).toContain('Models')
   expect(getText(dom)).toContain('GPT-5.4')
 })
@@ -1825,6 +1835,9 @@ test('closes the model picker when clicking outside it', async () => {
   expect(instance.getState().modelPickerOpen).toBe(false)
   expect(instance.getState().draft).toBe('keep this draft')
   expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+  expect(
+    getNodesByClass(instance.render(), 'ChatModelPickerHidden'),
+  ).toHaveLength(0)
 
   instance.setState({ ...instance.getState(), modelPickerOpen: true })
   instance.handleModelPickerOutsideClick(undefined, undefined)
@@ -1832,6 +1845,9 @@ test('closes the model picker when clicking outside it', async () => {
   expect(instance.getState().modelPickerOpen).toBe(false)
   expect(instance.getState().draft).toBe('keep this draft')
   expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+  expect(
+    getNodesByClass(instance.render(), 'ChatModelPickerHidden'),
+  ).toHaveLength(0)
 
   await dispatch(instance, { type: 'blur' })
   expect(instance.getState().modelPickerOpen).toBe(false)
@@ -1855,6 +1871,9 @@ test('closes the model picker on Escape without changing the model or draft', as
   expect(instance.getState().selectedModelId).toBe('gpt-5.4')
   expect(instance.getState().draft).toBe('keep this draft')
   expect(getNodesByClass(instance.render(), 'Chat2ModelPicker')).toHaveLength(0)
+  expect(
+    getNodesByClass(instance.render(), 'ChatModelPickerHidden'),
+  ).toHaveLength(0)
 
   instance.handleKeyDown('Escape')
   expect(instance.getState().modelPickerOpen).toBe(false)
@@ -2024,6 +2043,35 @@ test('keeps the latest task selected when an older task refresh finishes later',
   await firstSelection
 
   expect(instance.getState().selectedTask?.id).toBe(secondTask.id)
+})
+
+test('keeps a new chat selected when the previous submission finishes', async () => {
+  const api = createMockChatApi()
+  const tasks = await api.listTasks(1)
+  const task = tasks[0]
+  const completed = Promise.withResolvers<ChatTask>()
+  const started = Promise.withResolvers<void>()
+  const instance = await createInstance(undefined, {
+    ...api,
+    createTask: async () => {
+      started.resolve()
+      return completed.promise
+    },
+  })
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Start a task',
+  })
+  const submission = instance.submit()
+  await started.promise
+  await instance.newChat()
+  completed.resolve(task)
+  await submission
+
+  expect(instance.getState().selectedTask).toBeUndefined()
+  expect(instance.renderTitle()).toBe('Chat 2')
+  instance.dispose?.()
 })
 
 test('opens a new chat from the active task', async () => {
@@ -2490,4 +2538,49 @@ test('focus toggles return matching view markup and layout metadata without comm
     ),
   ).toBe(false)
   instance.dispose?.()
+})
+
+test('focus layout classes track new conversations and place one fade above changes', async () => {
+  const instance = await createTestInstance()
+  const state = instance.getState() as { focusMode: boolean }
+  state.focusMode = true
+  const emptyDom = instance.render()
+  expect(getNodesByClass(emptyDom, 'ChatConversationBodyEmpty')).toHaveLength(1)
+  expect(getNodesByClass(emptyDom, 'ChatMessagesEmpty')).toHaveLength(1)
+  expect(getNodesByClass(emptyDom, 'ChatComposerFade')).toHaveLength(0)
+
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Make a scoped change',
+  })
+  await instance.submit()
+  const activeDom = instance.render()
+  expect(getNodesByClass(activeDom, 'ChatConversationBodyEmpty')).toHaveLength(
+    0,
+  )
+  expect(getNodesByClass(activeDom, 'ChatMessagesActive')).toHaveLength(1)
+  expect(getNodesByClass(activeDom, 'ChatComposerAreaActive')).toHaveLength(1)
+  expect(getNodesByClass(activeDom, 'ChatComposerFade')).toEqual(
+    getNodesByClass(activeDom, 'ChatChanges'),
+  )
+
+  const submittedState = instance.getState()
+  const task = submittedState.selectedTask!
+  instance.setState({
+    ...submittedState,
+    selectedTask: {
+      ...task,
+      events: task.events.filter((event) => event.type !== 'changes'),
+    },
+  })
+  const withoutChanges = instance.render()
+  expect(getNodesByClass(withoutChanges, 'ChatComposerFade')).toEqual(
+    getNodesByClass(withoutChanges, 'ChatComposerArea'),
+  )
+
+  instance.setState({ ...instance.getState(), selectedTask: undefined })
+  const newConversation = instance.render()
+  expect(getNodesByClass(newConversation, 'ChatMessagesEmpty')).toHaveLength(1)
+  expect(getNodesByClass(newConversation, 'ChatComposerFade')).toHaveLength(0)
 })

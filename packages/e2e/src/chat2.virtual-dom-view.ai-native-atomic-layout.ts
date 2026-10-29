@@ -97,7 +97,8 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   await expect(titleBar).toHaveCount(0)
   await expect(statusBar).toHaveCount(0)
   await expect(composer).toHaveValue('Start a conversation in AI-native layout')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
   const userMessage = Locator('.ChatMessageUser')
   await expect(userMessage).toContainText(
     'Start a conversation in AI-native layout',
