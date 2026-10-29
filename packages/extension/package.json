@@ -28,14 +28,14 @@
     }
   },
   "dependencies": {
-    "@babel/standalone": "8.0.7",
-    "@lvce-editor/chat-tool-worker": "9.25.0",
-    "@lvce-editor/rpc": "6.22.0",
-    "@lvce-editor/rpc-registry": "9.66.0"
+    "@babel/standalone": "7.29.12",
+    "@lvce-editor/chat-tool-worker": "0.0.0-dev",
+    "@lvce-editor/rpc": "6.23.0",
+    "@lvce-editor/rpc-registry": "9.67.0"
   },
   "devDependencies": {
-    "@lvce-editor/api": "9.48.1",
-    "@lvce-editor/virtual-dom-worker": "11.24.0",
+    "@lvce-editor/api": "9.54.0",
+    "@lvce-editor/virtual-dom-worker": "11.25.2",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.15"
   }
