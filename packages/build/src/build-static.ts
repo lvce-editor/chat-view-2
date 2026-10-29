@@ -84,7 +84,7 @@ const assertStaticChatExtension = async (commitHash: string): Promise<void> => {
   const worker = await readFile(workerPath, 'utf8')
   const requiredRuntimeContext = [
     `return typeof assetDir !== 'string' || assetDir.length === 0;`,
-    `const getRuntimeContext = async (assetDir, platform) => {`,
+    `const getRuntimeContext = async (assetDir, platform, applicationId) => {`,
     `isHttpLocation() && isStaticHttpAssetDir(resolvedAssetDir)`,
     `platform: Web`,
   ]
