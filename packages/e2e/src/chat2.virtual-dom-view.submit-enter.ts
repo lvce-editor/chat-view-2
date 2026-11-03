@@ -17,6 +17,8 @@ export const test: Test = async ({
   await composer.type('Build a smaller chat view')
   await composer.dispatchEvent('focus', { bubbles: true } as unknown as string)
   await expect(composer).toBeFocused()
+  const submit = Locator('button[name="submit"]')
+  await expect(submit).toHaveAttribute('disabled', null)
   await KeyBoard.press('Enter')
 
   const userMessage = Locator('.ChatMessageUser')
