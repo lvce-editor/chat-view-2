@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { pathToFileURL } from 'node:url'
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
@@ -7,6 +10,12 @@ import { root } from './root.ts'
 import './build-extension.ts'
 
 const record = process.argv.includes('--record')
+const desktop =
+  process.argv.includes('--electron') ||
+  process.argv.includes('--runtime=electron')
+const desktopWorkspace = desktop
+  ? await mkdtemp(join(tmpdir(), 'chat-desktop-workspace-'))
+  : undefined
 if (record) {
   try {
     loadEnvFile(join(root, '.env'))
@@ -18,12 +27,15 @@ if (record) {
 }
 const proxy = await startEvaluationProxy({
   cacheDirectory: join(root, 'packages/evaluation/cache'),
+  ...(desktop && { allowedOrigin: 'lvce://-' }),
   mode: record ? 'record' : 'replay',
   ...(record &&
     process.env.LVCE_ACCESS_TOKEN && { apiKey: process.env.LVCE_ACCESS_TOKEN }),
   model: 'gpt-5.4-mini',
   port: 8787,
-  workspaceUri: 'memfs:///recorded-workspace/',
+  workspaceUri: desktopWorkspace
+    ? pathToFileURL(desktopWorkspace).href
+    : 'memfs:///recorded-workspace/',
   scenarioId: 'ui-e2e',
   enableControls: true,
   transcriptPath: join(root, 'packages/evaluation/results/ui-e2e.json'),
@@ -39,10 +51,26 @@ try {
     [
       cli,
       `--only-extension=${join(root, 'packages/extension')}`,
-      `--test-path=${join(root, 'packages/e2e')}`,
+      `--test-path=${join(root, desktop ? 'packages/desktop-tests' : 'packages/e2e')}`,
+      ...(desktop
+        ? [
+            `--electron-env=ONLY_EXTENSION=${join(root, 'packages/extension')}`,
+            '--timeout=300000',
+          ]
+        : []),
       ...process.argv.slice(2).filter((arg) => arg !== '--record'),
     ],
-    { cwd: root, stdio: 'inherit' },
+    {
+      cwd: root,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        ...(desktopWorkspace && {
+          CHAT_DESKTOP_WORKSPACE: desktopWorkspace,
+          CHAT_DESKTOP_REPLAY_URL: proxy.origin,
+        }),
+      },
+    },
   )
   process.exitCode = await new Promise<number>((resolve, reject) => {
     child.once('error', reject)
@@ -50,4 +78,7 @@ try {
   })
 } finally {
   await proxy.close()
+  if (desktopWorkspace) {
+    await rm(desktopWorkspace, { recursive: true, force: true })
+  }
 }

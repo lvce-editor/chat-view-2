@@ -19,14 +19,13 @@ export const test: Test = async ({
   await expect(composer).toBeFocused()
   await KeyBoard.press('Enter')
 
-  const detail = Locator('.ChatDetailView')
   const userMessage = Locator('.ChatMessageUser')
   const messages = Locator('.ChatMessage')
   const messageAuthors = Locator('.ChatMessageAuthor')
   const assistantMessage = Locator(
     'text=I inspected the relevant files, made the scoped change, and verified the result.',
   )
-  await expect(detail).toBeVisible()
+  await expect(composer).toHaveValue('')
   await expect(messages).toHaveCount(2)
   await expect(messageAuthors).toHaveCount(0)
   await expect(userMessage).toContainText('Build a smaller chat view')

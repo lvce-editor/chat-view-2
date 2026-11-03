@@ -30,7 +30,7 @@ npm run evaluation
 npm run build:static
 npm run e2e:static
 # Official packaged desktop app, with an isolated temporary profile:
-EVALUATION_ELECTRON=1 npm run evaluation
+npm run e2e:headless -- --electron --filter=recorded
 ```
 
 The tests type into the visible Chat 2 composer and assert rendered output and
@@ -50,7 +50,7 @@ the OpenAI credential. Then run the relevant explicit recording command:
 npm run evaluation:record
 npm run e2e:record -- --headless --filter=recorded
 npm run e2e:static:record
-EVALUATION_ELECTRON=1 npm run evaluation:record
+npm run e2e:record -- --headless --electron --filter=recorded
 ```
 
 Recording commands load the local `.env` file. Only missing requests are

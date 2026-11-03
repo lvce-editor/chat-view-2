@@ -92,7 +92,3 @@ jobs:
         working-directory: ./packages/e2e
       - name: Replay chat in the official Electron application
         run: xvfb-run -a npm run e2e:headless -- --electron --filter=recorded
-      - name: Verify agent-run project checks in Electron
-        run: xvfb-run -a npm run evaluation
-        env:
-          EVALUATION_ELECTRON: 1

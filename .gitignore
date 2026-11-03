@@ -138,3 +138,5 @@ dist
 
 # Browser diagnostic traces
 renderer-worker-traces/
+
+.test-with-playwright/

@@ -211,6 +211,11 @@ export const startEvaluationProxy = async (
     response: ServerResponse,
   ): Promise<void> => {
     if (!isAllowedOrigin(request.headers.origin, options.allowedOrigin)) {
+      if (options.enableControls) {
+        process.stderr.write(
+          `Replay rejected origin: ${request.headers.origin}\n`,
+        )
+      }
       sendJson(response, 403, { error: { message: 'Origin is not allowed' } })
       return
     }
@@ -314,11 +319,24 @@ export const startEvaluationProxy = async (
         return
       }
       if (options.mode !== 'record') {
-        sendJson(response, 502, {
-          error: {
-            message: `Replay recording missing for ${options.scenarioId}: ${cacheKey}. Record this request explicitly; replay never contacts the provider.`,
-          },
+        const missing: RecordedHttpResponse = {
+          body: JSON.stringify({
+            error: {
+              message: `Replay recording missing for ${options.scenarioId}: ${cacheKey}. Record this request explicitly; replay never contacts the provider.`,
+            },
+          }),
+          headers: { 'content-type': 'application/json' },
+          status: 502,
+        }
+        await transcript.append({
+          cacheKey,
+          request: cacheRequest,
+          response: missing,
+          source: 'missing',
+          toolCalls: [],
+          toolResults: getToolResults(requestBody),
         })
+        replayResponse(response, missing)
         return
       }
       source = 'upstream'

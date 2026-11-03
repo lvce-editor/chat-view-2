@@ -18,6 +18,11 @@
     "rootDir": "../..",
     "composite": true
   },
-  "include": ["src", "test", "../evaluation/src"],
+  "include": [
+    "src",
+    "test",
+    "../evaluation/src",
+    "../desktop-tests/src/**/*.ts"
+  ],
   "exclude": ["third_party", "coverage"]
 }

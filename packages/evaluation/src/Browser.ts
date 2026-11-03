@@ -85,7 +85,6 @@ export const createBrowserTestSource = (
 ): string => {
   const configuration = JSON.stringify({
     backendOrigin: options.backendOrigin,
-    electron: process.env.EVALUATION_ELECTRON === '1',
     model: options.model,
     prompt: options.prompt,
     scenarioId: options.scenarioId,
@@ -128,9 +127,7 @@ export const test = async ({ Command, Workspace, Locator, expect, KeyBoard }) =>
   await expect(Locator('.ChatError, .ChatErrorBanner')).toHaveCount(0)
   await expect(Locator('.ChatTaskStatus-completed')).toHaveCount(1)
   await expect(Locator('.ChatMessageAssistant').first()).toBeVisible()
-  if (configuration.electron && configuration.scenarioId === 'fix-node-test') {
-    await expect(Locator('.ChatChecksPassed')).toContainText('checks passed')
-  }
+
 
 }
 `
@@ -164,10 +161,8 @@ export const createEvaluationBrowser = (): EvaluationBrowser => ({
           `--only-extension=${extensionDirectory}`,
           `--test-path=${testDirectory}`,
           '--headless',
-          ...(process.env.EVALUATION_ELECTRON === '1'
-            ? ['--electron']
-            : ['--trace-renderer-worker']),
           '--fail-on-console-messages',
+          '--trace-renderer-worker',
           `--timeout=${options.timeoutMs}`,
         ],
         command: process.execPath,
