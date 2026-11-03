@@ -18,9 +18,14 @@ export interface AgentFileSystem {
   ) => Promise<readonly AgentFileSystemEntry[]>
   readonly readFile: (uri: string) => Promise<string>
   readonly remove: (uri: string) => Promise<void>
-  readonly writeFile: (uri: string, content: string) => Promise<void>
+  readonly writeFile: (
+    uri: string,
+    content: string,
+    expectedContent?: string,
+  ) => Promise<void>
 }
 import definitions from './AgentToolDefinitions.json' with { type: 'json' }
+import { withFileMutation } from './FileMutation.ts'
 
 export interface AgentToolDefinition {
   readonly description: string
@@ -122,6 +127,7 @@ export interface AgentToolHostOptions {
 
 export interface AgentToolHost {
   readonly beginTurn: (taskId: string) => void | Promise<void>
+  readonly dispose?: () => Promise<void> | void
   readonly execute: (
     call: AgentToolCall,
     signal?: AbortSignal,
@@ -373,7 +379,11 @@ export const createAgentToolHost = ({
     fileSystemAccess === undefined || fileSystemAccess.allowWrite
   let changedFiles = new Map<string, ChatChangedFile>()
   let snapshots = new Map<string, FileSnapshot>()
+  const observedContents = new Map<string, string>()
   const availableDefinitions = definitions.filter((definition) => {
+    if (definition.name === 'execute_typescript') {
+      return typeScriptExecutor !== unavailableTypeScript
+    }
     if (readToolNames.has(definition.name)) {
       return allowRead
     }
@@ -389,6 +399,21 @@ export const createAgentToolHost = ({
     return true
   })
   const externalDefinitions = externalToolHost?.getDefinitions() || []
+
+  const getEditorContext = async (): Promise<AgentEditorContext> => {
+    const context = (await editorContextProvider?.getContext()) || {}
+    if (context.activeFile) {
+      try {
+        getWorkspaceRelativePath(
+          await getWorkspaceBase(workspaceUriProvider),
+          context.activeFile,
+        )
+      } catch {
+        return {}
+      }
+    }
+    return context
+  }
 
   const searchWorkspace = async (
     query: string,
@@ -427,6 +452,7 @@ export const createAgentToolHost = ({
         try {
           const uri = toWorkspaceUri(workspace, relativePath)
           const content = await fileSystem.readFile(uri)
+          observedContents.set(uri, content)
           if (content.length > maximumFileCharacters) {
             continue
           }
@@ -464,6 +490,7 @@ export const createAgentToolHost = ({
       fileSystem,
     )
     const content = await fileSystem.readFile(target.uri)
+    observedContents.set(target.uri, content)
     const lines = content.split('\n')
     const start = Math.max(1, startLine)
     const end = Math.min(lines.length, Math.max(start, endLine), start + 399)
@@ -479,61 +506,82 @@ export const createAgentToolHost = ({
     oldText: string,
     newText: string,
     expectedHash?: string,
-  ): Promise<string> => {
-    const target = await resolveWorkspaceUri(
+    signal?: AbortSignal,
+  ): Promise<string> =>
+    withFileMutation(
       uri,
-      workspaceUriProvider,
-      fileSystem,
+      async () => {
+        const target = await resolveWorkspaceUri(
+          uri,
+          workspaceUriProvider,
+          fileSystem,
+        )
+        const existed = await fileSystem.exists(target.uri)
+        const content = existed ? await fileSystem.readFile(target.uri) : ''
+        const observed = observedContents.get(target.uri)
+        if (observed !== undefined && observed !== content) {
+          throw new Error(
+            `File changed since it was read: ${target.relativePath}. Read the file again before editing.`,
+          )
+        }
+        if (expectedHash && hashText(content) !== expectedHash) {
+          throw new Error(
+            `File changed since it was read: ${target.relativePath}`,
+          )
+        }
+        const originalSnapshot = snapshots.get(target.relativePath) || {
+          appliedContent: content,
+          content,
+          existed,
+          uri: target.uri,
+        }
+        let updated: string
+        if (!existed && oldText === '') {
+          updated = newText
+        } else {
+          const firstIndex = content.indexOf(oldText)
+          const lastIndex = content.lastIndexOf(oldText)
+          if (firstIndex === -1) {
+            throw new Error(
+              `Text to replace was not found in ${target.relativePath}`,
+            )
+          }
+          if (firstIndex !== lastIndex) {
+            throw new Error(
+              `Text to replace is not unique in ${target.relativePath}`,
+            )
+          }
+          updated = `${content.slice(0, firstIndex)}${newText}${content.slice(firstIndex + oldText.length)}`
+        }
+        signal?.throwIfAborted()
+        await fileSystem.writeFile(
+          target.uri,
+          updated,
+          existed ? content : undefined,
+        )
+        observedContents.set(target.uri, updated)
+        snapshots.set(target.relativePath, {
+          ...originalSnapshot,
+          appliedContent: updated,
+        })
+        const previousChange = changedFiles.get(target.relativePath)
+        const lineChanges = getLineChanges(oldText, newText)
+        changedFiles.set(target.relativePath, {
+          additions: (previousChange?.additions || 0) + lineChanges.additions,
+          deletions: (previousChange?.deletions || 0) + lineChanges.deletions,
+          path: target.relativePath,
+          status: originalSnapshot.existed ? 'modified' : 'added',
+        })
+        return `Updated ${target.relativePath} [hash ${hashText(updated)}]`
+      },
+      signal,
     )
-    const existed = await fileSystem.exists(target.uri)
-    const content = existed ? await fileSystem.readFile(target.uri) : ''
-    if (expectedHash && hashText(content) !== expectedHash) {
-      throw new Error(`File changed since it was read: ${target.relativePath}`)
-    }
-    const originalSnapshot = snapshots.get(target.relativePath) || {
-      appliedContent: content,
-      content,
-      existed,
-      uri: target.uri,
-    }
-    let updated: string
-    if (!existed && oldText === '') {
-      updated = newText
-    } else {
-      const firstIndex = content.indexOf(oldText)
-      const lastIndex = content.lastIndexOf(oldText)
-      if (firstIndex === -1) {
-        throw new Error(
-          `Text to replace was not found in ${target.relativePath}`,
-        )
-      }
-      if (firstIndex !== lastIndex) {
-        throw new Error(
-          `Text to replace is not unique in ${target.relativePath}`,
-        )
-      }
-      updated = `${content.slice(0, firstIndex)}${newText}${content.slice(firstIndex + oldText.length)}`
-    }
-    await fileSystem.writeFile(target.uri, updated)
-    snapshots.set(target.relativePath, {
-      ...originalSnapshot,
-      appliedContent: updated,
-    })
-    const previousChange = changedFiles.get(target.relativePath)
-    const lineChanges = getLineChanges(oldText, newText)
-    changedFiles.set(target.relativePath, {
-      additions: (previousChange?.additions || 0) + lineChanges.additions,
-      deletions: (previousChange?.deletions || 0) + lineChanges.deletions,
-      path: target.relativePath,
-      status: originalSnapshot.existed ? 'modified' : 'added',
-    })
-    return `Updated ${target.relativePath} [hash ${hashText(updated)}]`
-  }
 
   return {
     beginTurn() {
       changedFiles = new Map()
       snapshots = new Map()
+      observedContents.clear()
     },
     async execute(call, signal) {
       try {
@@ -588,6 +636,7 @@ export const createAgentToolHost = ({
               args.oldText,
               args.newText,
               args.expectedHash,
+              signal,
             ),
           )
         }
@@ -595,7 +644,7 @@ export const createAgentToolHost = ({
           if (!editorContextProvider) {
             return failure(new Error('Diagnostics are unavailable'))
           }
-          const context = await editorContextProvider.getContext()
+          const context = await getEditorContext()
           return success(
             context.diagnostics?.join('\n') || 'No visible diagnostics',
           )
@@ -645,10 +694,13 @@ export const createAgentToolHost = ({
       try {
         const workspace = await getWorkspaceBase(workspaceUriProvider)
         const agentsUri = toWorkspaceUri(workspace, 'AGENTS.md')
-        const editorContext = editorContextProvider
-          ? await editorContextProvider.getContext()
-          : undefined
-        const contextParts = [getWorkspaceContextLabel(workspace)]
+        const editorContext = await getEditorContext()
+        const contextParts = [
+          getWorkspaceContextLabel(workspace),
+          commandExecutor
+            ? 'Project commands are available. Run relevant verification after editing.'
+            : 'Project commands are unavailable on this host. Report checks that could not run; use available editor diagnostics.',
+        ]
         if (externalToolHost) {
           contextParts.push(externalToolHost.getInstructions())
         }
@@ -672,7 +724,16 @@ export const createAgentToolHost = ({
             `Visible diagnostics:\n${editorContext.diagnostics.slice(0, 50).join('\n')}`,
           )
         }
-        const entries = await fileSystem.readDirWithFileTypes(workspace)
+        const rootEntries = await fileSystem.readDirWithFileTypes(workspace)
+        const entries = rootEntries.toSorted((left, right) =>
+          left.name.localeCompare(right.name),
+        )
+        const entryNames = entries
+          .slice(0, 80)
+          .map(
+            (entry) => entry.name + (entry.type === directoryType ? '/' : ''),
+          )
+        contextParts.push(`Workspace root entries:\n${entryNames.join('\n')}`)
         if (
           entries.some(
             (entry) => entry.name === 'AGENTS.md' && entry.type === fileType,

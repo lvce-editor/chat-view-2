@@ -106,3 +106,19 @@ test('stops a command when it is aborted', async () => {
     output: '\nCommand was aborted',
   })
 })
+
+test('a command that ignores termination still stops within its timeout', async () => {
+  if (process.platform === 'win32') {
+    return
+  }
+  const executor = createExecutor(async () => process.cwd())
+  const result = await executor.execute(
+    `trap '' TERM; while true; do :; done`,
+    {
+      onOutput() {},
+      outputLimit: 1024,
+      timeoutMs: 100,
+    },
+  )
+  expect(result.exitCode).toBe(124)
+})

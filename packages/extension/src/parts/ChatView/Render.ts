@@ -15,6 +15,8 @@ import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 import { applyLayoutClasses } from './ApplyLayoutClasses.ts'
 
+const fileUriPattern = /^(?:file|memfs|remote-ssh|html|opfs):\/\//u
+const relativeFilePattern = /^(?:\.\/)?[\w.-]+\/[\w./%#:-]+$/u
 const getMessageDateFormatter = (() => {
   let messageDateFormatter: Intl.DateTimeFormat | undefined
   return (): Intl.DateTimeFormat => {
@@ -41,8 +43,12 @@ const getStatusLabel = (task: ChatTask): string => {
   switch (task.status) {
     case 'failed':
       return 'Failed'
+    case 'interrupted':
+      return 'Interrupted'
     case 'running':
       return 'Working'
+    case 'stopped':
+      return 'Stopped'
     case 'stopping':
       return 'Stopping'
     default:
@@ -134,7 +140,9 @@ const findNextMarkdownLink = (
       !label.includes('[') &&
       destinationEndIndex !== -1 &&
       (destination.startsWith('http://') ||
-        destination.startsWith('https://')) &&
+        destination.startsWith('https://') ||
+        fileUriPattern.test(destination) ||
+        relativeFilePattern.test(destination)) &&
       !invalidMarkdownDestinationPattern.test(destination)
     ) {
       return {
@@ -201,7 +209,16 @@ const renderMessageTextWithoutBold = (
         ...renderMessageTextWithUrls(text.slice(previousIndex, matchIndex)),
       )
     }
-    children.push(Dom.link(link.destination, link.label, 'ChatMessageLink'))
+    children.push(
+      link.destination.startsWith('http://') ||
+        link.destination.startsWith('https://')
+        ? Dom.link(link.destination, link.label, 'ChatMessageLink')
+        : Dom.button(
+            `open-file:${encodeURIComponent(link.destination)}`,
+            link.label,
+            'ChatMessageLink ChatFileLink',
+          ),
+    )
     previousIndex = link.endIndex
     link = findNextMarkdownLink(text, previousIndex)
   }
@@ -1080,7 +1097,6 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
         ]),
       ]),
       Dom.div('ChatChangesActions', [
-        Dom.button('revert', 'Undo ↩', 'ChatRevertButton'),
         Dom.button('toggle-changes', 'Review', 'ChatReviewButton', {
           ariaExpanded: changesExpanded,
         }),

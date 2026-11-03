@@ -1,14 +1,16 @@
 import type { VirtualDomNode } from '@lvce-editor/virtual-dom-worker'
-/* eslint-disable sonarjs/cognitive-complexity, unicorn/prefer-await */
 import {
   executeCommand,
   getPreference,
+  getWorkspaceUri,
   setPreference,
   type MenuEntry,
   type ViewContext,
   type ViewEvent,
   type VirtualDomViewInstance,
 } from '@lvce-editor/api'
+/* eslint-disable sonarjs/cognitive-complexity, unicorn/prefer-await */
+import { getWorkspaceRelativePath } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { DragAndDropWorker, RendererWorker } from '@lvce-editor/rpc-registry'
 import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
@@ -41,7 +43,11 @@ import {
   type DefaultChatApiOptions,
 } from '../DefaultChatApi/DefaultChatApi.ts'
 import { initializeImageTransfer } from '../InitializeImageTransfer/InitializeImageTransfer.ts'
-import { taskStoreChannelName } from '../TaskStore/TaskStore.ts'
+import {
+  readDraft,
+  writeDraft,
+  taskStoreChannelName,
+} from '../TaskStore/TaskStore.ts'
 import { readAiNativeTheme } from './AiNativeTheme.ts'
 import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
@@ -171,6 +177,7 @@ const defaultWindowTitle = 'Lvce Editor'
 const defaultChatTitle = 'Chat 2'
 const titleMenuId = 'chat2.title'
 const maxTaskTitleLength = 80
+const fileLineHash = /^#L(\d+)$/u
 const pathSeparatorRegex = /[\\/]/
 const localImagePathRegex =
   /^(?:file:\/\/|\/|~\/|[a-z]:[\\/]).+\.(?:avif|bmp|gif|jpe?g|png|webp)$/i
@@ -323,6 +330,7 @@ const isSameBackendConfiguration = (
   newConfiguration: BackendConfiguration,
 ): boolean => {
   return (
+    oldConfiguration.useMockBackend === newConfiguration.useMockBackend &&
     oldConfiguration.accessToken === newConfiguration.accessToken &&
     oldConfiguration.loginRequired === newConfiguration.loginRequired &&
     oldConfiguration.openAiWebSearch === newConfiguration.openAiWebSearch &&
@@ -353,6 +361,8 @@ export const toggleActiveChatViewFocusMode = async (): Promise<void> => {
 export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
   await getActiveInstance()?.toggleSessionsList(true)
 }
+
+const activeRuns = new Map<string, AbortController>()
 
 export const createInstance = async (
   context?: ViewContext,
@@ -422,6 +432,8 @@ export const createInstance = async (
   }
   const focusModeEnabled = chatRoute || (await getFocusModeEnabled())
   pendingWorkbenchLayout = chatRoute ? 'ai-native' : undefined
+  const draftWorkspace = await getWorkspaceUri().catch(() => '')
+  const storedDraft = await readDraft(draftWorkspace, selectedTask?.id)
   const state: MutableChatViewState = {
     activityExpanded: false,
     aiNativeTheme,
@@ -429,7 +441,7 @@ export const createInstance = async (
     composerFocused: false,
     composerImages: [],
     copiedMessageId: '',
-    draft: typeof saved.draft === 'string' ? saved.draft : '',
+    draft: storedDraft ?? (typeof saved.draft === 'string' ? saved.draft : ''),
     errorMessage,
     focusMode: chatRoute || (focusModeEnabled && (await getFocusMode())),
     focusModeEnabled,
@@ -451,6 +463,8 @@ export const createInstance = async (
         ? getWorkingSeconds(selectedTask)
         : 0,
   }
+  const saveDraft = (): Promise<void> =>
+    writeDraft(draftWorkspace, state.selectedTask?.id, state.draft)
   let selectedTaskRequest = 0
   let focusComposerRequest = false
   let windowTitleQueue = Promise.resolve()
@@ -488,7 +502,7 @@ export const createInstance = async (
     return windowTitleQueue
   }
   currentState = state
-  let activeController: AbortController | undefined
+  const pendingStarts = new Set<number>()
   let authStatePoll: ReturnType<typeof setInterval> | undefined
   let authStateSyncing = false
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
@@ -599,7 +613,7 @@ export const createInstance = async (
       !backendConfiguration ||
       (state.loginRequired && !retryLogin) ||
       authStateSyncing ||
-      activeController ||
+      activeRuns.size > 0 ||
       disposed
     ) {
       return
@@ -659,12 +673,14 @@ export const createInstance = async (
   }
 
   const newChat = async (requestRerender = false): Promise<void> => {
+    await saveDraft()
     taskRefreshRequest++
     selectedTaskRequest++
     resetCopyFeedback()
     state.selectedTask = undefined
     await setChatTaskHash(execute)
     state.draft = ''
+    await saveDraft()
     state.composerImages = []
     state.activityExpanded = false
     state.changesExpanded = false
@@ -701,6 +717,7 @@ export const createInstance = async (
     }
     openingTaskId = id
     try {
+      await saveDraft()
       const request = ++selectedTaskRequest
       resetCopyFeedback()
       const task = await api.getTask(id)
@@ -716,7 +733,7 @@ export const createInstance = async (
       } else {
         await setChatTaskHash(execute)
       }
-      state.draft = ''
+      state.draft = (await readDraft(draftWorkspace, task?.id)) || ''
       state.composerImages = []
       state.activityExpanded = false
       state.changesExpanded = false
@@ -732,7 +749,15 @@ export const createInstance = async (
     task: ChatTask,
     request = selectedTaskRequest,
   ): Promise<void> => {
-    if (disposed || request !== selectedTaskRequest) {
+    if (disposed) {
+      return
+    }
+    if (request !== selectedTaskRequest && state.selectedTask?.id !== task.id) {
+      state.tasks = [
+        task,
+        ...state.tasks.filter((item) => item.id !== task.id),
+      ].slice(0, 20)
+      await context?.requestRerender()
       return
     }
     await setTask(task)
@@ -784,28 +809,46 @@ export const createInstance = async (
     ) {
       return
     }
-    if (activeController && state.selectedTask?.status !== 'running') {
+    if (pendingStarts.has(selectedTaskRequest)) {
       return
     }
     if (state.focusMode) {
       scrollToLatestTurn = true
     }
     state.draft = ''
+    await saveDraft()
     state.composerImages = []
     state.modelPickerOpen = false
     if (state.selectedTask?.status === 'running') {
+      if (!activeRuns.has(state.selectedTask.id)) {
+        throw new Error('This conversation is running in another window.')
+      }
       await api.steer(state.selectedTask.id, message, attachments)
       if (requestRerender) {
         await context?.requestRerender()
       }
       return
     }
-    activeController = new AbortController()
+    const controller = new AbortController()
     const request = selectedTaskRequest
+    pendingStarts.add(request)
+    let runningTaskId = state.selectedTask?.id
+    if (runningTaskId) {
+      activeRuns.set(runningTaskId, controller)
+    }
     const options = {
       attachments,
-      onUpdate: (task: ChatTask): Promise<void> => updateTask(task, request),
-      signal: activeController.signal,
+      onUpdate: (task: ChatTask): Promise<void> => {
+        runningTaskId = task.id
+        if (task.status === 'idle' || isWorking(task)) {
+          activeRuns.set(task.id, controller)
+        }
+        if (task.status !== 'idle') {
+          pendingStarts.delete(request)
+        }
+        return updateTask(task, request)
+      },
+      signal: controller.signal,
     }
     const selectedTask = state.selectedTask
       ? { ...state.selectedTask, modelId: state.selectedModelId }
@@ -816,7 +859,10 @@ export const createInstance = async (
         : await api.createTask(message, state.selectedModelId, options)
       await updateTask(task, request)
     } finally {
-      activeController = undefined
+      pendingStarts.delete(request)
+      if (runningTaskId && activeRuns.get(runningTaskId) === controller) {
+        activeRuns.delete(runningTaskId)
+      }
     }
     if (requestRerender) {
       await context?.requestRerender()
@@ -935,7 +981,6 @@ export const createInstance = async (
         void syncWindowTitle().catch(() => {})
       }
       currentState = undefined
-      activeController?.abort()
       if (authStatePoll !== undefined) {
         clearInterval(authStatePoll)
         authStatePoll = undefined
@@ -1002,6 +1047,7 @@ export const createInstance = async (
       if (event.type === 'input' && event.name === 'composer') {
         state.composerFocused = true
         state.draft = getEventString(event)
+        await saveDraft()
         return
       }
       if (event.type === 'click' && event.name?.startsWith('remove-image:')) {
@@ -1024,6 +1070,37 @@ export const createInstance = async (
         return
       }
       if (event.type !== 'click') {
+        return
+      }
+      if (event.name?.startsWith('open-file:')) {
+        try {
+          const workspace = state.selectedTask?.workspaceUri
+          if (!workspace) {
+            throw new Error('This conversation has no associated workspace.')
+          }
+          const base = workspace.endsWith('/') ? workspace : `${workspace}/`
+          const destination = decodeURIComponent(
+            event.name.slice('open-file:'.length),
+          )
+          const target = URL.parse(destination, base)
+          if (!target) {
+            throw new Error('Invalid file source link.')
+          }
+          const line = fileLineHash.exec(target.hash)
+          target.hash = ''
+          getWorkspaceRelativePath(base, target.href)
+          if (state.focusMode) {
+            await handleToggleFocusMode()
+          }
+          await execute('Main.openUri', target.href)
+          if (line) {
+            const row = Math.max(0, Number(line[1]) - 1)
+            await execute('GetActiveEditor.setSelections', [row, 0, row, 0])
+          }
+        } catch (error) {
+          state.errorMessage =
+            error instanceof Error ? error.message : String(error)
+        }
         return
       }
       if (event.name === 'submit') {
@@ -1049,10 +1126,17 @@ export const createInstance = async (
         return
       }
       if (event.name === 'stop') {
+        if (state.selectedTask && !activeRuns.has(state.selectedTask.id)) {
+          state.errorMessage =
+            'Stop this conversation in the window where it is running.'
+          return
+        }
         if (state.selectedTask?.status === 'running') {
           await setTask(setStatus(state.selectedTask, 'stopping'))
         }
-        activeController?.abort()
+        if (state.selectedTask) {
+          activeRuns.get(state.selectedTask.id)?.abort()
+        }
         return
       }
       if (event.name === 'back' || event.name === 'new-task') {
@@ -1177,6 +1261,7 @@ export const createInstance = async (
           ? Math.max(start, Math.min(selectionEnd, state.draft.length))
           : start
       state.draft = `${state.draft.slice(0, start)}${text}${state.draft.slice(end)}`
+      await saveDraft()
       state.errorMessage = ''
       await context?.requestRerender()
     },
@@ -1188,6 +1273,11 @@ export const createInstance = async (
     handleModelPickerOutsideClick(name: unknown, value: unknown): void {
       if (name === 'composer' && typeof value === 'string') {
         state.draft = value
+        void saveDraft().catch((error: unknown) => {
+          state.errorMessage =
+            error instanceof Error ? error.message : String(error)
+          void context?.requestRerender()
+        })
       }
       if (
         state.modelPickerOpen &&

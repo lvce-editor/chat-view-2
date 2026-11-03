@@ -9,7 +9,7 @@ const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repositoryRoot = join(packageRoot, '..', '..')
 const scenariosDirectory = join(packageRoot, 'scenarios')
 
-const main = async (): Promise<void> => {
+const loadEnvironment = (): void => {
   try {
     loadEnvFile(join(repositoryRoot, '.env'))
   } catch (error) {
@@ -17,7 +17,14 @@ const main = async (): Promise<void> => {
       throw error
     }
   }
+}
 
+const main = async (): Promise<void> => {
+  loadEnvironment()
+
+  const { LVCE_ACCESS_TOKEN } = process.env
+  const credential = LVCE_ACCESS_TOKEN?.trim()
+  const credentials = credential ? { apiKey: credential } : {}
   const [command, scenarioId] = process.argv.slice(2)
   if (
     command !== 'run' &&
@@ -30,15 +37,14 @@ const main = async (): Promise<void> => {
 
   if (command === 'run') {
     await runEvaluations({
-      ...(process.env.OPENAI_API_KEY && {
-        apiKey: process.env.OPENAI_API_KEY.trim(),
-      }),
+      mode: process.argv.includes('--record') ? 'record' : 'replay',
+      ...credentials,
       cacheDirectory: join(packageRoot, 'cache'),
       log: (message) => process.stdout.write(`${message}\n`),
       resultsDirectory: join(packageRoot, 'results'),
       scenariosDirectory,
       upstreamBaseUrl:
-        process.env.EVALUATION_UPSTREAM_URL || 'https://api.openai.com/v1',
+        process.env.EVALUATION_UPSTREAM_URL || 'http://127.0.0.1:1/api/v1',
       workspacesDirectory: join(packageRoot, 'workspaces'),
     })
     return
@@ -61,12 +67,11 @@ const main = async (): Promise<void> => {
     throw new Error(`Invalid EVALUATION_PORT: ${process.env.EVALUATION_PORT}`)
   }
   const proxy = await startEvaluationProxy({
+    mode: process.argv.includes('--record') ? 'record' : 'replay',
     ...(process.env.EVALUATION_ALLOWED_ORIGIN && {
       allowedOrigin: process.env.EVALUATION_ALLOWED_ORIGIN,
     }),
-    ...(process.env.OPENAI_API_KEY && {
-      apiKey: process.env.OPENAI_API_KEY,
-    }),
+    ...credentials,
     cacheDirectory: join(packageRoot, 'cache'),
     model: scenario.model,
     port,
@@ -76,7 +81,7 @@ const main = async (): Promise<void> => {
     }),
     transcriptPath: join(packageRoot, 'results', `${scenario.id}.json`),
     upstreamBaseUrl:
-      process.env.EVALUATION_UPSTREAM_URL || 'https://api.openai.com/v1',
+      process.env.EVALUATION_UPSTREAM_URL || 'http://127.0.0.1:1/api/v1',
   })
   process.stdout.write(`Evaluation proxy: ${proxy.origin}\n`)
   process.stdout.write(`Set chat2.backendUrl to ${proxy.origin}\n`)

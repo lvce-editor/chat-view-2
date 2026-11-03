@@ -1,4 +1,5 @@
 import type { AgentFileSystemAccess } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
+import { getWorkspaceUri } from '@lvce-editor/api'
 import type { ChatApi } from '../ChatApi/ChatApi.ts'
 import { createAgentChatApi } from '../AgentChatApi/AgentChatApi.ts'
 import {
@@ -30,9 +31,10 @@ export const createDefaultChatApi = async ({
     refreshAccessToken,
     supportsStreaming,
     titleModelId = 'gpt-6-luna',
+    useMockBackend = false,
   } = providedConfiguration ||
   (await resolveBackendConfiguration(undefined, providedAccessToken))
-  if (!baseUrl) {
+  if (useMockBackend) {
     return createMockChatApi(120)
   }
   return createAgentChatApi({
@@ -44,8 +46,16 @@ export const createDefaultChatApi = async ({
       ...(refreshAccessToken && { refreshAccessToken }),
       supportsStreaming,
     }),
+    createToolHost: (task) =>
+      createRemoteAgentToolHost(fileSystemAccess, task.workspaceUri || ''),
     store: createIndexedDbTaskStore(),
     titleModelId,
-    toolHost: await createRemoteAgentToolHost(fileSystemAccess),
+    workspaceUriProvider: async () => {
+      try {
+        return await getWorkspaceUri()
+      } catch {
+        return ''
+      }
+    },
   })
 }

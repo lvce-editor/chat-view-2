@@ -1225,3 +1225,12 @@
     margin: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
 }
+
+.ChatFileLink {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: inherit;
+}

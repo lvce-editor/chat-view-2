@@ -21,9 +21,6 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await review.click()
   const changedFiles = Locator('.ChatChangedFile')
   await expect(changedFiles).toHaveCount(5)
-  const revert = Locator('button[name="revert"]')
-  // eslint-disable-next-line e2e/no-direct-click
-  await revert.click()
-  const revertedMessage = Locator('text=Reverted 5 changed files.')
-  await expect(revertedMessage).toBeVisible()
+  const undoButton = Locator('button[name="revert"]')
+  await expect(undoButton).toHaveCount(0)
 }

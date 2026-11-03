@@ -16,7 +16,7 @@ export interface NodeCommandExecutorOptions {
 
 interface NodeRuntime {
   readonly getBuiltinModule?: (id: string) => unknown
-  readonly kill?: (pid: number) => boolean
+  readonly kill?: (pid: number, signal?: string) => boolean
   readonly platform?: string
   readonly versions?: {
     readonly node?: string
@@ -100,6 +100,7 @@ export const createNodeCommandExecutor = ({
         let output = ''
         let stopReason: 'aborted' | 'timeout' | undefined
         let settled = false
+        let killTimeout: ReturnType<typeof setTimeout> | undefined
 
         const appendOutput = (chunk: string): void => {
           const available = Math.max(0, options.outputLimit - output.length)
@@ -113,6 +114,7 @@ export const createNodeCommandExecutor = ({
 
         const cleanup = (): void => {
           clearTimeout(timeout)
+          clearTimeout(killTimeout)
           options.signal?.removeEventListener('abort', handleAbort)
           child.stdout.off('data', handleOutput)
           child.stderr.off('data', handleOutput)
@@ -133,7 +135,7 @@ export const createNodeCommandExecutor = ({
           appendOutput(chunk)
         }
 
-        const killChild = (): void => {
+        const killChild = (force = false): void => {
           if (runtime.platform === 'win32' && child.pid) {
             const killer = spawn(
               'taskkill',
@@ -143,16 +145,17 @@ export const createNodeCommandExecutor = ({
             killer.once('error', child.kill.bind(child))
             return
           }
+          const signal = force ? 'SIGKILL' : 'SIGTERM'
           if (child.pid && typeof runtime.kill === 'function') {
             try {
-              runtime.kill(-child.pid)
+              runtime.kill(-child.pid, signal)
               return
             } catch {
-              child.kill()
+              child.kill(signal)
               return
             }
           }
-          child.kill()
+          child.kill(signal)
         }
 
         const stop = (reason: 'aborted' | 'timeout'): void => {
@@ -161,6 +164,7 @@ export const createNodeCommandExecutor = ({
           }
           stopReason = reason
           killChild()
+          killTimeout = setTimeout(killChild, 500, true)
         }
 
         const handleAbort = (): void => {

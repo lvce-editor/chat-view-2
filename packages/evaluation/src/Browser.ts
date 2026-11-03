@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 import { spawn } from 'node:child_process'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL, fileURLToPath } from 'node:url'
@@ -30,13 +31,8 @@ const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const repositoryRoot = join(packageRoot, '..', '..')
 const e2eDirectory = join(repositoryRoot, 'packages', 'e2e')
 const extensionDirectory = join(repositoryRoot, 'packages', 'extension')
-const playwrightCli = join(
-  e2eDirectory,
-  'node_modules',
-  '@lvce-editor',
-  'test-with-playwright',
-  'bin',
-  'test-with-playwright.js',
+const playwrightCli = createRequire(join(e2eDirectory, 'package.json')).resolve(
+  '@lvce-editor/test-with-playwright/bin/test-with-playwright.js',
 )
 const maximumProcessOutput = 128_000
 
@@ -89,35 +85,53 @@ export const createBrowserTestSource = (
 ): string => {
   const configuration = JSON.stringify({
     backendOrigin: options.backendOrigin,
+    electron: process.env.EVALUATION_ELECTRON === '1',
     model: options.model,
     prompt: options.prompt,
     scenarioId: options.scenarioId,
+    timeoutMs: options.timeoutMs,
     workspace: pathToFileURL(options.workspace).href,
   })
   return `const configuration = ${configuration}
 
 export const name = \`chat2.evaluation.\${configuration.scenarioId}\`
 
-export const test = async ({ Command, Workspace }) => {
+export const test = async ({ Command, Workspace, Locator, expect, KeyBoard }) => {
   // Let Playwright's network-idle navigation finish before starting a long request.
-  const { promise, resolve } = Promise.withResolvers<void>()
+  const { promise, resolve } = Promise.withResolvers()
   setTimeout(resolve, 1000)
   await promise
   await Workspace.setPath(configuration.workspace)
   await Command.execute('Preferences.update', {
+    'chat2.computerUseEnabled': false,
     'chat2.backendUrl': configuration.backendOrigin,
     'chat2.selectedModelId': configuration.model,
     'chat2.supportsStreaming': true,
     'chat2.useMockBackend': false,
   })
-  await Command.executeExtensionCommand(
-    'chat2.createSession',
-    configuration.model,
-  )
-  await Command.executeExtensionCommand(
-    'chat2.sendMessage',
-    configuration.prompt,
-  )
+  await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
+  const composer = Locator('textarea[name="composer"]')
+  await expect(composer).toBeVisible()
+  await composer.type(configuration.prompt)
+  await expect(Locator('button[name="submit"]')).toHaveAttribute('disabled', null)
+  await KeyBoard.press('Enter')
+  await expect(Locator('.ChatMessageUser')).toContainText(configuration.prompt)
+  const deadline = Date.now() + configuration.timeoutMs
+  while (true) {
+    try {
+      await expect(Locator('.ChatTaskStatus-completed, .ChatTaskStatus-failed')).toHaveCount(1)
+      break
+    } catch (error) {
+      if (Date.now() >= deadline) { throw error }
+    }
+  }
+  await expect(Locator('.ChatError, .ChatErrorBanner')).toHaveCount(0)
+  await expect(Locator('.ChatTaskStatus-completed')).toHaveCount(1)
+  await expect(Locator('.ChatMessageAssistant').first()).toBeVisible()
+  if (configuration.electron && configuration.scenarioId === 'fix-node-test') {
+    await expect(Locator('.ChatChecksPassed')).toContainText('checks passed')
+  }
+
 }
 `
 }
@@ -150,6 +164,9 @@ export const createEvaluationBrowser = (): EvaluationBrowser => ({
           `--only-extension=${extensionDirectory}`,
           `--test-path=${testDirectory}`,
           '--headless',
+          ...(process.env.EVALUATION_ELECTRON === '1' ? ['--electron'] : []),
+          '--fail-on-console-messages',
+          '--trace-renderer-worker',
           `--timeout=${options.timeoutMs}`,
         ],
         command: process.execPath,

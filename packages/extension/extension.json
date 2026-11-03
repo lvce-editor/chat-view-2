@@ -9,7 +9,8 @@
   "contentSecurityPolicy": [
     "default-src 'none'",
     "script-src 'self'",
-    "img-src data:"
+    "img-src data:",
+    "connect-src https: wss: http://127.0.0.1:* ws://127.0.0.1:* http://localhost:* ws://localhost:*"
   ],
   "isolated": true,
   "categories": ["Other"],
@@ -70,6 +71,11 @@
       "type": "boolean",
       "default": false,
       "description": "Use the mock Chat 2 backend for development and testing."
+    },
+    "chat2.computerUseEnabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the optional desktop computer-use tools on supported Electron hosts."
     }
   },
   "activation": [
@@ -107,6 +113,12 @@
       "name": "Chat 2 TypeScript Evaluation Worker",
       "type": "web-worker",
       "url": "dist/typeScriptEvaluationWorkerMain.js"
+    },
+    {
+      "id": "builtin.chat-view-2.commands",
+      "type": "node-process",
+      "name": "Chat 2 Commands",
+      "url": "dist/commandProcessMain.js"
     }
   ],
   "commands": [

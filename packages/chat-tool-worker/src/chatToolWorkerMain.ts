@@ -9,7 +9,6 @@ import type {
   AgentToolCall,
   AgentToolHost,
   AgentToolResult,
-  TypeScriptExecutionResult,
 } from './parts/AgentToolHost/AgentToolHost.ts'
 import { createAgentToolHost } from './parts/AgentToolHost/AgentToolHost.ts'
 
@@ -27,6 +26,7 @@ interface RequestState {
 
 interface SessionOptions {
   readonly fileSystemAccess?: AgentFileSystemAccess
+  readonly workspaceUri?: string
 }
 
 const sessions = new Map<string, AgentToolHost>()
@@ -57,12 +57,19 @@ const createRemoteFileSystem = (): AgentFileSystem => {
       rpc.invoke('ChatToolWorkerHost.readFile', uri) as Promise<string>,
     remove: (uri) =>
       rpc.invoke('ChatToolWorkerHost.remove', uri) as Promise<void>,
-    writeFile: (uri, content) =>
-      rpc.invoke('ChatToolWorkerHost.writeFile', uri, content) as Promise<void>,
+    writeFile: (uri, content, expectedContent) =>
+      rpc.invoke(
+        'ChatToolWorkerHost.writeFile',
+        uri,
+        content,
+        expectedContent,
+      ) as Promise<void>,
   }
 }
 
-const createRemoteCommandExecutor = (): AgentCommandExecutor => ({
+const createRemoteCommandExecutor = (
+  workspaceUri?: string,
+): AgentCommandExecutor => ({
   async execute(command, options) {
     const requestId = `command-${crypto.randomUUID()}`
     const rpc = getParentRpc()
@@ -76,6 +83,7 @@ const createRemoteCommandExecutor = (): AgentCommandExecutor => ({
         requestId,
         command,
         { outputLimit: options.outputLimit, timeoutMs: options.timeoutMs },
+        workspaceUri,
       )) as { readonly exitCode: number; readonly output: string }
     } finally {
       options.signal?.removeEventListener('abort', cancel)
@@ -135,24 +143,19 @@ const createRemoteEditorContextProvider = (): AgentEditorContextProvider => ({
     }>,
 })
 
-const createRemoteTypeScriptExecutor = (
-  code: string,
-): Promise<TypeScriptExecutionResult> =>
-  getParentRpc().invoke(
-    'ChatToolWorkerHost.executeTypeScript',
-    code,
-  ) as Promise<TypeScriptExecutionResult>
-
 const createSession = async (
   sessionId: string,
   options: SessionOptions = {},
-): Promise<void> => {
+): Promise<{ readonly verification: boolean }> => {
   if (sessions.has(sessionId)) {
     throw new Error(`Chat tool session already exists: ${sessionId}`)
   }
   const [externalToolHost, capabilities] = await Promise.all([
     createRemoteExternalToolHost(),
-    getParentRpc().invoke('ChatToolWorkerHost.getCapabilities') as Promise<{
+    getParentRpc().invoke(
+      'ChatToolWorkerHost.getCapabilities',
+      options.workspaceUri,
+    ) as Promise<{
       readonly commandExecutor: boolean
       readonly editorContext: boolean
     }>,
@@ -161,7 +164,7 @@ const createSession = async (
     sessionId,
     createAgentToolHost({
       ...(capabilities.commandExecutor && {
-        commandExecutor: createRemoteCommandExecutor(),
+        commandExecutor: createRemoteCommandExecutor(options.workspaceUri),
       }),
       ...(capabilities.editorContext && {
         editorContextProvider: createRemoteEditorContextProvider(),
@@ -171,13 +174,15 @@ const createSession = async (
       ...(options.fileSystemAccess && {
         fileSystemAccess: options.fileSystemAccess,
       }),
-      typeScriptExecutor: createRemoteTypeScriptExecutor,
       workspaceUriProvider: () =>
-        getParentRpc().invoke(
-          'ChatToolWorkerHost.getWorkspaceUri',
-        ) as Promise<string>,
+        options.workspaceUri === undefined
+          ? (getParentRpc().invoke(
+              'ChatToolWorkerHost.getWorkspaceUri',
+            ) as Promise<string>)
+          : Promise.resolve(options.workspaceUri),
     }),
   )
+  return { verification: capabilities.commandExecutor }
 }
 
 const disposeSession = (sessionId: string): void => {

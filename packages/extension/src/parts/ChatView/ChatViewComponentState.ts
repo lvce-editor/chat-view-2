@@ -12,6 +12,8 @@ const taskStatuses = new Set<ChatTaskStatus>([
   'idle',
   'running',
   'stopping',
+  'stopped',
+  'interrupted',
 ])
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -87,6 +89,8 @@ const isChatTaskEvent = (value: unknown): value is ChatTaskEvent => {
 const isChatTask = (value: unknown): value is ChatTask => {
   return (
     isRecord(value) &&
+    (value.workspaceUri === undefined ||
+      typeof value.workspaceUri === 'string') &&
     typeof value.createdAt === 'string' &&
     Array.isArray(value.events) &&
     value.events.every(isChatTaskEvent) &&

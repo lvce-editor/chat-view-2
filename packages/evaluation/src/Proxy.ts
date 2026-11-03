@@ -1,15 +1,21 @@
-/* eslint-disable @typescript-eslint/prefer-readonly-parameter-types, sonarjs/cognitive-complexity */
+import type { RawData, WebSocket } from 'ws'
 import {
   createServer,
   type IncomingMessage,
   type ServerResponse,
 } from 'node:http'
+import { setTimeout as delay } from 'node:timers/promises'
+/* eslint-disable @typescript-eslint/prefer-readonly-parameter-types, sonarjs/cognitive-complexity */
+import { fileURLToPath } from 'node:url'
+import { WebSocketServer } from 'ws'
 import type { RecordedHttpResponse } from './Types.ts'
 import {
   createCacheKey,
   readCachedResponse,
   writeCachedResponse,
 } from './Cache.ts'
+import { normalizeCommandOutput } from './NormalizeCommandOutput.ts'
+import { socketDataToText, recordWebSocketResponse } from './RecordWebSocket.ts'
 import {
   createTranscriptWriter,
   getToolCalls,
@@ -20,13 +26,16 @@ export interface EvaluationProxyOptions {
   readonly allowedOrigin?: string
   readonly apiKey?: string
   readonly cacheDirectory: string
+  readonly enableControls?: boolean
   readonly host?: string
+  readonly mode?: 'record' | 'replay'
   readonly model: string
   readonly port?: number
   readonly scenarioId: string
   readonly temperature?: number
   readonly transcriptPath: string
   readonly upstreamBaseUrl: string
+  readonly workspaceUri?: string
 }
 
 export interface EvaluationProxy {
@@ -115,9 +124,75 @@ const isAllowedOrigin = (
   return localHostnames.has(hostname)
 }
 
+const trailingSlash = /\/$/u
+const controlPath = /^\/__replay\/(pause|resume)\/api\/v1\/models$/u
+const controlPrefix = /^\/__replay\/(?:pause|resume)/u
+const responseSocketPath =
+  /^(?:\/__replay\/(?:pause|resume))?\/api\/v1\/responses$/u
+const apiPath = /^\/api\//u
+const eventSeparator = /\r?\n\r?\n/u
+const lineSeparator = /\r?\n/u
+
+const parseReplayEvents = (
+  text: string,
+  streamed: boolean,
+): readonly unknown[] => {
+  if (!streamed) {
+    return [{ response: JSON.parse(text), type: 'response.completed' }]
+  }
+  return text.split(eventSeparator).flatMap((block) => {
+    const data = block
+      .split(lineSeparator)
+      .filter((line) => line.startsWith('data:'))
+      .map((line) => line.slice(5).trimStart())
+      .join('\n')
+    return data && data !== '[DONE]' ? [JSON.parse(data)] : []
+  })
+}
+
 export const startEvaluationProxy = async (
   options: EvaluationProxyOptions,
 ): Promise<EvaluationProxy> => {
+  let paused: ReturnType<typeof Promise.withResolvers<void>> | undefined
+  const workspaceRoot = options.workspaceUri?.replace(trailingSlash, '')
+  const portableRoot = 'memfs:///recorded-workspace'
+  const workspacePath = workspaceRoot?.startsWith('file://')
+    ? JSON.stringify(fileURLToPath(workspaceRoot)).slice(1, -1)
+    : undefined
+  const commands = new Map<string, string>()
+  const trackCommands = (recorded: RecordedHttpResponse): void => {
+    for (const call of getToolCalls(recorded.body)) {
+      if (call.name !== 'run_command') {
+        continue
+      }
+
+      const args = JSON.parse(call.arguments) as { command?: unknown }
+      if (typeof args.command === 'string') {
+        commands.set(call.callId, args.command)
+      }
+    }
+  }
+  const normalize = (value: string): string => {
+    const portable = workspaceRoot
+      ? value.replaceAll(workspaceRoot, () => portableRoot)
+      : value
+    return workspacePath
+      ? portable.replaceAll(workspacePath, () => portableRoot)
+      : portable
+  }
+
+  const materialize = (
+    recorded: RecordedHttpResponse,
+  ): RecordedHttpResponse => ({
+    ...recorded,
+    body: workspaceRoot
+      ? recorded.body.replaceAll(portableRoot, () => workspaceRoot)
+      : recorded.body,
+  })
+  const portable = (recorded: RecordedHttpResponse): RecordedHttpResponse => ({
+    ...recorded,
+    body: normalize(recorded.body),
+  })
   const transcript = createTranscriptWriter(
     options.transcriptPath,
     options.scenarioId,
@@ -134,6 +209,25 @@ export const startEvaluationProxy = async (
     }
     setCorsHeaders(request, response)
     try {
+      if (
+        options.enableControls &&
+        (request.method === 'POST' || request.method === 'GET') &&
+        request.url === '/__replay/pause'
+      ) {
+        paused ||= Promise.withResolvers<void>()
+        sendJson(response, 200, { paused: true })
+        return
+      }
+      if (
+        options.enableControls &&
+        (request.method === 'POST' || request.method === 'GET') &&
+        request.url === '/__replay/resume'
+      ) {
+        paused?.resolve()
+        paused = undefined
+        sendJson(response, 200, { paused: false })
+        return
+      }
       if (request.method === 'OPTIONS') {
         response.statusCode = 204
         response.end()
@@ -143,7 +237,22 @@ export const startEvaluationProxy = async (
         sendJson(response, 200, { ok: true })
         return
       }
-      if (request.method === 'GET' && request.url === '/v1/models') {
+      const control = options.enableControls
+        ? controlPath.exec(request.url || '')
+        : null
+      if (control?.[1] === 'pause') {
+        paused ||= Promise.withResolvers<void>()
+      }
+      if (control?.[1] === 'resume') {
+        paused?.resolve()
+        paused = undefined
+      }
+      // Keep a control URL usable if the view observes the temporary test preference.
+      const route = options.enableControls
+        ? request.url?.replace(controlPrefix, '')
+        : request.url
+      const pathname = control ? '/v1/models' : route?.replace(apiPath, '/')
+      if (request.method === 'GET' && pathname === '/v1/models') {
         sendJson(response, 200, {
           data: [
             {
@@ -157,7 +266,7 @@ export const startEvaluationProxy = async (
         })
         return
       }
-      if (request.method !== 'POST' || request.url !== '/v1/responses') {
+      if (request.method !== 'POST' || pathname !== '/v1/responses') {
         sendJson(response, 404, { error: { message: 'Not found' } })
         return
       }
@@ -172,8 +281,12 @@ export const startEvaluationProxy = async (
           temperature: options.temperature,
         }),
       }
+      const normalizedBody = normalizeCommandOutput(requestBody, (id) =>
+        commands.get(id),
+      )
+      const normalizedJson = normalize(JSON.stringify(normalizedBody))
       const cacheRequest = {
-        body: requestBody,
+        body: JSON.parse(normalizedJson) as unknown,
         method: 'POST' as const,
         path: '/v1/responses' as const,
       }
@@ -189,16 +302,48 @@ export const startEvaluationProxy = async (
           toolCalls: getToolCalls(recorded.body),
           toolResults: getToolResults(requestBody),
         })
-        replayResponse(response, recorded)
+        trackCommands(recorded)
+        replayResponse(response, materialize(recorded))
+        return
+      }
+      if (options.mode !== 'record') {
+        sendJson(response, 502, {
+          error: {
+            message: `Replay recording missing for ${options.scenarioId}: ${cacheKey}. Record this request explicitly; replay never contacts the provider.`,
+          },
+        })
         return
       }
       source = 'upstream'
       if (!options.apiKey) {
         sendJson(response, 502, {
           error: {
-            message: `Evaluation cache miss ${cacheKey}. OPENAI_API_KEY is missing or empty; copy .env.example to the repository-root .env file and add a valid key to record new responses.`,
+            message: `Evaluation cache miss ${cacheKey}. LVCE_ACCESS_TOKEN is missing or empty; copy .env.example to the repository-root .env file and add a valid LVCE backend token to record new responses.`,
           },
         })
+        return
+      }
+      if (request.headers['x-chat-record-websocket'] === '1') {
+        recorded = await recordWebSocketResponse(
+          options.upstreamBaseUrl,
+          options.apiKey,
+          requestBody,
+        )
+        await writeCachedResponse(
+          options.cacheDirectory,
+          cacheKey,
+          portable(recorded),
+        )
+        await transcript.append({
+          cacheKey,
+          request: cacheRequest,
+          response: recorded,
+          source,
+          toolCalls: getToolCalls(recorded.body),
+          toolResults: getToolResults(requestBody),
+        })
+        trackCommands(recorded)
+        replayResponse(response, materialize(recorded))
         return
       }
       const upstream = await fetch(
@@ -218,7 +363,7 @@ export const startEvaluationProxy = async (
           body: `${JSON.stringify({
             error: {
               message:
-                'OpenAI rejected OPENAI_API_KEY. Update the key in the repository-root .env file and try again.',
+                'LVCE backend rejected LVCE_ACCESS_TOKEN. Update the token in the repository-root .env file and try again.',
             },
           })}\n`,
           headers: { 'content-type': 'application/json' },
@@ -232,7 +377,8 @@ export const startEvaluationProxy = async (
           toolCalls: [],
           toolResults: getToolResults(requestBody),
         })
-        replayResponse(response, recorded)
+        trackCommands(recorded)
+        replayResponse(response, materialize(recorded))
         return
       }
       const headers = getResponseHeaders(upstream.headers)
@@ -259,7 +405,11 @@ export const startEvaluationProxy = async (
         status: upstream.status,
       }
       if (upstream.ok) {
-        await writeCachedResponse(options.cacheDirectory, cacheKey, recorded)
+        await writeCachedResponse(
+          options.cacheDirectory,
+          cacheKey,
+          portable(recorded),
+        )
       }
       await transcript.append({
         cacheKey,
@@ -288,6 +438,82 @@ export const startEvaluationProxy = async (
     void handleRequest(request, response)
   })
 
+  const sockets = new WebSocketServer({
+    handleProtocols: (protocols): string | false =>
+      protocols.has('lvce.responses.v1') ? 'lvce.responses.v1' : false,
+    noServer: true,
+  })
+  const replaySocketResponse = async (
+    connection: WebSocket,
+    data: Readonly<RawData>,
+  ): Promise<void> => {
+    const value = JSON.parse(socketDataToText(data)) as Record<string, unknown>
+    if (value.type !== 'response.create') {
+      throw new Error('Expected response.create')
+    }
+    const { type: _type, ...body } = value
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Replay server is not listening')
+    }
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/v1/responses`,
+      {
+        body: JSON.stringify({ ...body, stream: true }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-chat-record-websocket': '1',
+        },
+        method: 'POST',
+      },
+    )
+    const text = await response.text()
+    if (!response.ok) {
+      throw new Error(text)
+    }
+    const events = parseReplayEvents(
+      text,
+      response.headers.get('content-type')?.includes('text/event-stream') ===
+        true,
+    )
+    await paused?.promise
+    for (const event of events) {
+      if (connection.readyState !== 1) {
+        return
+      }
+      connection.send(JSON.stringify(event))
+      await delay(2)
+    }
+  }
+  const connect = (connection: WebSocket): void => {
+    connection.once('message', (data: Readonly<RawData>) => {
+      void replaySocketResponse(connection, data).catch((error: unknown) => {
+        if (connection.readyState === 1) {
+          connection.send(
+            JSON.stringify({
+              error: {
+                message: error instanceof Error ? error.message : String(error),
+              },
+              type: 'error',
+            }),
+          )
+        }
+      })
+    })
+  }
+  server.on('upgrade', (request, socket, head) => {
+    if (
+      !isAllowedOrigin(request.headers.origin, options.allowedOrigin) ||
+      !(options.enableControls
+        ? responseSocketPath.test(request.url || '')
+        : request.url === '/api/v1/responses')
+    ) {
+      socket.end('HTTP/1.1 403 Forbidden\r\n\r\n')
+      return
+    }
+    sockets.handleUpgrade(request, socket, head, connect)
+  })
+
   const started = Promise.withResolvers<void>()
   server.once('error', started.reject)
   server.listen(options.port ?? 0, options.host ?? '127.0.0.1', () => {
@@ -301,7 +527,12 @@ export const startEvaluationProxy = async (
   }
   return {
     close: async (): Promise<void> => {
+      paused?.resolve()
       const closed = Promise.withResolvers<void>()
+      for (const connection of sockets.clients) {
+        connection.terminate()
+      }
+      sockets.close()
       server.close((error) => (error ? closed.reject(error) : closed.resolve()))
       return closed.promise
     },

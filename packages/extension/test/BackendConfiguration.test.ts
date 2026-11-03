@@ -124,6 +124,7 @@ test('uses the deterministic mock backend when explicitly configured', async () 
     openAiWebSearch: true,
     supportsStreaming: false,
     titleModelId: 'gpt-6-luna',
+    useMockBackend: true,
   })
   expect(host.getAccessToken).not.toHaveBeenCalled()
 })

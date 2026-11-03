@@ -5,7 +5,7 @@ import type {
   AgentToolImageOutput,
   AgentToolResult,
 } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
-import { createNodeRpc } from '@lvce-editor/api'
+import { createNodeRpc, getPlatform, getPreference } from '@lvce-editor/api'
 
 interface NodeRpc {
   readonly invoke: (
@@ -209,6 +209,9 @@ const tryCreateComputerUseToolHost = async (): Promise<
   AgentExternalToolHost | undefined
 > => {
   try {
+    if ((await getPlatform()) !== 'electron') {
+      return undefined
+    }
     return await createComputerUseToolHost()
   } catch {
     return undefined
@@ -218,6 +221,9 @@ const tryCreateComputerUseToolHost = async (): Promise<
 export const getDefaultComputerUseToolHost = async (): Promise<
   AgentExternalToolHost | undefined
 > => {
+  if ((await getPreference('chat2.computerUseEnabled')) === false) {
+    return undefined
+  }
   defaultHostState.hostPromise ||= tryCreateComputerUseToolHost()
   return defaultHostState.hostPromise
 }

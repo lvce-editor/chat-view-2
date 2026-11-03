@@ -72,11 +72,14 @@ const publishTaskChange = (): void => {
 
 const openDatabase = (): Promise<IDBDatabase> => {
   const { promise, reject, resolve } = Promise.withResolvers<IDBDatabase>()
-  const request = indexedDB.open(databaseName, 1)
+  const request = indexedDB.open(databaseName, 2)
   request.onerror = () => reject(request.error)
   request.onsuccess = () => resolve(request.result)
   request.onupgradeneeded = () => {
     const database = request.result
+    if (!database.objectStoreNames.contains('drafts')) {
+      database.createObjectStore('drafts')
+    }
     if (!database.objectStoreNames.contains(storeName)) {
       database.createObjectStore(storeName, { keyPath: 'id' })
     }
@@ -215,5 +218,47 @@ export const createIndexedDbTaskStore = (): TaskStore => {
         database.close()
       }
     },
+  }
+}
+
+// Persist on input; unload callbacks cannot reliably finish asynchronous RPCs.
+export const readDraft = async (
+  workspace: string,
+  taskId?: string,
+): Promise<string | undefined> => {
+  if (typeof indexedDB === 'undefined') {
+    return undefined
+  }
+  const database = await openDatabase()
+  try {
+    const transaction = database.transaction('drafts', 'readonly')
+    return await requestToPromise<string | undefined>(
+      transaction
+        .objectStore('drafts')
+        .get(JSON.stringify([workspace, taskId || ''])),
+    )
+  } finally {
+    database.close()
+  }
+}
+
+export const writeDraft = async (
+  workspace: string,
+  taskId: string | undefined,
+  text: string,
+): Promise<void> => {
+  if (typeof indexedDB === 'undefined') {
+    return
+  }
+  const database = await openDatabase()
+  try {
+    const transaction = database.transaction('drafts', 'readwrite')
+    const committed = transactionToPromise(transaction)
+    transaction
+      .objectStore('drafts')
+      .put(text, JSON.stringify([workspace, taskId || '']))
+    await committed
+  } finally {
+    database.close()
   }
 }

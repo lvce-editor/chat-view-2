@@ -1147,3 +1147,53 @@ test('does not refresh on non-authentication WebSocket connection failures', asy
   ).rejects.toThrow('Could not connect')
   expect(refreshAccessToken).not.toHaveBeenCalled()
 })
+
+test('preserves web citations and identifies native weather feeds', async () => {
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: jest.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'resp-sources',
+        output: [
+          {
+            action: {
+              sources: [
+                { name: 'oai-weather', type: 'api' },
+                {
+                  title: 'Forecast',
+                  url: 'https://weather.example.com/berlin',
+                },
+              ],
+            },
+            type: 'web_search_call',
+          },
+          {
+            content: [
+              {
+                annotations: [
+                  {
+                    title: 'Forecast',
+                    type: 'url_citation',
+                    url: 'https://weather.example.com/berlin',
+                  },
+                ],
+                text: 'Berlin forecast.',
+                type: 'output_text',
+              },
+            ],
+            type: 'message',
+          },
+        ],
+      }),
+    ),
+  })
+  const result = await backend.runStep({
+    input: [],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+  expect(result.text).toBe(
+    'Berlin forecast.\n\nSources: [Forecast](https://weather.example.com/berlin), OpenAI weather feed',
+  )
+})

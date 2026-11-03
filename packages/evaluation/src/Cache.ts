@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RecordedHttpResponse } from './Types.ts'
@@ -52,7 +52,7 @@ export const writeCachedResponse = async (
 ): Promise<void> => {
   await mkdir(cacheDirectory, { recursive: true })
   const path = getCachePath(cacheDirectory, key)
-  const temporaryPath = `${path}.${process.pid}.tmp`
+  const temporaryPath = `${path}.${randomUUID()}.tmp`
   await writeFile(temporaryPath, `${JSON.stringify(response, undefined, 2)}\n`)
   await rename(temporaryPath, path)
 }

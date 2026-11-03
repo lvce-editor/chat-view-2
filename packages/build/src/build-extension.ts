@@ -52,3 +52,16 @@ await esbuild.build({
   platform: 'browser',
   target: 'esnext',
 })
+
+await esbuild.build({
+  banner: {
+    js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
+  },
+  entryPoints: [path.join(extension, 'src', 'commandProcessMain.ts')],
+  outfile: path.join(outdir, 'commandProcessMain.js'),
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  external: ['electron', 'node:*'],
+  target: 'esnext',
+})

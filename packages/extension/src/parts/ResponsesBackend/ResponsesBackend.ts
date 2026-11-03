@@ -65,7 +65,7 @@ const openRouterModelNotFoundCode = 'E_OPENROUTER_MODEL_NOT_FOUND'
 const openRouterApiBadResponseCode = 'E_OPENROUTER_API_BAD_RESPONSE'
 const computerUseToolPrefix = 'computer_use_'
 const defaultAgentInstructions =
-  'You are the Lvce assistant. Answer general questions directly. When the user asks you to work on an open workspace, inspect relevant files before editing, keep changes scoped, use tools to modify the workspace, and run available verification. If workspace context is unavailable, continue with requests that do not need workspace access and explain clearly when a requested operation requires an open workspace. End with a concise result. Treat every tool registered with the request as an available capability.'
+  'You are the Lvce assistant. Answer general questions directly. When the user asks you to work on an open workspace, inspect relevant files before editing, keep changes scoped, use tools to modify the workspace, and run available verification. If workspace context is unavailable, continue with requests that do not need workspace access and explain clearly when a requested operation requires an open workspace. Questions about files authorize reading and explanation; edit only when the user requests an implementation or change. Cite workspace evidence with Markdown links using the absolute file URI and a #L line number fragment. Keep the original workspace binding throughout a conversation. Clearly distinguish checks that ran from verification unavailable on this host. End with a concise result. Treat every tool registered with the request as an available capability.'
 const computerUseInstructions =
   'You have direct access to observe and control the local Linux desktop through the registered computer_use_* tools. You can launch installed desktop applications, inspect accessibility state and windows, take or save screenshots, focus apps, click, scroll, type text, and press keys. Do not say that computer use or GUI control is unavailable when these tools are registered. Invoke them like any other tool: start with computer_use_doctor when readiness is unknown. When an application must be opened, call computer_use_launch_app instead of using keyboard shortcuts or typing into an application launcher. Inspect windows or app state, prefer semantic accessibility selectors over pixel coordinates, and perform the requested action. When clicking coordinates from a window-cropped screenshot, pass the same window target and relative: true so the click uses the screenshot coordinate space. When a screenshot must be written to a path, call computer_use_save_screenshot because computer_use_screenshot does not save files. Inspect state again to verify the result. Ask before consequential actions that submit, send, purchase, delete, overwrite, or publish.'
 
@@ -128,6 +128,10 @@ const createResponseRequest = (
 ): Readonly<Record<string, unknown>> => ({
   input: options.input.map(mapInput),
   instructions: getAgentInstructions(options),
+  ...(openAiWebSearch &&
+    !options.modelId.toLowerCase().startsWith('openrouter/') && {
+      include: ['web_search_call.action.sources'],
+    }),
   model: options.modelId,
   ...(options.previousResponseId && {
     previous_response_id: options.previousResponseId,
@@ -274,6 +278,11 @@ const getWebSocketUrl = (root: string, path: string): string => {
 }
 
 const getApiUrl = (root: string, path: string): string => {
+  if (!root) {
+    throw new Error(
+      'Chat backend is not configured. Configure the LVCE backend to use chat.',
+    )
+  }
   const apiRoot = root.endsWith('/api') ? root : `${root}/api`
   return `${apiRoot}${path}`
 }
@@ -365,8 +374,8 @@ const runWebSocketRequest = (
     }
     if (event.type === 'response.completed') {
       responseId = event.response?.id || responseId
-      if (event.response && !text) {
-        text = getResponseText(event.response)
+      if (event.response) {
+        text = getResponseText(event.response) || text
       }
       if (event.response && toolCalls.size === 0) {
         for (const toolCall of getResponseToolCalls(event.response)) {
@@ -496,32 +505,112 @@ const getRecord = (
     ? (value as Readonly<Record<string, unknown>>)
     : undefined
 
-const getResponseText = (
-  response: Readonly<Record<string, unknown>>,
-): string => {
-  if (typeof response.output_text === 'string') {
-    return response.output_text
+const sourceTitleBrackets = /[\u{5B}\u{5D}]/gu
+const feedLabels = new Map([
+  ['oai-weather', 'OpenAI weather feed'],
+  ['oai-finance', 'OpenAI finance feed'],
+  ['oai-sports', 'OpenAI sports feed'],
+])
+
+const addSource = (
+  sources: Map<string, string>,
+  source: Readonly<Record<string, unknown>>,
+): void => {
+  if (typeof source.url !== 'string' || !URL.canParse(source.url)) {
+    return
   }
-  if (!Array.isArray(response.output)) {
+  const url = new URL(source.url)
+  if (url.protocol === 'https:' || url.protocol === 'http:') {
+    sources.set(
+      url.href,
+      typeof source.title === 'string' ? source.title : url.hostname,
+    )
+  }
+}
+
+const collectSearchSources = (
+  item: Readonly<Record<string, unknown>>,
+  sources: Map<string, string>,
+  feeds: Set<string>,
+): void => {
+  const action = getRecord(item.action)
+  if (!Array.isArray(action?.sources)) {
+    return
+  }
+  for (const entry of action.sources) {
+    const source = getRecord(entry)
+    if (source) {
+      const label =
+        feedLabels.get(String(source.name)) ||
+        feedLabels.get(String(source.type)) ||
+        feedLabels.get(String(source.url))
+      if (label) {
+        feeds.add(label)
+      }
+      addSource(sources, source)
+    }
+  }
+}
+
+const collectMessageText = (
+  item: Readonly<Record<string, unknown>>,
+  sources: Map<string, string>,
+): string => {
+  if (!Array.isArray(item.content)) {
     return ''
   }
   const chunks: string[] = []
-  for (const outputItem of response.output) {
-    const item = getRecord(outputItem)
-    if (item?.type !== 'message' || !Array.isArray(item.content)) {
-      continue
-    }
-    for (const contentPart of item.content) {
-      const part = getRecord(contentPart)
-      if (
-        (part?.type === 'output_text' || part?.type === 'text') &&
-        typeof part.text === 'string'
-      ) {
-        chunks.push(part.text)
+  for (const value of item.content) {
+    const part = getRecord(value)
+    if (
+      (part?.type === 'output_text' || part?.type === 'text') &&
+      typeof part.text === 'string'
+    ) {
+      chunks.push(part.text)
+      const annotations: readonly unknown[] = Array.isArray(part.annotations)
+        ? part.annotations
+        : []
+      for (const annotation of annotations) {
+        const citation = getRecord(annotation)
+        if (citation?.type === 'url_citation') {
+          addSource(sources, citation)
+        }
       }
     }
   }
   return chunks.join('')
+}
+
+const getResponseText = (
+  response: Readonly<Record<string, unknown>>,
+): string => {
+  if (!Array.isArray(response.output)) {
+    return typeof response.output_text === 'string' ? response.output_text : ''
+  }
+  const sources = new Map<string, string>()
+  const feeds = new Set<string>()
+  const chunks: string[] = []
+  for (const value of response.output) {
+    const item = getRecord(value)
+    if (item?.type === 'web_search_call') {
+      collectSearchSources(item, sources, feeds)
+    }
+    if (item?.type === 'message') {
+      chunks.push(collectMessageText(item, sources))
+    }
+  }
+  const text =
+    chunks.join('') ||
+    (typeof response.output_text === 'string' ? response.output_text : '')
+  const links = Array.from(
+    sources,
+    ([url, title]) =>
+      `[${title.replaceAll(sourceTitleBrackets, '')}](${url.replaceAll('(', '%28').replaceAll(')', '%29')})`,
+  )
+  const references = [...links, ...feeds]
+  return references.length > 0
+    ? `${text}\n\nSources: ${references.join(', ')}`
+    : text
 }
 
 const getResponseToolCalls = (

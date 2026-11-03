@@ -1466,7 +1466,7 @@ test('submits a task and shows a Codex-style changed-files summary', async () =>
   expect(getText(dom)).toContain('+51')
   expect(getText(dom)).toContain('-10')
   expect(getText(dom)).toContain('✓ 2 checks passed')
-  expect(getText(dom)).toContain('Undo ↩')
+  expect(getText(dom)).not.toContain('Undo ↩')
   expect(getText(dom)).toContain('Review')
   expect(getNodesByClass(dom, 'ChatChangedFile')).toHaveLength(3)
   expect(getText(dom)).toContain('Show 2 more files  ⌄')

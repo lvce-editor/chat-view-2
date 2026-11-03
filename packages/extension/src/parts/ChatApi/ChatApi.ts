@@ -5,6 +5,8 @@ export type ChatTaskStatus =
   | 'idle'
   | 'running'
   | 'stopping'
+  | 'stopped'
+  | 'interrupted'
 
 export interface ChatModel {
   readonly available: boolean
@@ -135,6 +137,7 @@ export interface ChatTask {
   readonly title: string
   readonly titleGenerated?: boolean
   readonly updatedAt: string
+  readonly workspaceUri?: string
 }
 
 export interface ChatRunOptions {
