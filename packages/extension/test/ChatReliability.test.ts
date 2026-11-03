@@ -225,13 +225,11 @@ test('stopping after an edit keeps the file and records stopped status and chang
 })
 
 test('an explicit continuation after interruption starts a fresh response chain with preserved conversation', async () => {
-  const runStep = jest
-    .fn<AgentBackend['runStep']>()
-    .mockResolvedValue({
-      responseId: 'resumed',
-      text: 'Continued.',
-      toolCalls: [],
-    })
+  const runStep = jest.fn<AgentBackend['runStep']>().mockResolvedValue({
+    responseId: 'resumed',
+    text: 'Continued.',
+    toolCalls: [],
+  })
   const store = createMemoryTaskStore()
   const task: ChatTask = {
     createdAt: '2026-11-03T12:00:00Z',

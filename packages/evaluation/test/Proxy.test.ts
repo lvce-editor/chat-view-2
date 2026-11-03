@@ -300,3 +300,63 @@ void test('replays recorded events over the production WebSocket protocol', asyn
     await proxy.close()
   }
 })
+
+void test('coalesces concurrent identical recordings into one backend request', async () => {
+  const { WebSocketServer } = await import('ws')
+  const upstream = createServer()
+  const sockets = new WebSocketServer({ server: upstream })
+  let calls = 0
+  sockets.on('connection', (socket) => {
+    socket.once('message', () => {
+      calls++
+      setTimeout(
+        () =>
+          socket.send(
+            JSON.stringify({
+              response: { id: 'record-once' },
+              type: 'response.completed',
+            }),
+          ),
+        30,
+      )
+    })
+  })
+  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve))
+  const address = upstream.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('No upstream address')
+  }
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), 'chat-record-once-'))
+  temporaryDirectories.push(temporaryDirectory)
+  const proxy = await startEvaluationProxy({
+    apiKey: 'test-token',
+    cacheDirectory: join(temporaryDirectory, 'cache'),
+    mode: 'record',
+    model: 'test-model',
+    scenarioId: 'record-once',
+    transcriptPath: join(temporaryDirectory, 'result.json'),
+    upstreamBaseUrl: `http://127.0.0.1:${address.port}/api/v1`,
+  })
+  try {
+    const responses = await Promise.all(
+      [1, 2].map(async () => {
+        const response = await fetch(`${proxy.origin}/v1/responses`, {
+          body: JSON.stringify({ input: [], stream: true }),
+          headers: { 'x-chat-record-websocket': '1' },
+          method: 'POST',
+        })
+        strictEqual(response.status, 200)
+        return response.text()
+      }),
+    )
+    strictEqual(calls, 1)
+    strictEqual(responses[0], responses[1])
+  } finally {
+    await proxy.close()
+    for (const socket of sockets.clients) {
+      socket.terminate()
+    }
+    sockets.close()
+    await new Promise<void>((resolve) => upstream.close(() => resolve()))
+  }
+})

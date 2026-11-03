@@ -156,10 +156,12 @@ export const startEvaluationProxy = async (
   let paused: ReturnType<typeof Promise.withResolvers<void>> | undefined
   const workspaceRoot = options.workspaceUri?.replace(trailingSlash, '')
   const portableRoot = 'memfs:///recorded-workspace'
+  const portableWorkspacePath = '__LVCE_RECORDED_WORKSPACE_PATH__'
   const workspacePath = workspaceRoot?.startsWith('file://')
     ? JSON.stringify(fileURLToPath(workspaceRoot)).slice(1, -1)
     : undefined
   const commands = new Map<string, string>()
+  const recordings = new Map<string, Promise<RecordedHttpResponse>>()
   const trackCommands = (recorded: RecordedHttpResponse): void => {
     for (const call of getToolCalls(recorded.body)) {
       if (call.name !== 'run_command') {
@@ -177,18 +179,23 @@ export const startEvaluationProxy = async (
       ? value.replaceAll(workspaceRoot, () => portableRoot)
       : value
     return workspacePath
-      ? portable.replaceAll(workspacePath, () => portableRoot)
+      ? portable.replaceAll(workspacePath, () => portableWorkspacePath)
       : portable
   }
 
   const materialize = (
     recorded: RecordedHttpResponse,
-  ): RecordedHttpResponse => ({
-    ...recorded,
-    body: workspaceRoot
+  ): RecordedHttpResponse => {
+    const body = workspaceRoot
       ? recorded.body.replaceAll(portableRoot, () => workspaceRoot)
-      : recorded.body,
-  })
+      : recorded.body
+    return {
+      ...recorded,
+      body: workspacePath
+        ? body.replaceAll(portableWorkspacePath, () => workspacePath)
+        : body,
+    }
+  }
   const portable = (recorded: RecordedHttpResponse): RecordedHttpResponse => ({
     ...recorded,
     body: normalize(recorded.body),
@@ -324,16 +331,32 @@ export const startEvaluationProxy = async (
         return
       }
       if (request.headers['x-chat-record-websocket'] === '1') {
-        recorded = await recordWebSocketResponse(
-          options.upstreamBaseUrl,
-          options.apiKey,
-          requestBody,
-        )
-        await writeCachedResponse(
-          options.cacheDirectory,
-          cacheKey,
-          portable(recorded),
-        )
+        let recording = recordings.get(cacheKey)
+        if (recording) {
+          source = 'cache'
+        } else {
+          recording = (async (): Promise<RecordedHttpResponse> => {
+            const result = await recordWebSocketResponse(
+              options.upstreamBaseUrl,
+              options.apiKey!,
+              requestBody,
+            )
+            await writeCachedResponse(
+              options.cacheDirectory,
+              cacheKey,
+              portable(result),
+            )
+            return result
+          })()
+          recordings.set(cacheKey, recording)
+        }
+        try {
+          recorded = await recording
+        } finally {
+          if (recordings.get(cacheKey) === recording) {
+            recordings.delete(cacheKey)
+          }
+        }
         await transcript.append({
           cacheKey,
           request: cacheRequest,

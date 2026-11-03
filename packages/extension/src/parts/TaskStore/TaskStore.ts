@@ -235,7 +235,7 @@ export const readDraft = async (
     return await requestToPromise<string | undefined>(
       transaction
         .objectStore('drafts')
-        .get(JSON.stringify([workspace, taskId || ''])),
+        .get(JSON.stringify([taskId ? '' : workspace, taskId || ''])),
     )
   } finally {
     database.close()
@@ -256,7 +256,7 @@ export const writeDraft = async (
     const committed = transactionToPromise(transaction)
     transaction
       .objectStore('drafts')
-      .put(text, JSON.stringify([workspace, taskId || '']))
+      .put(text, JSON.stringify([taskId ? '' : workspace, taskId || '']))
     await committed
   } finally {
     database.close()

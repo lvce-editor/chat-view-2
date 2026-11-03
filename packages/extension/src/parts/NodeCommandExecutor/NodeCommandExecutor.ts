@@ -3,7 +3,10 @@ import type {
   AgentCommandOptions,
   AgentCommandResult,
 } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
-import type { spawn as spawnProcess } from 'node:child_process'
+import type {
+  spawnSync as spawnProcessSync,
+  spawn as spawnProcess,
+} from 'node:child_process'
 import type { fileURLToPath as fileUrlToPath } from 'node:url'
 import { getWorkspaceFolder } from '@lvce-editor/api'
 
@@ -17,6 +20,8 @@ export interface NodeCommandExecutorOptions {
 interface NodeRuntime {
   readonly getBuiltinModule?: (id: string) => unknown
   readonly kill?: (pid: number, signal?: string) => boolean
+  readonly off?: (event: string, listener: () => void) => unknown
+  readonly once?: (event: string, listener: () => void) => unknown
   readonly platform?: string
   readonly versions?: {
     readonly node?: string
@@ -115,6 +120,7 @@ export const createNodeCommandExecutor = ({
         const cleanup = (): void => {
           clearTimeout(timeout)
           clearTimeout(killTimeout)
+          runtime.off?.('exit', handleParentExit)
           options.signal?.removeEventListener('abort', handleAbort)
           child.stdout.off('data', handleOutput)
           child.stderr.off('data', handleOutput)
@@ -158,6 +164,20 @@ export const createNodeCommandExecutor = ({
           child.kill(signal)
         }
 
+        const handleParentExit = (): void => {
+          if (runtime.platform === 'win32' && child.pid) {
+            const { spawnSync } = getBuiltinModule('node:child_process') as {
+              readonly spawnSync: typeof spawnProcessSync
+            }
+            spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+              stdio: 'ignore',
+              timeout: 2000,
+            })
+            return
+          }
+          killChild(true)
+        }
+
         const stop = (reason: 'aborted' | 'timeout'): void => {
           if (stopReason) {
             return
@@ -194,6 +214,7 @@ export const createNodeCommandExecutor = ({
           stop('timeout')
         }, options.timeoutMs)
 
+        runtime.once?.('exit', handleParentExit)
         child.stdout.on('data', handleOutput)
         child.stderr.on('data', handleOutput)
         child.once('close', handleClose)

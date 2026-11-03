@@ -164,9 +164,10 @@ export const createEvaluationBrowser = (): EvaluationBrowser => ({
           `--only-extension=${extensionDirectory}`,
           `--test-path=${testDirectory}`,
           '--headless',
-          ...(process.env.EVALUATION_ELECTRON === '1' ? ['--electron'] : []),
+          ...(process.env.EVALUATION_ELECTRON === '1'
+            ? ['--electron']
+            : ['--trace-renderer-worker']),
           '--fail-on-console-messages',
-          '--trace-renderer-worker',
           `--timeout=${options.timeoutMs}`,
         ],
         command: process.execPath,
