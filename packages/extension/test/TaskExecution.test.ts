@@ -50,7 +50,7 @@ test('a lock held by another window prevents recovery and execution callbacks', 
         request: async (
           _name: string,
           _options: unknown,
-          callback: Readonly<(lock: null) => Promise<unknown>>,
+          callback: (lock: null) => Promise<unknown>,
         ): Promise<unknown> => callback(null),
       },
     },

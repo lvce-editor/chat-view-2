@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { spawn } from 'node:child_process'
@@ -46,38 +46,68 @@ try {
   const cli = createRequire(join(root, 'packages/e2e/package.json')).resolve(
     '@lvce-editor/test-with-playwright/bin/test-with-playwright.js',
   )
-  const child = spawn(
-    process.execPath,
-    [
-      cli,
-      ...(!desktop
-        ? [`--only-extension=${join(root, 'packages/extension')}`]
-        : []),
-      `--test-path=${join(root, desktop ? 'packages/desktop-tests' : 'packages/e2e')}`,
-      ...(desktop
-        ? [
-            `--electron-arg=--link=${join(root, 'packages/extension')}`,
-            '--timeout=300000',
-          ]
-        : []),
-      ...process.argv.slice(2).filter((arg) => arg !== '--record'),
-    ],
-    {
-      cwd: root,
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        ...(desktopWorkspace && {
-          CHAT_DESKTOP_WORKSPACE: desktopWorkspace,
-          CHAT_DESKTOP_REPLAY_URL: proxy.origin,
-        }),
-      },
-    },
+  const forwardedArguments = process.argv
+    .slice(2)
+    .filter((arg) => arg !== '--record')
+  const filterIndex = forwardedArguments.findIndex(
+    (arg) => arg === '--filter' || arg.startsWith('--filter='),
   )
-  process.exitCode = await new Promise<number>((resolve, reject) => {
-    child.once('error', reject)
-    child.once('exit', (code) => resolve(code ?? 1))
-  })
+  const filterArgument = forwardedArguments[filterIndex]
+  const filter =
+    filterArgument === '--filter'
+      ? forwardedArguments[filterIndex + 1]
+      : filterArgument?.slice('--filter='.length)
+  const desktopTests = desktop
+    ? (await readdir(join(root, 'packages/desktop-tests/src')))
+        .filter(
+          (file) => file.endsWith('.ts') && (!filter || file.includes(filter)),
+        )
+        .sort()
+    : [undefined]
+  if (desktop && desktopTests.length === 0)
+    throw new Error('No desktop tests matched the filter')
+  if (desktop && filterIndex !== -1)
+    forwardedArguments.splice(
+      filterIndex,
+      filterArgument === '--filter' ? 2 : 1,
+    )
+  // Each desktop scenario owns an app and private profile, including its exit.
+  for (const desktopTest of desktopTests) {
+    const child = spawn(
+      process.execPath,
+      [
+        cli,
+        ...(!desktop
+          ? [`--only-extension=${join(root, 'packages/extension')}`]
+          : []),
+        `--test-path=${join(root, desktop ? 'packages/desktop-tests' : 'packages/e2e')}`,
+        ...(desktop
+          ? [
+              `--electron-arg=--link=${join(root, 'packages/extension')}`,
+              '--timeout=300000',
+            ]
+          : []),
+        ...forwardedArguments,
+        ...(desktopTest ? [`--filter=${desktopTest}`] : []),
+      ],
+      {
+        cwd: root,
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+          ...(desktopWorkspace && {
+            CHAT_DESKTOP_WORKSPACE: desktopWorkspace,
+            CHAT_DESKTOP_REPLAY_URL: proxy.origin,
+          }),
+        },
+      },
+    )
+    process.exitCode = await new Promise<number>((resolve, reject) => {
+      child.once('error', reject)
+      child.once('exit', (code) => resolve(code ?? 1))
+    })
+    if (process.exitCode !== 0) break
+  }
 } finally {
   await proxy.close()
   if (desktopWorkspace) {
