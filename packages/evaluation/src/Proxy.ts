@@ -157,7 +157,7 @@ export const startEvaluationProxy = async (
   let paused: ReturnType<typeof Promise.withResolvers<void>> | undefined
   const workspaceRoot = options.workspaceUri?.replace(trailingSlash, '')
   const portableRoot = 'memfs:///recorded-workspace'
-  const portableWorkspacePath = '__LVCE_RECORDED_WORKSPACE_PATH__'
+  const portableWorkspacePath = '/recorded-workspace'
   const workspacePath = workspaceRoot?.startsWith('file://')
     ? JSON.stringify(fileURLToPath(workspaceRoot)).slice(1, -1)
     : undefined
@@ -352,6 +352,9 @@ export const startEvaluationProxy = async (
         })
         return
       }
+      const portableRequestBody = JSON.parse(
+        normalize(JSON.stringify(requestBody)),
+      ) as Readonly<Record<string, unknown>>
       if (request.headers['x-chat-record-websocket'] === '1') {
         let recording = recordings.get(cacheKey)
         if (recording) {
@@ -361,7 +364,7 @@ export const startEvaluationProxy = async (
             const result = await recordWebSocketResponse(
               options.upstreamBaseUrl,
               options.apiKey!,
-              requestBody,
+              portableRequestBody,
             )
             await writeCachedResponse(
               options.cacheDirectory,
@@ -394,7 +397,7 @@ export const startEvaluationProxy = async (
       const upstream = await fetch(
         `${trimTrailingSlashes(options.upstreamBaseUrl)}/responses`,
         {
-          body: JSON.stringify(requestBody),
+          body: JSON.stringify(portableRequestBody),
           headers: {
             Authorization: `Bearer ${options.apiKey}`,
             'Content-Type': 'application/json',
@@ -441,7 +444,6 @@ export const startEvaluationProxy = async (
           }
           const chunk = Buffer.from(result.value)
           chunks.push(chunk)
-          response.write(chunk)
         }
       }
       recorded = {
@@ -464,7 +466,7 @@ export const startEvaluationProxy = async (
         toolCalls: getToolCalls(recorded.body),
         toolResults: getToolResults(requestBody),
       })
-      response.end()
+      response.end(materialize(recorded).body)
     } catch (error) {
       if (response.headersSent) {
         response.destroy(

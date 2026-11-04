@@ -33,7 +33,7 @@ const fixtures: Readonly<Record<string, string>> = {
   }),
   'README.md':
     'A small arithmetic project. Authentication is implemented in src/auth.ts.\n',
-  'src/add.js': 'export const add = (left, right) => left - right\n',
+  'src/add.js': 'export const add = (left = 0, right = 0) => left - right\n',
   'src/auth.ts': "export const mechanism = 'disk-token'\n",
   'test/add.test.js':
     "import assert from 'node:assert/strict'\nimport test from 'node:test'\nimport { add } from '../src/add.js'\ntest('adds numbers', () => assert.equal(add(2, 3), 5))\n",

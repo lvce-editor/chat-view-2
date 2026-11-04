@@ -9,6 +9,9 @@ const body = (output: string): Readonly<Record<string, unknown>> => ({
 const getCommand = (id: string): string | undefined =>
   id === 'command' ? 'npm test' : undefined
 
+const command = (): string =>
+  'cd /recorded-workspace && npm test -- --runInBand'
+
 void test('normalizes Node test timing while retaining assertions and non-command file data', () => {
   deepStrictEqual(
     normalizeCommandOutput(
@@ -66,5 +69,50 @@ void test('normalizes the optional npm banner for the same Node test script', ()
       getCommand,
     ),
     normalizeCommandOutput(body(output), getCommand),
+  )
+})
+
+void test('normalizes a Node test command from the portable workspace and its forwarded npm arguments', () => {
+  const output = 'node: bad option: --runInBand\n'
+  deepStrictEqual(
+    normalizeCommandOutput(
+      body(
+        `\n> desktop-chat-fixture@1.0.0 test\n> node --test --runInBand\n\n${output}`,
+      ),
+      command,
+    ),
+    normalizeCommandOutput(body(output), command),
+  )
+  deepStrictEqual(
+    normalizeCommandOutput(
+      body('✔ adds numbers (1.2ms)\nℹ pass 1'),
+      () => 'cd /recorded-workspace && npm test',
+    ),
+    normalizeCommandOutput(
+      body('✔ adds numbers (5.6ms)\nℹ pass 1'),
+      () => 'cd /recorded-workspace && npm test',
+    ),
+  )
+  notDeepStrictEqual(
+    normalizeCommandOutput(
+      body('✔ adds numbers (1.2ms)\nℹ pass 0'),
+      () => 'cd /recorded-workspace && npm test',
+    ),
+    normalizeCommandOutput(
+      body('✔ adds numbers (5.6ms)\nℹ pass 1'),
+      () => 'cd /recorded-workspace && npm test',
+    ),
+  )
+})
+
+void test('retains command exit codes when normalizing npm banners', () => {
+  deepStrictEqual(
+    normalizeCommandOutput(
+      body(
+        'Command exited with code 9\n\n> desktop-chat-fixture@1.0.0 test\n> node --test --runInBand\n\nnode: bad option: --runInBand\n',
+      ),
+      command,
+    ),
+    body('Command exited with code 9\nnode: bad option: --runInBand\n'),
   )
 })

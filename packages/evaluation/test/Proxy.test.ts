@@ -365,3 +365,59 @@ void test('coalesces concurrent identical recordings into one backend request', 
     await new Promise<void>((resolve) => upstream.close(() => resolve()))
   }
 })
+
+void test('records portable workspace URIs upstream and replays them in another workspace', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'chat-portable-recording-'))
+  temporaryDirectories.push(directory)
+  const inputs: string[] = []
+  const upstream = createServer((request, response) => {
+    void (async (): Promise<void> => {
+      const chunks: Buffer[] = []
+      for await (const chunk of request) chunks.push(Buffer.from(chunk))
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
+        input: string
+      }
+      inputs.push(body.input)
+      response.setHeader('Content-Type', 'application/json')
+      response.end(JSON.stringify({ text: body.input }))
+    })()
+  })
+  await new Promise<void>((resolve) => upstream.listen(0, '127.0.0.1', resolve))
+  const address = upstream.address()
+  if (!address || typeof address === 'string')
+    throw new Error('Expected upstream port')
+  const proxies: Awaited<ReturnType<typeof startEvaluationProxy>>[] = []
+  try {
+    for (const [index, workspaceUri] of [
+      'file:///workspace-one',
+      'file:///workspace-two',
+    ].entries()) {
+      const proxy = await startEvaluationProxy({
+        apiKey: 'test-key',
+        cacheDirectory: join(directory, 'cache'),
+        mode: index === 0 ? 'record' : 'replay',
+        model: 'test-model',
+        scenarioId: 'portable-workspace',
+        transcriptPath: join(directory, `transcript-${index}.json`),
+        upstreamBaseUrl: `http://127.0.0.1:${address.port}/v1`,
+        workspaceUri,
+      })
+      proxies.push(proxy)
+      const input = `${workspaceUri}/src/a.ts\ncwd: ${new URL(workspaceUri).pathname}`
+      const response = await fetch(`${proxy.origin}/v1/responses`, {
+        body: JSON.stringify({ input }),
+        headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+      })
+      deepStrictEqual(await response.json(), {
+        text: input,
+      })
+    }
+    deepStrictEqual(inputs, [
+      'memfs:///recorded-workspace/src/a.ts\ncwd: /recorded-workspace',
+    ])
+  } finally {
+    await Promise.all(proxies.map((proxy) => proxy.close()))
+    await new Promise<void>((resolve) => upstream.close(() => resolve()))
+  }
+})
