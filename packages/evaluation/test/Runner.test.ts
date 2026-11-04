@@ -98,6 +98,7 @@ void test('runs scenarios, records misses, and replays matching requests', async
     ...paths,
     apiKey: 'test-key',
     browser,
+    mode: 'record',
     upstreamBaseUrl,
   })
   deepStrictEqual(recorded, [

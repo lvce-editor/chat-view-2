@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   ci:
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: 0
     strategy:
       fail-fast: false
       matrix:
@@ -50,13 +52,14 @@ jobs:
       - name: install playwright dependencies
         working-directory: ./packages/e2e
         run: npx playwright install chromium
-        if: steps.npm-cache.outputs.cache-hit != 'true'
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Run headless test
         run: npm run e2e:headless
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Replay coding evaluations
+        run: npm run evaluation
       - name: Build static site
         run: node packages/build/src/build-static.ts
         env:

@@ -161,6 +161,7 @@ test('contributes every preference read by Chat 2', async () => {
     [
       'chat2.backendUrl',
       'chat2.aiNativeTheme',
+      'chat2.computerUseEnabled',
       'chat2.experimentalFocusMode',
       'chat2.fontFamily',
       'chat2.fontSize',

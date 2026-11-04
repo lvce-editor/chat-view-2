@@ -10,6 +10,9 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
 
   // The command is contributed by the extension manifest, so it should be
   // available before Chat 2 has been opened and activated.
+  const browserTabTitle = Locator('head title')
+  const initialTitle = (await Command.execute('Layout.getHref')) as string
+  const expectedTitle = initialTitle.slice(initialTitle.lastIndexOf('/') + 1)
   const focusMode = Locator('.ChatAiNativeLayout')
   await QuickPick.open()
   await QuickPick.setValue('>toggle ai')
@@ -22,7 +25,6 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
 
   await Command.executeExtensionCommand('chat2.show')
 
-  const browserTabTitle = Locator('head title')
   const toggle = Locator('button[name="toggle-focus-mode"]')
   await expect(toggle).toHaveAttribute('title', 'Focus entirely on chat')
   await Command.executeExtensionCommand('chat2.toggleFocusMode')
@@ -99,9 +101,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(composerInput).toHaveValue('Another new chat')
   await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
   await expect(focusMode).toHaveCount(0)
-  await expect(browserTabTitle).toHaveText(
-    'chat2.virtual-dom-view.focus-mode.html',
-  )
+  await expect(browserTabTitle).toHaveText(expectedTitle)
   const main = Locator('.Main')
   await expect(main).toBeVisible()
   await QuickPick.open()

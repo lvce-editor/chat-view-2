@@ -2,7 +2,8 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.message-actions'
 
-// The upgraded server runtime does not apply this unrelated transient feedback update reliably.
+// Isolated extensions currently reject ClipBoard.writeText. A public clipboard
+// write capability is needed before this success-path scenario can execute.
 export const skip = 1
 
 export const test: Test = async ({

@@ -5,8 +5,8 @@
   "main": "index.js",
   "scripts": {
     "build:extension": "node ../build/src/build-extension.ts",
-    "e2e": "npm run build:extension && test-with-playwright --only-extension=../extension --test-path=.",
-    "e2e:headless": "npm run build:extension && test-with-playwright --only-extension=../extension --test-path=. --headless"
+    "e2e": "node ../build/src/run-e2e.ts",
+    "e2e:headless": "node ../build/src/run-e2e.ts --headless"
   },
   "type": "module",
   "author": "Lvce Editor",

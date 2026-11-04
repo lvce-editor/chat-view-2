@@ -169,6 +169,19 @@ await esbuildBuild({
   target: 'node24',
 })
 
+await esbuildBuild({
+  banner: {
+    js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
+  },
+  entryPoints: [path.join(extension, 'src', 'commandProcessMain.ts')],
+  outfile: join(root, 'dist', 'dist', 'commandProcessMain.js'),
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  external: ['electron', 'node:*'],
+  target: 'esnext',
+})
+
 await packageExtension({
   highestCompression: true,
   inDir: join(root, 'dist'),

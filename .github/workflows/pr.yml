@@ -7,6 +7,8 @@ on:
 
 jobs:
   pr:
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: 0
     strategy:
       fail-fast: false
       matrix:
@@ -38,13 +40,14 @@ jobs:
       - name: install playwright dependencies
         working-directory: ./packages/e2e
         run: npx playwright install chromium
-        if: steps.npm-cache.outputs.cache-hit != 'true'
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Run headless test
         run: npm run e2e:headless
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Replay coding evaluations
+        run: npm run evaluation
       - name: Build release archive
         run: node packages/build/src/build.ts
       - name: Check Chat 2 bundle budgets
@@ -60,3 +63,47 @@ jobs:
         run: npm run e2e:static
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Preserve replay transcripts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: replay-${{ matrix.os }}
+          path: packages/evaluation/results/*.json
+          if-no-files-found: ignore
+
+  desktop:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: 0
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+      - name: Compute node modules cache key
+        id: nodeModulesCacheKey
+        run: |
+          value=$(node packages/build/src/computeNodeModulesCacheKey.ts)
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+        shell: bash
+      - uses: actions/cache@v5
+        id: npm-cache
+        with:
+          path: '**/node_modules'
+          key: ${{ runner.os }}-cacheNodeModules-${{ steps.nodeModulesCacheKey.outputs.value }}
+      - name: npm ci
+        run: npm ci
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+      - name: Install desktop runtime dependencies
+        run: npx playwright install-deps chromium
+        working-directory: ./packages/e2e
+      - name: Replay chat in the official Electron application
+        run: xvfb-run -a npm run e2e:headless -- --electron --filter=recorded
+      - name: Preserve desktop replay transcript
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: replay-desktop
+          path: packages/evaluation/results/*.json
+          if-no-files-found: ignore

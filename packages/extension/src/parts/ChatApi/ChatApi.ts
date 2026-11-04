@@ -5,6 +5,8 @@ export type ChatTaskStatus =
   | 'idle'
   | 'running'
   | 'stopping'
+  | 'stopped'
+  | 'interrupted'
 
 export interface ChatModel {
   readonly available: boolean
@@ -16,6 +18,7 @@ export interface ChatModel {
 export interface ChatChangedFile {
   readonly additions: number
   readonly deletions: number
+  readonly diff?: string
   readonly path: string
   readonly status: 'added' | 'deleted' | 'modified'
 }
@@ -135,6 +138,7 @@ export interface ChatTask {
   readonly title: string
   readonly titleGenerated?: boolean
   readonly updatedAt: string
+  readonly workspaceUri?: string
 }
 
 export interface ChatRunOptions {

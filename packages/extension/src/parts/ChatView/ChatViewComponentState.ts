@@ -12,6 +12,8 @@ const taskStatuses = new Set<ChatTaskStatus>([
   'idle',
   'running',
   'stopping',
+  'stopped',
+  'interrupted',
 ])
 
 const isRecord = (value: unknown): value is Record<string, unknown> => {
@@ -66,6 +68,7 @@ const isChatTaskEvent = (value: unknown): value is ChatTaskEvent => {
           return (
             isRecord(file) &&
             typeof file.additions === 'number' &&
+            (file.diff === undefined || typeof file.diff === 'string') &&
             typeof file.deletions === 'number' &&
             typeof file.path === 'string' &&
             ['added', 'deleted', 'modified'].includes(String(file.status))
@@ -87,6 +90,8 @@ const isChatTaskEvent = (value: unknown): value is ChatTaskEvent => {
 const isChatTask = (value: unknown): value is ChatTask => {
   return (
     isRecord(value) &&
+    (value.workspaceUri === undefined ||
+      typeof value.workspaceUri === 'string') &&
     typeof value.createdAt === 'string' &&
     Array.isArray(value.events) &&
     value.events.every(isChatTaskEvent) &&

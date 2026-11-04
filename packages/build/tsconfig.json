@@ -21,8 +21,8 @@
   "include": [
     "src",
     "test",
-    "../evaluation/src/Scenario.ts",
-    "../evaluation/src/Types.ts"
+    "../evaluation/src",
+    "../desktop-tests/src/**/*.ts"
   ],
   "exclude": ["third_party", "coverage"]
 }

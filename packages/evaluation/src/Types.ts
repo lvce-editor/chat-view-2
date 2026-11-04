@@ -47,7 +47,7 @@ export interface EvaluationExchange {
     readonly path: '/v1/responses'
   }
   readonly response: RecordedHttpResponse
-  readonly source: 'cache' | 'upstream'
+  readonly source: 'cache' | 'missing' | 'upstream'
   readonly toolCalls: readonly RecordedToolCall[]
   readonly toolResults: readonly RecordedToolResult[]
 }

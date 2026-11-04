@@ -1,4 +1,4 @@
-/* eslint-disable prefer-destructuring, unicorn/no-break-in-nested-loop, unicorn/no-top-level-assignment-in-function, unicorn/prefer-minimal-ternary */
+/* eslint-disable prefer-destructuring, unicorn/no-break-in-nested-loop, unicorn/prefer-minimal-ternary */
 import type {
   ChatActivityEvent,
   ChatAssistantMessageEvent,
@@ -22,8 +22,6 @@ export interface ChatTaskSummary {
     | Extract<ChatTaskEvent, { type: 'user-message' }>
   )[]
 }
-
-let nextEventId = 1
 
 export function createEvent(
   event: Omit<ChatActivityEvent, 'id' | 'timestamp'>,
@@ -54,7 +52,7 @@ export function createEvent(
 ): ChatTaskEvent {
   return {
     ...event,
-    id: `event-${nextEventId++}`,
+    id: `event-${crypto.randomUUID()}`,
     timestamp: new Date().toISOString(),
   }
 }

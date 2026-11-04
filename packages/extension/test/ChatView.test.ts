@@ -5,7 +5,7 @@ import type { ViewContext, ViewEvent } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { VirtualDomElements } from '@lvce-editor/virtual-dom-worker'
 import type { BackendConfiguration } from '../src/parts/BackendConfiguration/BackendConfiguration.ts'
-import type { ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
+import type { ChatRunOptions, ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createEvent } from '../src/parts/ChatTask/ChatTask.ts'
 import { view } from '../src/parts/ChatView/ChatView.ts'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
@@ -107,6 +107,248 @@ const createViewContext = (state: unknown): ViewContext => ({
   uid: 1,
   viewId: 'chat2.views.chat',
 })
+
+test('reserves a pending submission before draft persistence can yield to another send', async () => {
+  const api = createMockChatApi()
+  const createTask = jest.spyOn(api, 'createTask')
+  const sendMessage = jest.spyOn(api, 'sendMessage')
+  const instance = await createInstance(undefined, api)
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'First request',
+  })
+  const first = instance.submit()
+  const input = dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Keep this next draft',
+  })
+  const second = instance.submit()
+  await Promise.all([first, input, second])
+  expect(createTask.mock.calls.length + sendMessage.mock.calls.length).toBe(1)
+  expect(instance.getState().draft).toBe('Keep this next draft')
+  instance.dispose?.()
+})
+
+test('an older turn finishing cannot release a newer pending steering submission', async () => {
+  const started = Promise.withResolvers<void>()
+  const finish = Promise.withResolvers<void>()
+  const steeringStarted = Promise.withResolvers<void>()
+  const steeringFinished = Promise.withResolvers<void>()
+  const api = createMockChatApi()
+  jest
+    .spyOn(api, 'createTask')
+    .mockImplementation(
+      async (
+        message,
+        modelId,
+        options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+      ) => {
+        const task: ChatTask = {
+          createdAt: new Date().toISOString(),
+          events: [createEvent({ text: message, type: 'user-message' })],
+          id: 'pending-reservation-task',
+          modelId,
+          status: 'running',
+          title: 'Pending reservation',
+          updatedAt: new Date().toISOString(),
+        }
+        await options?.onUpdate?.(task)
+        started.resolve()
+        await finish.promise
+        const completed = { ...task, status: 'completed' as const }
+        await options?.onUpdate?.(completed)
+        return completed
+      },
+    )
+  const sendMessage = jest.spyOn(api, 'sendMessage')
+  const steer = jest.spyOn(api, 'steer').mockImplementation(async () => {
+    steeringStarted.resolve()
+    await steeringFinished.promise
+  })
+  const instance = await createInstance(undefined, api)
+  try {
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Start this turn',
+    })
+    const first = instance.submit()
+    await started.promise
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Steer this turn',
+    })
+    const second = instance.submit()
+    await steeringStarted.promise
+    finish.resolve()
+    await first
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Preserve this draft',
+    })
+    await instance.submit()
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(steer).toHaveBeenCalledTimes(1)
+    expect(instance.getState().draft).toBe('Preserve this draft')
+    steeringFinished.resolve()
+    await second
+  } finally {
+    finish.resolve()
+    steeringFinished.resolve()
+    instance.dispose?.()
+  }
+})
+
+test('a follow-up waits for its own completed turn to release execution', async () => {
+  const terminalShown = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const api = createMockChatApi()
+  jest
+    .spyOn(api, 'createTask')
+    .mockImplementation(
+      async (
+        message,
+        modelId,
+        options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+      ) => {
+        const task: ChatTask = {
+          createdAt: new Date().toISOString(),
+          events: [createEvent({ text: message, type: 'user-message' })],
+          id: 'finishing-turn',
+          modelId,
+          status: 'running',
+          title: 'Finishing turn',
+          updatedAt: new Date().toISOString(),
+        }
+        await options?.onUpdate?.(task)
+        const completed = { ...task, status: 'completed' as const }
+        await options?.onUpdate?.(completed)
+        terminalShown.resolve()
+        await release.promise
+        return completed
+      },
+    )
+  const sendMessage = jest.spyOn(api, 'sendMessage')
+  const instance = await createInstance(undefined, api)
+  try {
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'First message',
+    })
+    const first = instance.submit()
+    await terminalShown.promise
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Follow-up message',
+    })
+    const second = instance.submit()
+    await flushPromises()
+    expect(sendMessage).not.toHaveBeenCalled()
+    release.resolve()
+    await Promise.all([first, second])
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+  } finally {
+    release.resolve()
+    instance.dispose?.()
+  }
+})
+
+test.each([false, true])(
+  'an older task-list refresh cannot restore running status after completion (selected: %s)',
+  async (selected) => {
+    const channels: BroadcastChannel[] = []
+    const originalBroadcastChannel = BroadcastChannel
+    class TestBroadcastChannel extends BroadcastChannel {
+      constructor(name: Readonly<string>) {
+        super(name)
+        channels.push(this)
+      }
+    }
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      configurable: true,
+      value: TestBroadcastChannel,
+    })
+    const baseApi = createMockChatApi()
+    const [original] = await baseApi.listTasks(1)
+    if (!original) throw new Error('Expected a mock task')
+    const running: ChatTask = { ...original, status: 'running' }
+    const completed: ChatTask = { ...original, status: 'completed' }
+    const started = Promise.withResolvers<void>()
+    const finish = Promise.withResolvers<void>()
+    const refreshStarted = Promise.withResolvers<void>()
+    const staleList = Promise.withResolvers<readonly ChatTask[]>()
+    let blockRefresh = false
+    const instance = await createInstance(undefined, {
+      ...baseApi,
+      async createTask(
+        _message,
+        _model,
+        options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+      ) {
+        await options?.onUpdate?.(running)
+        started.resolve()
+        await finish.promise
+        return completed
+      },
+      async getTask() {
+        return running
+      },
+      async listTasks() {
+        if (blockRefresh) {
+          refreshStarted.resolve()
+          return staleList.promise
+        }
+        return [original]
+      },
+    })
+    let submission: Promise<void> | undefined
+    try {
+      await dispatch(instance, {
+        name: 'composer',
+        type: 'input',
+        value: 'Start a task',
+      })
+      submission = instance.submit()
+      await started.promise
+      if (!selected) await instance.newChat()
+      blockRefresh = true
+      channels[0]?.onmessage?.(
+        new MessageEvent('message', { data: { type: 'tasks-changed' } }),
+      )
+      await refreshStarted.promise
+      finish.resolve()
+      await submission
+      expect(
+        instance.getState().tasks.find((task) => task.id === original.id)
+          ?.status,
+      ).toBe('completed')
+      staleList.resolve([running])
+      await flushPromises()
+      expect(
+        instance.getState().tasks.find((task) => task.id === original.id)
+          ?.status,
+      ).toBe('completed')
+      expect(instance.getState().selectedTask?.id).toBe(
+        selected ? original.id : undefined,
+      )
+    } finally {
+      finish.resolve()
+      staleList.resolve([running])
+      await submission
+      instance.dispose?.()
+      Object.defineProperty(globalThis, 'BroadcastChannel', {
+        configurable: true,
+        value: originalBroadcastChannel,
+      })
+    }
+  },
+)
 
 test('refreshes changed tasks from another tab without replacing the draft', async () => {
   const channels: TestBroadcastChannel[] = []
@@ -1116,6 +1358,36 @@ test('switching to AI-native layout keeps the deployment prefix, query, and sele
   instance.dispose?.()
 })
 
+test('desktop layout changes preserve the served path and encode the selected conversation in the fragment', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      if (command === 'Layout.getHref') {
+        return 'lvce://-/'
+      }
+      if (command === 'Layout.getSideBarFocusMode') {
+        return false
+      }
+      return undefined
+    },
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+  const state = instance.getState() as { focusModeEnabled: boolean }
+  state.focusModeEnabled = true
+  await dispatch(instance, { name: 'task:mock-task-2', type: 'click' })
+  await instance.toggleFocusMode()
+  expect(execute).toHaveBeenCalledWith('Layout.setHash', '#chat-mock-task-2')
+  expect(execute).not.toHaveBeenCalledWith(
+    'Layout.setPathName',
+    expect.anything(),
+  )
+  instance.dispose?.()
+})
+
 test('exposes and applies live component state without replacing the chat instance', async () => {
   const instance = await createTestInstance()
   expect(view).toEqual(
@@ -1466,7 +1738,7 @@ test('submits a task and shows a Codex-style changed-files summary', async () =>
   expect(getText(dom)).toContain('+51')
   expect(getText(dom)).toContain('-10')
   expect(getText(dom)).toContain('✓ 2 checks passed')
-  expect(getText(dom)).toContain('Undo ↩')
+  expect(getText(dom)).not.toContain('Undo ↩')
   expect(getText(dom)).toContain('Review')
   expect(getNodesByClass(dom, 'ChatChangedFile')).toHaveLength(3)
   expect(getText(dom)).toContain('Show 2 more files  ⌄')
@@ -1509,6 +1781,27 @@ test('renders Markdown and bare urls as external links and preserves punctuation
   expect(getText(dom)).toContain(
     'l \nVS Code download page\n. Also \nhttps://example.com/docs?q=chat\n.',
   )
+})
+
+test('renders explicit native file citations as workspace links without activating unsafe citations or code', async () => {
+  const instance = await createTestInstance()
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value:
+      'Evidence citefile:///workspace/src/auth.ts#L1-L2 and [README](memfs:///workspace/README.md#L1). Unsafe citejavascript:alert(1).\n```text\ncitefile:///workspace/literal.ts#L2\n```',
+  })
+  await instance.submit()
+  const dom = instance.render() as readonly any[]
+  const links = getNodesByClass(dom, 'ChatFileLink')
+  expect(links.map((node) => node.name)).toEqual([
+    `open-file:${encodeURIComponent('file:///workspace/src/auth.ts#L1-L2')}`,
+    `open-file:${encodeURIComponent('memfs:///workspace/README.md#L1')}`,
+  ])
+  expect(getText(dom)).toContain('auth.ts#L1-L2')
+  expect(getText(dom)).toContain('citejavascript:alert(1)')
+  expect(getText(dom)).toContain('citefile:///workspace/literal.ts#L2')
+  instance.dispose?.()
 })
 
 test('renders Markdown tables in messages while keeping malformed streaming text literal', async () => {
@@ -1797,6 +2090,32 @@ test('renders user message actions and shows feedback after copying', async () =
       title: 'Copied',
     }),
   )
+  instance.dispose?.()
+})
+
+test('surfaces clipboard permission failures without showing copied feedback', async () => {
+  const execute = async (id: string): Promise<unknown> => {
+    if (id === 'ClipBoard.writeText') throw new Error('Clipboard access denied')
+    return undefined
+  }
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+  await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
+  const copyButton = getNodesByClass(
+    instance.render() as readonly any[],
+    'ChatMessageCopyButton',
+  )[0]
+  await expect(
+    dispatch(instance, { name: copyButton.name, type: 'click' }),
+  ).resolves.toBeUndefined()
+  expect(instance.getState().errorMessage).toBe(
+    'Unable to copy message: Clipboard access denied',
+  )
+  expect(instance.getState().copiedMessageId).toBe('')
   instance.dispose?.()
 })
 

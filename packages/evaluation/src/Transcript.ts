@@ -91,26 +91,36 @@ export const createTranscriptWriter = (
 ): TranscriptWriter => {
   const startedAt = new Date().toISOString()
   const exchanges: EvaluationExchange[] = []
+  let pending = Promise.resolve()
   return {
-    async append(exchange): Promise<void> {
-      exchanges.push(exchange)
-      const transcript: EvaluationTranscript = {
-        exchanges,
-        model,
-        scenarioId,
-        schemaVersion: 1,
-        startedAt,
-        ...(temperature !== undefined && { temperature }),
-        updatedAt: new Date().toISOString(),
-      }
-      await mkdir(dirname(path), { recursive: true })
-      const temporaryPath = `${path}.${process.pid}.tmp`
-      await writeFile(
-        temporaryPath,
-        `${JSON.stringify(transcript, undefined, 2)}\n`,
-      )
-      await rm(path, { force: true })
-      await rename(temporaryPath, path)
+    append(exchange): Promise<void> {
+      const previous = pending
+      pending = (async (): Promise<void> => {
+        try {
+          await previous
+        } catch {
+          /* Keep later transcript writes serialized after a failure. */
+        }
+        exchanges.push(exchange)
+        const transcript: EvaluationTranscript = {
+          exchanges,
+          model,
+          scenarioId,
+          schemaVersion: 1,
+          startedAt,
+          ...(temperature !== undefined && { temperature }),
+          updatedAt: new Date().toISOString(),
+        }
+        await mkdir(dirname(path), { recursive: true })
+        const temporaryPath = `${path}.${process.pid}.tmp`
+        await writeFile(
+          temporaryPath,
+          `${JSON.stringify(transcript, undefined, 2)}\n`,
+        )
+        await rm(path, { force: true })
+        await rename(temporaryPath, path)
+      })()
+      return pending
     },
   }
 }

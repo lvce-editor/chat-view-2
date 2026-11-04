@@ -13,15 +13,19 @@ import type {
 import {
   createRpc,
   exists,
+  getActiveEditor,
+  getDiagnostics,
   getWorkspaceUri,
   readDirWithFileTypes,
-  readFile,
   remove,
-  writeFile,
 } from '@lvce-editor/api'
 import { getDefaultComputerUseToolHost } from '../ComputerUseToolHost/ComputerUseToolHost.ts'
-import { createNodeCommandExecutor } from '../NodeCommandExecutor/NodeCommandExecutor.ts'
+import {
+  getCommandExecutor,
+  hasCommandExecutor,
+} from '../NodeCommandExecutor/DesktopCommandExecutor.ts'
 import { executeTypeScript } from '../TypeScriptEvaluationWorker/TypeScriptEvaluationWorker.ts'
+import { readWorkspaceFile, writeWorkspaceFile } from './WorkspaceFiles.ts'
 
 interface Rpc {
   readonly dispose: () => Promise<void> | void
@@ -44,8 +48,6 @@ interface Capabilities {
 const rpcId = 'builtin.chat-view-2.chat-tool-worker'
 let rpcPromise: Promise<Rpc> | undefined
 const commandRequests = new Map<string, AbortController>()
-const externalHostPromise = getDefaultComputerUseToolHost()
-const commandExecutor = createNodeCommandExecutor()
 
 const getRpc = (): Promise<Rpc> => {
   rpcPromise ||= createRpc({
@@ -57,14 +59,15 @@ const getRpc = (): Promise<Rpc> => {
         requestId: string,
         command: string,
         options: CommandOptions,
+        workspaceUri?: string,
       ) {
-        if (!commandExecutor) {
-          throw new Error('Bash command execution is disabled')
-        }
+        const executor = await getCommandExecutor(
+          workspaceUri ?? (await getWorkspaceUri()),
+        )
         const controller = new AbortController()
         commandRequests.set(requestId, controller)
         try {
-          return await commandExecutor.execute(command, {
+          return await executor.execute(command, {
             ...options,
             onOutput() {},
             signal: controller.signal,
@@ -77,7 +80,7 @@ const getRpc = (): Promise<Rpc> => {
         _requestId: string,
         call: AgentToolCall,
       ): Promise<AgentToolResult> {
-        const host = await externalHostPromise
+        const host = await getDefaultComputerUseToolHost()
         if (!host) {
           return { content: 'Computer use is unavailable', isError: true }
         }
@@ -89,30 +92,43 @@ const getRpc = (): Promise<Rpc> => {
         return executeTypeScript(code)
       },
       'ChatToolWorkerHost.exists': exists,
-      async 'ChatToolWorkerHost.getCapabilities'(): Promise<Capabilities> {
+      async 'ChatToolWorkerHost.getCapabilities'(
+        workspaceUri?: string,
+      ): Promise<Capabilities> {
         return {
-          commandExecutor: Boolean(commandExecutor),
-          editorContext: false,
+          commandExecutor: await hasCommandExecutor(workspaceUri),
+          editorContext: true,
         }
       },
       async 'ChatToolWorkerHost.getEditorContext'(): Promise<AgentEditorContext> {
-        return {}
+        const editor = await getActiveEditor()
+        if (!editor) {
+          return {}
+        }
+        const diagnostics = await getDiagnostics()
+        return {
+          activeFile: editor.uri,
+          diagnostics: diagnostics.map(
+            (diagnostic) =>
+              `${diagnostic.uri || editor.uri}:${diagnostic.rowIndex + 1}:${diagnostic.columnIndex + 1}: ${diagnostic.message}`,
+          ),
+        }
       },
       async 'ChatToolWorkerHost.getExternalToolDefinitions'(): Promise<
         readonly AgentToolDefinition[] | undefined
       > {
-        return (await externalHostPromise)?.getDefinitions()
+        return (await getDefaultComputerUseToolHost())?.getDefinitions()
       },
       async 'ChatToolWorkerHost.getExternalToolInstructions'(): Promise<
         string | undefined
       > {
-        return (await externalHostPromise)?.getInstructions()
+        return (await getDefaultComputerUseToolHost())?.getInstructions()
       },
       'ChatToolWorkerHost.getWorkspaceUri': getWorkspaceUri,
       'ChatToolWorkerHost.readDirWithFileTypes': readDirWithFileTypes,
-      'ChatToolWorkerHost.readFile': readFile,
+      'ChatToolWorkerHost.readFile': readWorkspaceFile,
       'ChatToolWorkerHost.remove': remove,
-      'ChatToolWorkerHost.writeFile': writeFile,
+      'ChatToolWorkerHost.writeFile': writeWorkspaceFile,
     },
     id: rpcId,
   }) as Promise<Rpc>
@@ -154,11 +170,17 @@ export interface RemoteAgentToolHost extends AgentToolHost {
 
 export const createRemoteAgentToolHost = async (
   fileSystemAccess?: AgentFileSystemAccess,
+  workspaceUri?: string,
 ): Promise<RemoteAgentToolHost> => {
   const sessionId = `session-${crypto.randomUUID()}`
-  await invoke('ChatToolWorker.createSession', sessionId, {
-    ...(fileSystemAccess && { fileSystemAccess }),
-  })
+  const capabilities = await invoke<{ readonly verification: boolean }>(
+    'ChatToolWorker.createSession',
+    sessionId,
+    {
+      ...(fileSystemAccess && { fileSystemAccess }),
+      ...(workspaceUri !== undefined && { workspaceUri }),
+    },
+  )
   return {
     async beginTurn(taskId) {
       await invoke('ChatToolWorker.beginTurn', sessionId, taskId)
@@ -186,14 +208,16 @@ export const createRemoteAgentToolHost = async (
     async revert(): Promise<readonly ChatChangedFile[]> {
       return invoke('ChatToolWorker.revert', sessionId)
     },
-    async verifyChanges(
-      signal?: AbortSignal,
-    ): Promise<AgentVerificationResult> {
-      return invokeCancellable<AgentVerificationResult>(
-        'ChatToolWorker.verifyChanges',
-        signal,
-        sessionId,
-      )
-    },
+    ...(capabilities.verification && {
+      async verifyChanges(
+        signal?: AbortSignal,
+      ): Promise<AgentVerificationResult> {
+        return invokeCancellable<AgentVerificationResult>(
+          'ChatToolWorker.verifyChanges',
+          signal,
+          sessionId,
+        )
+      },
+    }),
   }
 }

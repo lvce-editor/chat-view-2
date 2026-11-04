@@ -846,6 +846,7 @@
 
 .ChatChangedFile {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -1104,6 +1105,7 @@
 }
 
 .ChatMessagesAiNative {
+  contain: layout style;
   width: 100%;
   padding-inline: 0;
   gap: 0;
@@ -1224,4 +1226,24 @@
   .ChatComposerFocus {
     margin: 8px 12px max(12px, env(safe-area-inset-bottom));
   }
+}
+
+.ChatFileLink {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: inherit;
+}
+
+.ChatFileDiff {
+  flex-basis: 100%;
+  order: 1;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
 }

@@ -8,6 +8,7 @@ export interface BackendConfiguration {
   readonly refreshAccessToken?: () => Promise<string>
   readonly supportsStreaming: boolean
   readonly titleModelId?: string
+  readonly useMockBackend?: boolean
 }
 
 interface BackendConfigurationHost {
@@ -131,6 +132,7 @@ export const resolveBackendConfiguration = async (
       openAiWebSearch,
       supportsStreaming: configuredSupportsStreaming,
       titleModelId: getTitleModelId(titleModelId),
+      useMockBackend: true,
     }
   }
   const baseUrl = configuredBaseUrl || editorBaseUrl

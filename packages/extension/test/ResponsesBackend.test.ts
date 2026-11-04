@@ -1147,3 +1147,94 @@ test('does not refresh on non-authentication WebSocket connection failures', asy
   ).rejects.toThrow('Could not connect')
   expect(refreshAccessToken).not.toHaveBeenCalled()
 })
+
+test('preserves web citations and identifies native weather feeds', async () => {
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: jest.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'resp-sources',
+        output: [
+          {
+            action: {
+              sources: [
+                { name: 'oai-weather', type: 'api' },
+                {
+                  title: 'Forecast',
+                  url: 'https://weather.example.com/berlin',
+                },
+              ],
+            },
+            type: 'web_search_call',
+          },
+          {
+            content: [
+              {
+                annotations: [
+                  {
+                    title: 'Forecast',
+                    type: 'url_citation',
+                    url: 'https://weather.example.com/berlin',
+                  },
+                ],
+                text: 'Berlin forecast.',
+                type: 'output_text',
+              },
+            ],
+            type: 'message',
+          },
+        ],
+      }),
+    ),
+  })
+  const result = await backend.runStep({
+    input: [],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+  expect(result.text).toBe(
+    'Berlin forecast.\n\nSources: [Forecast](https://weather.example.com/berlin), OpenAI weather feed',
+  )
+})
+
+test('cancelling a stream drains the current delta before releasing its turn', async () => {
+  const socket = new MockResponsesWebSocket()
+  const controller = new AbortController()
+  const deltaStarted = Promise.withResolvers<void>()
+  const releaseDelta = Promise.withResolvers<void>()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    supportsStreaming: true,
+  })
+  let settled = false
+  const request = backend.runStep({
+    input: [{ content: 'hello', role: 'user' }],
+    modelId: 'gpt-test',
+    async onTextDelta() {
+      deltaStarted.resolve()
+      await releaseDelta.promise
+    },
+    signal: controller.signal,
+    tools: [],
+  })
+  const result = (async (): Promise<unknown> => {
+    try {
+      return await request
+    } catch (error) {
+      settled = true
+      return error
+    }
+  })()
+  socket.open()
+  socket.receive({ delta: 'partial', type: 'response.output_text.delta' })
+  await deltaStarted.promise
+  controller.abort(new Error('stop requested'))
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  expect(socket.readyState).toBe(3)
+  expect(settled).toBe(false)
+  releaseDelta.resolve()
+  await expect(result).resolves.toMatchObject({ message: 'stop requested' })
+  expect(settled).toBe(true)
+})

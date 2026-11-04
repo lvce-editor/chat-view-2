@@ -15,6 +15,11 @@ import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 import { applyLayoutClasses } from './ApplyLayoutClasses.ts'
 
+const fileUriPattern = /^(?:file|memfs|remote-ssh|html|opfs):\/\//u
+const fileCitationPattern =
+  /cite((?:file|memfs|remote-ssh|html|opfs):\/\/[^\s]+)/gu
+const fileCitationLabelBrackets = /[[\]]/gu
+const relativeFilePattern = /^(?:\.\/)?[\w.-]+\/[\w./%#:-]+$/u
 const getMessageDateFormatter = (() => {
   let messageDateFormatter: Intl.DateTimeFormat | undefined
   return (): Intl.DateTimeFormat => {
@@ -41,8 +46,12 @@ const getStatusLabel = (task: ChatTask): string => {
   switch (task.status) {
     case 'failed':
       return 'Failed'
+    case 'interrupted':
+      return 'Interrupted'
     case 'running':
       return 'Working'
+    case 'stopped':
+      return 'Stopped'
     case 'stopping':
       return 'Stopping'
     default:
@@ -134,7 +143,9 @@ const findNextMarkdownLink = (
       !label.includes('[') &&
       destinationEndIndex !== -1 &&
       (destination.startsWith('http://') ||
-        destination.startsWith('https://')) &&
+        destination.startsWith('https://') ||
+        fileUriPattern.test(destination) ||
+        relativeFilePattern.test(destination)) &&
       !invalidMarkdownDestinationPattern.test(destination)
     ) {
       return {
@@ -191,22 +202,45 @@ const renderMessageTextWithUrls = (text: string): readonly Dom.TreeNode[] => {
 const renderMessageTextWithoutBold = (
   text: string,
 ): readonly Dom.TreeNode[] => {
+  const normalizedText = text.replaceAll(
+    fileCitationPattern,
+    (_marker: string, destination: string) => {
+      const label = destination
+        .slice(destination.lastIndexOf('/') + 1)
+        .replaceAll(fileCitationLabelBrackets, '')
+      const uri = destination.replaceAll('(', '%28').replaceAll(')', '%29')
+      return `[${label || 'Source'}](${uri})`
+    },
+  )
   const children: Dom.TreeNode[] = []
   let previousIndex = 0
-  let link = findNextMarkdownLink(text, previousIndex)
+  let link = findNextMarkdownLink(normalizedText, previousIndex)
   while (link) {
     const matchIndex = link.index
     if (matchIndex > previousIndex) {
       children.push(
-        ...renderMessageTextWithUrls(text.slice(previousIndex, matchIndex)),
+        ...renderMessageTextWithUrls(
+          normalizedText.slice(previousIndex, matchIndex),
+        ),
       )
     }
-    children.push(Dom.link(link.destination, link.label, 'ChatMessageLink'))
+    children.push(
+      link.destination.startsWith('http://') ||
+        link.destination.startsWith('https://')
+        ? Dom.link(link.destination, link.label, 'ChatMessageLink')
+        : Dom.button(
+            `open-file:${encodeURIComponent(link.destination)}`,
+            link.label,
+            'ChatMessageLink ChatFileLink',
+          ),
+    )
     previousIndex = link.endIndex
-    link = findNextMarkdownLink(text, previousIndex)
+    link = findNextMarkdownLink(normalizedText, previousIndex)
   }
-  if (previousIndex < text.length) {
-    children.push(...renderMessageTextWithUrls(text.slice(previousIndex)))
+  if (previousIndex < normalizedText.length) {
+    children.push(
+      ...renderMessageTextWithUrls(normalizedText.slice(previousIndex)),
+    )
   }
   return children
 }
@@ -1019,11 +1053,15 @@ const visibleChangedFileCount = 3
 const renderChangedFile = (
   file: ChatChangedFile,
   index: number,
+  expanded: boolean,
 ): Dom.TreeNode => {
   return Dom.div(
     `ChatChangedFile ChatChangedFile-${file.status}${index > 0 ? ' ChatChangedFileFollowing' : ''}`,
     [
       Dom.div('ChatChangedFileName', [Dom.textNode(file.path)]),
+      ...(expanded && file.diff
+        ? [Dom.div('ChatFileDiff', [Dom.textNode(file.diff)])]
+        : []),
       Dom.div('ChatChangedFileStats', [
         Dom.div('ChatChangedFileAdditions', [
           Dom.textNode(`+${file.additions || 0}`),
@@ -1080,13 +1118,17 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
         ]),
       ]),
       Dom.div('ChatChangesActions', [
-        Dom.button('revert', 'Undo ↩', 'ChatRevertButton'),
         Dom.button('toggle-changes', 'Review', 'ChatReviewButton', {
           ariaExpanded: changesExpanded,
         }),
       ]),
     ]),
-    Dom.div('ChatChangedFiles', files.map(renderChangedFile)),
+    Dom.div(
+      'ChatChangedFiles',
+      files.map((file, index) =>
+        renderChangedFile(file, index, changesExpanded),
+      ),
+    ),
     ...(!changesExpanded && hiddenFileCount > 0
       ? [
           Dom.button(

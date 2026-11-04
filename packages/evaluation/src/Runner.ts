@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process'
 import { access, readFile, readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type {
   EvaluationScenario,
   EvaluationTranscript,
@@ -22,6 +23,7 @@ export interface RunEvaluationsOptions extends EvaluationPaths {
   readonly apiKey?: string
   readonly browser?: EvaluationBrowser
   readonly log?: (message: string) => void
+  readonly mode?: 'record' | 'replay'
   readonly upstreamBaseUrl: string
 }
 
@@ -168,6 +170,8 @@ const runScenario = async (
     throw new Error('Evaluation browser was not prepared')
   }
   const proxy = await startEvaluationProxy({
+    mode: options.mode || 'replay',
+    workspaceUri: pathToFileURL(workspace).href,
     ...(options.apiKey && { apiKey: options.apiKey }),
     cacheDirectory: options.cacheDirectory,
     model: scenario.model,

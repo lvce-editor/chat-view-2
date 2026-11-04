@@ -3,7 +3,10 @@ import type {
   AgentCommandOptions,
   AgentCommandResult,
 } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
-import type { spawn as spawnProcess } from 'node:child_process'
+import type {
+  spawnSync as spawnProcessSync,
+  spawn as spawnProcess,
+} from 'node:child_process'
 import type { fileURLToPath as fileUrlToPath } from 'node:url'
 import { getWorkspaceFolder } from '@lvce-editor/api'
 
@@ -16,7 +19,9 @@ export interface NodeCommandExecutorOptions {
 
 interface NodeRuntime {
   readonly getBuiltinModule?: (id: string) => unknown
-  readonly kill?: (pid: number) => boolean
+  readonly kill?: (pid: number, signal?: string) => boolean
+  readonly off?: (event: string, listener: () => void) => unknown
+  readonly once?: (event: string, listener: () => void) => unknown
   readonly platform?: string
   readonly versions?: {
     readonly node?: string
@@ -100,6 +105,7 @@ export const createNodeCommandExecutor = ({
         let output = ''
         let stopReason: 'aborted' | 'timeout' | undefined
         let settled = false
+        let killTimeout: ReturnType<typeof setTimeout> | undefined
 
         const appendOutput = (chunk: string): void => {
           const available = Math.max(0, options.outputLimit - output.length)
@@ -113,6 +119,8 @@ export const createNodeCommandExecutor = ({
 
         const cleanup = (): void => {
           clearTimeout(timeout)
+          clearTimeout(killTimeout)
+          runtime.off?.('exit', handleParentExit)
           options.signal?.removeEventListener('abort', handleAbort)
           child.stdout.off('data', handleOutput)
           child.stderr.off('data', handleOutput)
@@ -133,7 +141,7 @@ export const createNodeCommandExecutor = ({
           appendOutput(chunk)
         }
 
-        const killChild = (): void => {
+        const killChild = (force = false): void => {
           if (runtime.platform === 'win32' && child.pid) {
             const killer = spawn(
               'taskkill',
@@ -143,16 +151,31 @@ export const createNodeCommandExecutor = ({
             killer.once('error', child.kill.bind(child))
             return
           }
+          const signal = force ? 'SIGKILL' : 'SIGTERM'
           if (child.pid && typeof runtime.kill === 'function') {
             try {
-              runtime.kill(-child.pid)
+              runtime.kill(-child.pid, signal)
               return
             } catch {
-              child.kill()
+              child.kill(signal)
               return
             }
           }
-          child.kill()
+          child.kill(signal)
+        }
+
+        const handleParentExit = (): void => {
+          if (runtime.platform === 'win32' && child.pid) {
+            const { spawnSync } = getBuiltinModule('node:child_process') as {
+              readonly spawnSync: typeof spawnProcessSync
+            }
+            spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+              stdio: 'ignore',
+              timeout: 2000,
+            })
+            return
+          }
+          killChild(true)
         }
 
         const stop = (reason: 'aborted' | 'timeout'): void => {
@@ -161,6 +184,7 @@ export const createNodeCommandExecutor = ({
           }
           stopReason = reason
           killChild()
+          killTimeout = setTimeout(killChild, 500, true)
         }
 
         const handleAbort = (): void => {
@@ -190,6 +214,7 @@ export const createNodeCommandExecutor = ({
           stop('timeout')
         }, options.timeoutMs)
 
+        runtime.once?.('exit', handleParentExit)
         child.stdout.on('data', handleOutput)
         child.stderr.on('data', handleOutput)
         child.once('close', handleClose)

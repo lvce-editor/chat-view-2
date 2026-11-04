@@ -344,70 +344,60 @@ test('answers a general question and follow-up when no workspace is open', async
   expect(execute).not.toHaveBeenCalled()
 })
 
+const taskIdPattern = /^[\da-f-]{36}$/u
+
 test('creates uniquely identified tasks and preserves their IDs for follow-ups', async () => {
-  const uuids: [
-    ReturnType<typeof crypto.randomUUID>,
-    ReturnType<typeof crypto.randomUUID>,
-  ] = [
-    '7d107d77-56d6-458f-b17f-27dce196bb8b',
-    '9129e442-9488-4e3b-a263-e08f9b89b458',
-  ]
-  const randomUUID = jest
-    .spyOn(crypto, 'randomUUID')
-    .mockReturnValueOnce(uuids[0])
-    .mockReturnValueOnce(uuids[1])
-  try {
-    const backend: AgentBackend = {
-      async listModels() {
-        return []
-      },
-      async runStep() {
-        return {
-          responseId: 'response',
-          text: 'Done',
-          toolCalls: [],
-        }
-      },
-    }
-    const toolHost: AgentToolHost = {
-      beginTurn() {},
-      async execute() {
-        return { content: '', isError: false }
-      },
-      getChangedFiles() {
-        return []
-      },
-      getDefinitions() {
-        return []
-      },
-      async getWorkspaceContext() {
-        return 'Workspace context is unavailable.'
-      },
-      async revert() {
-        return []
-      },
-    }
-    const store = createMemoryTaskStore()
-    const api = createAgentChatApi({
-      backend,
-      store,
-      toolHost,
-    })
-
-    const first = await api.createTask('First task', 'gpt-test')
-    const followUp = await api.sendMessage(first, 'Continue')
-    const second = await api.createTask('Second task', 'gpt-test')
-
-    expect(first.id).toBe(uuids[0])
-    expect(followUp.id).toBe(first.id)
-    const restoredTask = await api.getTask(first.id)
-    expect(restoredTask?.id).toBe(first.id)
-    expect(second.id).toBe(uuids[1])
-    expect(second.id).not.toBe(first.id)
-    expect(randomUUID).toHaveBeenCalledTimes(2)
-  } finally {
-    randomUUID.mockRestore()
+  const backend: AgentBackend = {
+    async listModels() {
+      return []
+    },
+    async runStep() {
+      return {
+        responseId: 'response',
+        text: 'Done',
+        toolCalls: [],
+      }
+    },
   }
+  const toolHost: AgentToolHost = {
+    beginTurn() {},
+    async execute() {
+      return { content: '', isError: false }
+    },
+    getChangedFiles() {
+      return []
+    },
+    getDefinitions() {
+      return []
+    },
+    async getWorkspaceContext() {
+      return 'Workspace context is unavailable.'
+    },
+    async revert() {
+      return []
+    },
+  }
+  const store = createMemoryTaskStore()
+  const api = createAgentChatApi({
+    backend,
+    store,
+    toolHost,
+  })
+
+  const first = await api.createTask('First task', 'gpt-test')
+  const followUp = await api.sendMessage(first, 'Continue')
+  const second = await api.createTask('Second task', 'gpt-test')
+
+  expect(first.id).toMatch(taskIdPattern)
+  expect(followUp.id).toBe(first.id)
+  const restoredTask = await api.getTask(first.id)
+  expect(restoredTask?.id).toBe(first.id)
+  expect(second.id).toMatch(taskIdPattern)
+  expect(second.id).not.toBe(first.id)
+  const eventIds = [...followUp.events, ...second.events].map(
+    (event) => event.id,
+  )
+  expect(new Set(eventIds).size).toBe(eventIds.length)
 })
 
 test('records a failed task when the backend rejects the request', async () => {
@@ -448,6 +438,92 @@ test('records a failed task when the backend rejects the request', async () => {
   expect(task.status).toBe('failed')
   expect(summarizeTask(task).errorMessage).toBe('Backend unavailable')
 })
+
+test.each(['verification', 'completion notification'])(
+  'retains steering received during %s',
+  async (phase) => {
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    let paused = false
+    const pause = async (): Promise<void> => {
+      if (paused) return
+      paused = true
+      entered.resolve()
+      await release.promise
+    }
+    const runStep = jest
+      .fn<AgentBackend['runStep']>()
+      .mockResolvedValueOnce({
+        responseId: 'before-steering',
+        text: 'Initial answer',
+        toolCalls: [],
+      })
+      .mockResolvedValueOnce({
+        responseId: 'after-steering',
+        text: 'Included the boundary condition',
+        toolCalls: [],
+      })
+    const store = createMemoryTaskStore()
+    const toolHost: AgentToolHost = {
+      beginTurn() {},
+      async execute() {
+        return { content: '', isError: false }
+      },
+      getChangedFiles() {
+        return [
+          { additions: 1, deletions: 0, path: 'src/a.ts', status: 'modified' },
+        ]
+      },
+      getDefinitions() {
+        return []
+      },
+      async getWorkspaceContext() {
+        return 'Workspace'
+      },
+      async revert() {
+        return []
+      },
+      async verifyChanges() {
+        if (phase === 'verification') await pause()
+        return { checksPassed: 1, failed: false, output: 'Checks passed' }
+      },
+    }
+    const api = createAgentChatApi({
+      backend: {
+        async listModels() {
+          return []
+        },
+        runStep,
+      },
+      store,
+      toolHost,
+    })
+    const pending = api.createTask('Fix it', 'gpt-test', {
+      async onUpdate(task) {
+        if (phase === 'completion notification' && task.status === 'completed')
+          await pause()
+      },
+    })
+    await entered.promise
+    const tasks = await store.list(1)
+    const task = tasks[0]
+    expect(task).toBeDefined()
+    if (!task) throw new Error('The running task was not stored')
+    await api.steer(task.id, 'Also cover the boundary condition')
+    release.resolve()
+    const completed = await pending
+    expect(completed.status).toBe('completed')
+    expect(runStep).toHaveBeenCalledTimes(2)
+    expect(runStep.mock.calls[1]?.[0].input).toEqual([
+      expect.objectContaining({
+        content: expect.stringContaining('Also cover the boundary condition'),
+      }),
+    ])
+    expect(
+      summarizeTask(completed).messages.map((message) => message.text),
+    ).toContain('Included the boundary condition')
+  },
+)
 
 test('returns automatic verification failures to the model for repair', async () => {
   const runStep = jest

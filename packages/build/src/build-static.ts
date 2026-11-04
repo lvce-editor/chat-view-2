@@ -100,6 +100,8 @@ await cp(path.join(root, 'dist'), path.join(root, 'dist2'), {
   force: true,
 })
 
+process.env.PATH_PREFIX ??= 'auto'
+
 const { commitHash } = await exportStatic({
   extensionPath: 'packages/extension',
   testPath: 'packages/e2e',
