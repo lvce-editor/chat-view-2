@@ -511,7 +511,7 @@ export const createInstance = async (
     return windowTitleQueue
   }
   currentState = state
-  const pendingStarts = new Set<number>()
+  const pendingStarts = new Map<number, symbol>()
   let authStatePoll: ReturnType<typeof setInterval> | undefined
   let authStateSyncing = false
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
@@ -821,60 +821,72 @@ export const createInstance = async (
     if (pendingStarts.has(selectedTaskRequest)) {
       return
     }
-    if (state.focusMode) {
-      scrollToLatestTurn = true
-    }
-    state.draft = ''
-    await saveDraft()
-    state.composerImages = []
-    state.modelPickerOpen = false
-    if (state.selectedTask?.status === 'running') {
-      if (!activeRuns.has(state.selectedTask.id)) {
-        throw new Error('This conversation is running in another window.')
+    const request = selectedTaskRequest
+    // Reserve before draft persistence yields, and release only our own send.
+    const reservation = Symbol()
+    pendingStarts.set(request, reservation)
+    const releaseReservation = (): void => {
+      if (pendingStarts.get(request) === reservation) {
+        pendingStarts.delete(request)
       }
-      await api.steer(state.selectedTask.id, message, attachments)
+    }
+    const modelId = state.selectedModelId
+    const initialTask = state.selectedTask
+    const submissionApi = api
+    const controller = new AbortController()
+    let runningTaskId: string | undefined
+    try {
+      if (state.focusMode) {
+        scrollToLatestTurn = true
+      }
+      state.draft = ''
+      state.composerImages = []
+      state.modelPickerOpen = false
+      await saveDraft()
+      const latestTask =
+        initialTask &&
+        (state.tasks.find((task) => task.id === initialTask.id) || initialTask)
+      const selectedTask = latestTask ? { ...latestTask, modelId } : undefined
+      if (selectedTask?.status === 'running') {
+        if (!activeRuns.has(selectedTask.id)) {
+          throw new Error('This conversation is running in another window.')
+        }
+        await submissionApi.steer(selectedTask.id, message, attachments)
+        if (requestRerender) {
+          await context?.requestRerender()
+        }
+        return
+      }
+      runningTaskId = selectedTask?.id
+      if (runningTaskId) {
+        activeRuns.set(runningTaskId, controller)
+      }
+      const options = {
+        attachments,
+        onUpdate: (task: ChatTask): Promise<void> => {
+          runningTaskId = task.id
+          if (task.status === 'idle' || isWorking(task)) {
+            activeRuns.set(task.id, controller)
+          }
+          if (task.status !== 'idle') {
+            releaseReservation()
+          }
+          return updateTask(task, request)
+        },
+        signal: controller.signal,
+      }
+      const task = selectedTask
+        ? await submissionApi.sendMessage(selectedTask, message, options)
+        : await submissionApi.createTask(message, modelId, options)
+      await updateTask(task, request)
       if (requestRerender) {
         await context?.requestRerender()
       }
-      return
-    }
-    const controller = new AbortController()
-    const request = selectedTaskRequest
-    pendingStarts.add(request)
-    let runningTaskId = state.selectedTask?.id
-    if (runningTaskId) {
-      activeRuns.set(runningTaskId, controller)
-    }
-    const options = {
-      attachments,
-      onUpdate: (task: ChatTask): Promise<void> => {
-        runningTaskId = task.id
-        if (task.status === 'idle' || isWorking(task)) {
-          activeRuns.set(task.id, controller)
-        }
-        if (task.status !== 'idle') {
-          pendingStarts.delete(request)
-        }
-        return updateTask(task, request)
-      },
-      signal: controller.signal,
-    }
-    const selectedTask = state.selectedTask
-      ? { ...state.selectedTask, modelId: state.selectedModelId }
-      : undefined
-    try {
-      const task = selectedTask
-        ? await api.sendMessage(selectedTask, message, options)
-        : await api.createTask(message, state.selectedModelId, options)
-      await updateTask(task, request)
     } finally {
-      pendingStarts.delete(request)
+      releaseReservation()
       if (runningTaskId && activeRuns.get(runningTaskId) === controller) {
         activeRuns.delete(runningTaskId)
       }
-    }
-    if (requestRerender) {
-      await context?.requestRerender()
     }
   }
 

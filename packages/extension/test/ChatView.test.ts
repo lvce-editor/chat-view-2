@@ -5,7 +5,7 @@ import type { ViewContext, ViewEvent } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { VirtualDomElements } from '@lvce-editor/virtual-dom-worker'
 import type { BackendConfiguration } from '../src/parts/BackendConfiguration/BackendConfiguration.ts'
-import type { ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
+import type { ChatRunOptions, ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createEvent } from '../src/parts/ChatTask/ChatTask.ts'
 import { view } from '../src/parts/ChatView/ChatView.ts'
 import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
@@ -106,6 +106,101 @@ const createViewContext = (state: unknown): ViewContext => ({
   state,
   uid: 1,
   viewId: 'chat2.views.chat',
+})
+
+test('reserves a pending submission before draft persistence can yield to another send', async () => {
+  const api = createMockChatApi()
+  const createTask = jest.spyOn(api, 'createTask')
+  const sendMessage = jest.spyOn(api, 'sendMessage')
+  const instance = await createInstance(undefined, api)
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'First request',
+  })
+  const first = instance.submit()
+  const input = dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Keep this next draft',
+  })
+  const second = instance.submit()
+  await Promise.all([first, input, second])
+  expect(createTask.mock.calls.length + sendMessage.mock.calls.length).toBe(1)
+  expect(instance.getState().draft).toBe('Keep this next draft')
+  instance.dispose?.()
+})
+
+test('an older turn finishing cannot release a newer pending steering submission', async () => {
+  const started = Promise.withResolvers<void>()
+  const finish = Promise.withResolvers<void>()
+  const steeringStarted = Promise.withResolvers<void>()
+  const steeringFinished = Promise.withResolvers<void>()
+  const api = createMockChatApi()
+  jest
+    .spyOn(api, 'createTask')
+    .mockImplementation(
+      async (
+        message,
+        modelId,
+        options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+      ) => {
+        const task: ChatTask = {
+          createdAt: new Date().toISOString(),
+          events: [createEvent({ text: message, type: 'user-message' })],
+          id: 'pending-reservation-task',
+          modelId,
+          status: 'running',
+          title: 'Pending reservation',
+          updatedAt: new Date().toISOString(),
+        }
+        await options?.onUpdate?.(task)
+        started.resolve()
+        await finish.promise
+        const completed = { ...task, status: 'completed' as const }
+        await options?.onUpdate?.(completed)
+        return completed
+      },
+    )
+  const sendMessage = jest.spyOn(api, 'sendMessage')
+  const steer = jest.spyOn(api, 'steer').mockImplementation(async () => {
+    steeringStarted.resolve()
+    await steeringFinished.promise
+  })
+  const instance = await createInstance(undefined, api)
+  try {
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Start this turn',
+    })
+    const first = instance.submit()
+    await started.promise
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Steer this turn',
+    })
+    const second = instance.submit()
+    await steeringStarted.promise
+    finish.resolve()
+    await first
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Preserve this draft',
+    })
+    await instance.submit()
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(steer).toHaveBeenCalledTimes(1)
+    expect(instance.getState().draft).toBe('Preserve this draft')
+    steeringFinished.resolve()
+    await second
+  } finally {
+    finish.resolve()
+    steeringFinished.resolve()
+    instance.dispose?.()
+  }
 })
 
 test('refreshes changed tasks from another tab without replacing the draft', async () => {

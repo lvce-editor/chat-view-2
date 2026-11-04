@@ -479,10 +479,6 @@
   scrollbar-width: thin;
 }
 
-.ChatView .ChatMessages {
-  contain: layout style;
-}
-
 .ChatMessagesContent {
   display: flex;
   flex-direction: column;
@@ -1109,6 +1105,7 @@
 }
 
 .ChatMessagesAiNative {
+  contain: layout style;
   width: 100%;
   padding-inline: 0;
   gap: 0;
