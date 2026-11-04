@@ -185,6 +185,7 @@ export const test = async ({
     }, workspace)
     await command('open folder', folderOption)
     await expect(page).toHaveTitle(new RegExp(basename(workspace), 'u'))
+    await openFile('src/add.js')
     await toggleLayout()
     process.stdout.write(`Desktop URL: ${page.url()}\n`)
     await page.locator('.Workbench.AiNativeLayout').waitFor()
@@ -229,7 +230,7 @@ export const test = async ({
     try {
       await newChat()
       await submit(
-        'Replace first original in a.txt with first updated. Keep the change scoped to that file. Preserve all other content and the existing single trailing newline.',
+        'Set a.txt to exactly one line containing "first updated" followed by one newline. Read the file, then replace its entire contents using apply_patch with oldText including its trailing newline and newText including exactly one trailing newline. Do not add an empty second line.',
       )
       await expect(page.locator('.ChatTaskStatus-running')).toHaveCount(1)
       await newChat()

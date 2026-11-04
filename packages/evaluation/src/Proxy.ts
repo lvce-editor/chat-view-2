@@ -208,6 +208,7 @@ export const startEvaluationProxy = async (
     options.model,
     options.temperature,
   )
+  const replayMisses = new Set<string>()
   const handleRequest = async (
     request: IncomingMessage,
     response: ServerResponse,
@@ -321,6 +322,7 @@ export const startEvaluationProxy = async (
         return
       }
       if (options.mode !== 'record') {
+        replayMisses.add(cacheKey)
         const missing: RecordedHttpResponse = {
           body: JSON.stringify({
             error: {
@@ -577,7 +579,12 @@ export const startEvaluationProxy = async (
       }
       sockets.close()
       server.close((error) => (error ? closed.reject(error) : closed.resolve()))
-      return closed.promise
+      await closed.promise
+      if (replayMisses.size > 0) {
+        throw new Error(
+          `Replay recording missing for ${options.scenarioId}: ${[...replayMisses].join(', ')}`,
+        )
+      }
     },
     origin: `http://${options.host ?? '127.0.0.1'}:${address.port}`,
   }

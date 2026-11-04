@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
-import { deepStrictEqual, strictEqual } from 'node:assert'
+import { deepStrictEqual, rejects, strictEqual } from 'node:assert'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import {
   createServer,
@@ -13,6 +13,8 @@ import type { EvaluationTranscript } from '../src/Types.ts'
 import { startEvaluationProxy } from '../src/Proxy.ts'
 
 const temporaryDirectories: string[] = []
+const missingScenarioRecording = /Replay recording missing.*test-scenario/u
+const missingCredentialRecording = /Replay recording missing.*replay-only/u
 
 afterEach(async () => {
   await Promise.all(
@@ -151,7 +153,7 @@ void test('reports cache misses without making a paid request', async () => {
   }
   strictEqual(body.error.message.includes('Replay recording missing'), true)
   strictEqual(body.error.message.includes('explicitly'), true)
-  await proxy.close()
+  await rejects(proxy.close(), missingScenarioRecording)
 })
 
 void test('reports an invalid LVCE token with .env guidance', async () => {
@@ -227,8 +229,11 @@ void test('replay mode forbids upstream requests even with a valid credential co
     strictEqual(text.includes('Replay recording missing'), true)
     strictEqual(requests, 0)
   } finally {
-    await proxy.close()
-    await new Promise<void>((resolve) => upstream.close(() => resolve()))
+    try {
+      await rejects(proxy.close(), missingCredentialRecording)
+    } finally {
+      await new Promise<void>((resolve) => upstream.close(() => resolve()))
+    }
   }
 })
 

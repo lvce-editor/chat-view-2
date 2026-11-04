@@ -33,7 +33,7 @@ npm run e2e:static
 npm run e2e:headless -- --electron --filter=recorded
 
 # Verify the extension bundled in a released app, without linking local source:
-npm run e2e:headless -- --electron --builtin --electron-version=<version> --filter=recorded
+npm run e2e:headless -- --electron --builtin --electron-version=<tag> --filter=recorded
 ```
 
 The tests type into the visible Chat 2 composer and assert rendered output and

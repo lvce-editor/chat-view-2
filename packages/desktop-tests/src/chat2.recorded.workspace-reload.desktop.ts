@@ -47,6 +47,13 @@ export const test = async ({
       await expect(page.locator('.Editor:visible')).toContainText(
         'workspace fixture',
       )
+      await expect
+        .poll(() =>
+          page.evaluate(() =>
+            Boolean(globalThis.document.activeElement?.closest('.Editor')),
+          ),
+        )
+        .toBe(true)
     }
     await search()
     process.stdout.write('workspace navigation before reload: pass\n')
