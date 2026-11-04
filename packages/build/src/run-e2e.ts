@@ -13,6 +13,8 @@ const record = process.argv.includes('--record')
 const desktop =
   process.argv.includes('--electron') ||
   process.argv.includes('--runtime=electron')
+const builtin = process.argv.includes('--builtin')
+if (builtin && !desktop) throw new Error('--builtin requires --electron')
 const desktopWorkspace = desktop
   ? await mkdtemp(join(tmpdir(), 'chat-desktop-workspace-'))
   : undefined
@@ -48,7 +50,7 @@ try {
   )
   const forwardedArguments = process.argv
     .slice(2)
-    .filter((arg) => arg !== '--record')
+    .filter((arg) => arg !== '--record' && arg !== '--builtin')
   const filterIndex = forwardedArguments.findIndex(
     (arg) => arg === '--filter' || arg.startsWith('--filter='),
   )
@@ -83,7 +85,9 @@ try {
         `--test-path=${join(root, desktop ? 'packages/desktop-tests' : 'packages/e2e')}`,
         ...(desktop
           ? [
-              `--electron-arg=--link=${join(root, 'packages/extension')}`,
+              ...(!builtin
+                ? [`--electron-arg=--link=${join(root, 'packages/extension')}`]
+                : []),
               '--timeout=300000',
             ]
           : []),

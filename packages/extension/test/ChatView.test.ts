@@ -1830,6 +1830,32 @@ test('renders user message actions and shows feedback after copying', async () =
   instance.dispose?.()
 })
 
+test('surfaces clipboard permission failures without showing copied feedback', async () => {
+  const execute = async (id: string): Promise<unknown> => {
+    if (id === 'ClipBoard.writeText') throw new Error('Clipboard access denied')
+    return undefined
+  }
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+  await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
+  const copyButton = getNodesByClass(
+    instance.render() as readonly any[],
+    'ChatMessageCopyButton',
+  )[0]
+  await expect(
+    dispatch(instance, { name: copyButton.name, type: 'click' }),
+  ).resolves.toBeUndefined()
+  expect(instance.getState().errorMessage).toBe(
+    'Unable to copy message: Clipboard access denied',
+  )
+  expect(instance.getState().copiedMessageId).toBe('')
+  instance.dispose?.()
+})
+
 test('opens the model picker without adding model controls to the header', async () => {
   const instance = await createTestInstance()
   const closedDom = instance.render() as readonly any[]

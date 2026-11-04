@@ -62,6 +62,13 @@ jobs:
         run: npm run e2e:static
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Preserve replay transcripts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: replay-${{ matrix.os }}
+          path: packages/evaluation/results/*.json
+          if-no-files-found: ignore
 
   desktop:
     runs-on: ubuntu-24.04
@@ -92,3 +99,10 @@ jobs:
         working-directory: ./packages/e2e
       - name: Replay chat in the official Electron application
         run: xvfb-run -a npm run e2e:headless -- --electron --filter=recorded
+      - name: Preserve desktop replay transcript
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: replay-desktop
+          path: packages/evaluation/results/*.json
+          if-no-files-found: ignore

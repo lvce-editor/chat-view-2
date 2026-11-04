@@ -1185,7 +1185,12 @@ export const createInstance = async (
           message?.type === 'assistant-message' ||
           message?.type === 'user-message'
         ) {
-          await execute('ClipBoard.writeText', message.text)
+          try {
+            await execute('ClipBoard.writeText', message.text)
+          } catch (error) {
+            state.errorMessage = `Unable to copy message: ${error instanceof Error ? error.message : String(error)}`
+            return
+          }
           showCopyFeedback(message.id)
         }
         return
