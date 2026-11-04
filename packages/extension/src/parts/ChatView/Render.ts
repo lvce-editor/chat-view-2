@@ -16,6 +16,9 @@ import * as Dom from '../VirtualDom/VirtualDom.ts'
 import { applyLayoutClasses } from './ApplyLayoutClasses.ts'
 
 const fileUriPattern = /^(?:file|memfs|remote-ssh|html|opfs):\/\//u
+const fileCitationPattern =
+  /cite((?:file|memfs|remote-ssh|html|opfs):\/\/[^\s]+)/gu
+const fileCitationLabelBrackets = /[[\]]/gu
 const relativeFilePattern = /^(?:\.\/)?[\w.-]+\/[\w./%#:-]+$/u
 const getMessageDateFormatter = (() => {
   let messageDateFormatter: Intl.DateTimeFormat | undefined
@@ -199,14 +202,26 @@ const renderMessageTextWithUrls = (text: string): readonly Dom.TreeNode[] => {
 const renderMessageTextWithoutBold = (
   text: string,
 ): readonly Dom.TreeNode[] => {
+  const normalizedText = text.replaceAll(
+    fileCitationPattern,
+    (_marker: string, destination: string) => {
+      const label = destination
+        .slice(destination.lastIndexOf('/') + 1)
+        .replaceAll(fileCitationLabelBrackets, '')
+      const uri = destination.replaceAll('(', '%28').replaceAll(')', '%29')
+      return `[${label || 'Source'}](${uri})`
+    },
+  )
   const children: Dom.TreeNode[] = []
   let previousIndex = 0
-  let link = findNextMarkdownLink(text, previousIndex)
+  let link = findNextMarkdownLink(normalizedText, previousIndex)
   while (link) {
     const matchIndex = link.index
     if (matchIndex > previousIndex) {
       children.push(
-        ...renderMessageTextWithUrls(text.slice(previousIndex, matchIndex)),
+        ...renderMessageTextWithUrls(
+          normalizedText.slice(previousIndex, matchIndex),
+        ),
       )
     }
     children.push(
@@ -220,10 +235,12 @@ const renderMessageTextWithoutBold = (
           ),
     )
     previousIndex = link.endIndex
-    link = findNextMarkdownLink(text, previousIndex)
+    link = findNextMarkdownLink(normalizedText, previousIndex)
   }
-  if (previousIndex < text.length) {
-    children.push(...renderMessageTextWithUrls(text.slice(previousIndex)))
+  if (previousIndex < normalizedText.length) {
+    children.push(
+      ...renderMessageTextWithUrls(normalizedText.slice(previousIndex)),
+    )
   }
   return children
 }

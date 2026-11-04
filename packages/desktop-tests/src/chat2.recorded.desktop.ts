@@ -17,6 +17,7 @@ interface Context {
 const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
 const layoutOption = /View: Toggle AI-Native \/ IDE Layout/u
 const folderOption = /Open Folder/u
+const reloadOption = /Window: Reload/u
 const addition = /left\s*\+\s*right/u
 const weatherPrompt =
   'What is the weather forecast for Berlin, Germany on November 4, 2026? Use web search and cite your sources.'
@@ -101,6 +102,10 @@ export const test = async ({
     assert.equal(response.status, 200)
   }
   const openFile = async (path: string): Promise<void> => {
+    if (!(await page.locator('.Explorer').isVisible())) {
+      await page.getByRole('tab', { exact: true, name: 'Explorer' }).click()
+    }
+    await page.locator('.Explorer').waitFor()
     const parts = path.split('/')
     const folders = parts.slice(0, -1)
     for (const folder of folders) {
@@ -111,6 +116,16 @@ export const test = async ({
     await page
       .getByRole('treeitem', { exact: true, name: parts.at(-1) })
       .dblclick()
+    const contents = fixtures[path]
+    assert.ok(contents)
+    await expect(page.locator('.Editor:visible')).toContainText(contents.trim())
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          Boolean(globalThis.document.activeElement?.closest('.Editor')),
+        ),
+      )
+      .toBe(true)
   }
   try {
     await page.locator('.ActivityBar').waitFor({ timeout: 60_000 })
@@ -257,7 +272,10 @@ export const test = async ({
     process.stdout.write(`Desktop before reload: ${page.url()}\n`)
     const hash = URL.parse(page.url())?.hash
     assert.ok(hash)
-    await page.reload({ waitUntil: 'domcontentloaded' })
+    await Promise.all([
+      page.waitForEvent('domcontentloaded'),
+      command('reload', reloadOption),
+    ])
     process.stdout.write(`Desktop after reload: ${page.url()}\n`)
     await page.locator('.Workbench.AiNativeLayout').waitFor()
     await expect(composer).toHaveValue('Preserve this desktop draft')
@@ -300,6 +318,13 @@ export const test = async ({
     let text = 'unavailable'
     try {
       text = await page.locator('body').innerText()
+      await mkdir('.test-with-playwright', { recursive: true })
+      await page.screenshot({
+        path: '.test-with-playwright/chat2-desktop-failure.png',
+      })
+      process.stderr.write(
+        `Desktop layout: ${JSON.stringify(await page.locator('.Main, .MainArea, .Workbench, .Explorer').evaluateAll((elements) => elements.map((element) => ({ bounds: element.getBoundingClientRect().toJSON(), className: element.className }))))}\n`,
+      )
     } catch {
       /* The window may have closed. */
     }

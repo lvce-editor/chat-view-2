@@ -1541,6 +1541,27 @@ test('renders Markdown and bare urls as external links and preserves punctuation
   )
 })
 
+test('renders explicit native file citations as workspace links without activating unsafe citations or code', async () => {
+  const instance = await createTestInstance()
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value:
+      'Evidence citefile:///workspace/src/auth.ts#L1-L2 and [README](memfs:///workspace/README.md#L1). Unsafe citejavascript:alert(1).\n```text\ncitefile:///workspace/literal.ts#L2\n```',
+  })
+  await instance.submit()
+  const dom = instance.render() as readonly any[]
+  const links = getNodesByClass(dom, 'ChatFileLink')
+  expect(links.map((node) => node.name)).toEqual([
+    `open-file:${encodeURIComponent('file:///workspace/src/auth.ts#L1-L2')}`,
+    `open-file:${encodeURIComponent('memfs:///workspace/README.md#L1')}`,
+  ])
+  expect(getText(dom)).toContain('auth.ts#L1-L2')
+  expect(getText(dom)).toContain('citejavascript:alert(1)')
+  expect(getText(dom)).toContain('citefile:///workspace/literal.ts#L2')
+  instance.dispose?.()
+})
+
 test('renders Markdown tables in messages while keeping malformed streaming text literal', async () => {
   const timestamp = '2026-09-10T12:00:00.000Z'
   const countries = [

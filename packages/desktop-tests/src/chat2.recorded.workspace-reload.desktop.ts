@@ -13,6 +13,7 @@ interface Context {
   readonly page: Page
 }
 const folderOption = /Open Folder/u
+const reloadOption = /Window: Reload/u
 const modifier = process.platform === 'darwin' ? 'Meta' : 'Control'
 export const name = 'chat2.recorded.workspace-reload.desktop'
 export const test = async ({
@@ -49,7 +50,14 @@ export const test = async ({
     }
     await search()
     process.stdout.write('workspace navigation before reload: pass\n')
-    await page.reload({ waitUntil: 'domcontentloaded' })
+    await Promise.all([
+      page.waitForEvent('domcontentloaded'),
+      (async (): Promise<void> => {
+        await page.keyboard.press(`${modifier}+Shift+P`)
+        await page.getByRole('combobox').fill('>reload')
+        await page.getByRole('option').filter({ hasText: reloadOption }).click()
+      })(),
+    ])
     await page.locator('.ActivityBar').waitFor({ timeout: 60_000 })
     await search()
     process.stdout.write('workspace navigation after reload: pass\n')

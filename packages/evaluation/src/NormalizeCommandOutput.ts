@@ -3,6 +3,8 @@
 const nodeTestCommand = /^(?:npm (?:run )?test|node --test)(?:\s|$)/u
 const tapDuration = /\bduration_ms(?::\s*|\s+)[\d.]+/gu
 const testDuration = /\([\d.]+(?:ms|s)\)(?=\r?$)/gmu
+const npmNodeTestBanner =
+  /^\r?\n> [@\w./-]+@[\w.+-]+ test\r?\n> node --test\r?\n\r?\n/u
 
 export const normalizeCommandOutput = (
   body: Readonly<Record<string, unknown>>,
@@ -29,6 +31,7 @@ export const normalizeCommandOutput = (
       return {
         ...value,
         output: value.output
+          .replace(npmNodeTestBanner, '')
           .replaceAll(tapDuration, 'duration_ms: <time>')
           .replaceAll(testDuration, '(<time>)'),
       }

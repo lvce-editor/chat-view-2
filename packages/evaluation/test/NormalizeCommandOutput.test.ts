@@ -48,3 +48,23 @@ void test('normalizes the desktop Node spec reporter timings', () => {
     ),
   )
 })
+
+void test('normalizes the optional npm banner for the same Node test script', () => {
+  const output = '✔ adds numbers (1.26ms)\nℹ pass 1\n'
+  deepStrictEqual(
+    normalizeCommandOutput(
+      body(`\n> desktop-chat-fixture@1.0.0 test\n> node --test\n\n${output}`),
+      getCommand,
+    ),
+    normalizeCommandOutput(body(output), getCommand),
+  )
+  notDeepStrictEqual(
+    normalizeCommandOutput(
+      body(
+        `\n> desktop-chat-fixture@1.0.0 test\n> node different-script.js\n\n${output}`,
+      ),
+      getCommand,
+    ),
+    normalizeCommandOutput(body(output), getCommand),
+  )
+})

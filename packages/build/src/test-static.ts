@@ -169,12 +169,27 @@ try {
       await startup.close()
     }
     const direct = await browser.newContext()
+    const directPage = await direct.newPage()
+    const directErrors: string[] = []
+    directPage.on('pageerror', (error) => directErrors.push(error.message))
     try {
-      const page = await direct.newPage()
+      const page = directPage
       await page.goto(`${baseUrl}chat/`)
       await page.locator('.Workbench.AiNativeLayout').waitFor()
       await page.locator('.ChatLoggedOut').waitFor()
+      assert.deepEqual(
+        directErrors,
+        [],
+        'Fresh direct chat raised an exception',
+      )
       process.stdout.write('fresh direct chat route: pass\n')
+    } catch (error) {
+      console.error(
+        'Direct route state:',
+        await directPage.locator('body').innerText(),
+        directErrors,
+      )
+      throw error
     } finally {
       await direct.close()
     }
@@ -231,6 +246,24 @@ try {
         )
         assert.deepEqual(externalRequests, [], 'Unexpected external requests')
         if (test === 'chat2.recorded.weather.html' && state === 'pass') {
+          // Test application preferences are scoped to that application. Keep
+          // the same replay boundary when navigating to the normal workbench.
+          await page.evaluate((backendUrl) => {
+            const settings = JSON.parse(
+              globalThis.localStorage.getItem('settings') || '{}',
+            )
+            globalThis.localStorage.setItem(
+              'settings',
+              JSON.stringify({
+                ...settings,
+                'chat2.backendUrl': backendUrl,
+                'chat2.computerUseEnabled': false,
+                'chat2.selectedModelId': 'gpt-5.4-mini',
+                'chat2.supportsStreaming': true,
+                'chat2.useMockBackend': false,
+              }),
+            )
+          }, replay.origin)
           const composer = page.locator('textarea[name="composer"]')
           await composer.fill('Preserve this draft across a real reload')
           await page.locator('button[name="submit"]:not([disabled])').waitFor()
@@ -238,7 +271,13 @@ try {
             .locator('.ChatMessageUser, .ChatMessageAssistant')
             .allTextContents()
           const hash = new URL(page.url()).hash
+          process.stdout.write(
+            `Static conversation before reload: ${page.url()}\n`,
+          )
           await page.reload()
+          process.stdout.write(
+            `Static conversation after reload: ${page.url()}\n`,
+          )
           await page.locator('.Workbench.AiNativeLayout').waitFor()
           await composer.waitFor()
           assert.equal(
@@ -256,6 +295,14 @@ try {
             'conversation and draft survive a real reload: pass\n',
           )
           await page.locator('button[name="new-task"]').click()
+          await page
+            .locator('.ChatMessageUser')
+            .first()
+            .waitFor({ state: 'detached' })
+          await page
+            .locator('.ChatMessageAssistant')
+            .first()
+            .waitFor({ state: 'detached' })
           await fetch(`${replay.origin}/__replay/pause`, { method: 'POST' })
           const before = await responseCount()
           await composer.fill(
@@ -305,6 +352,13 @@ try {
       } catch (error) {
         failures.push(`${test}: ${String(error)}`)
         console.error(failures.at(-1))
+        const page = context.pages()[0]
+        if (page)
+          console.error(
+            'Static failure state:',
+            page.url(),
+            (await page.locator('body').innerText()).slice(0, 5000),
+          )
       } finally {
         await context.close()
       }

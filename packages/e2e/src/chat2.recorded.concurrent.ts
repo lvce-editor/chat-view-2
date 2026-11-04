@@ -129,6 +129,8 @@ export const test: Test = async (api) => {
     await api.expect(api.Locator('.ChatTaskStatus-running')).toHaveCount(1)
     // eslint-disable-next-line e2e/no-direct-click
     await api.Locator('.ChatSessions .ChatNewTaskButton').click()
+    await api.expect(api.Locator('.ChatMessageUser')).toHaveCount(0)
+    await api.expect(api.Locator('.ChatMessageAssistant')).toHaveCount(0)
     await api.expect(api.Locator('textarea[name="composer"]')).toHaveValue('')
     await startMessage(
       api,
