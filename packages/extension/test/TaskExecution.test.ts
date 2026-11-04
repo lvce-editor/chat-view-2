@@ -40,16 +40,19 @@ test('an operation failure releases the conversation for a retry', async () => {
 })
 
 test('a lock held by another window prevents recovery and execution callbacks', async () => {
-  const original = Object.getOwnPropertyDescriptor(navigator, 'locks')
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+  if (!original) throw new Error('Navigator is unavailable')
   const operation = jest.fn(async () => 'unexpected')
-  Object.defineProperty(navigator, 'locks', {
+  Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
     value: {
-      request: async (
-        _name: string,
-        _options: Readonly<LockOptions>,
-        callback: (lock: null) => Promise<unknown>,
-      ): Promise<unknown> => callback(null),
+      locks: {
+        request: async (
+          _name: string,
+          _options: unknown,
+          callback: Readonly<(lock: null) => Promise<unknown>>,
+        ): Promise<unknown> => callback(null),
+      },
     },
   })
   try {
@@ -61,7 +64,6 @@ test('a lock held by another window prevents recovery and execution callbacks', 
     )
     expect(operation).not.toHaveBeenCalled()
   } finally {
-    if (original) Object.defineProperty(navigator, 'locks', original)
-    else Reflect.deleteProperty(navigator, 'locks')
+    Object.defineProperty(globalThis, 'navigator', original)
   }
 })
