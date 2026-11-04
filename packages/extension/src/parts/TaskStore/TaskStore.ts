@@ -5,7 +5,11 @@ export interface TaskStore {
   readonly archive: (id: string) => Promise<void>
   readonly get: (id: string) => Promise<ChatTask | undefined>
   readonly list: (limit: number) => Promise<readonly ChatTask[]>
-  readonly rename: (id: string, title: string) => Promise<ChatTask | undefined>
+  readonly rename: (
+    id: string,
+    title: string,
+    onlyIfNotGenerated?: boolean,
+  ) => Promise<ChatTask | undefined>
   readonly save: (task: ChatTask) => Promise<void>
 }
 
@@ -29,9 +33,13 @@ export const createMemoryTaskStore = (
         .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, Math.max(0, limit))
     },
-    async rename(id, title) {
+    async rename(id, title, onlyIfNotGenerated = false) {
       const task = tasks.get(id)
-      if (!task || task.archived) {
+      if (
+        !task ||
+        task.archived ||
+        (onlyIfNotGenerated && task.titleGenerated)
+      ) {
         return undefined
       }
       const renamed = {
@@ -163,13 +171,17 @@ export const createIndexedDbTaskStore = (): TaskStore => {
         database.close()
       }
     },
-    async rename(id, title) {
+    async rename(id, title, onlyIfNotGenerated = false) {
       const database = await openDatabase()
       try {
         const transaction = database.transaction(storeName, 'readwrite')
         const store = transaction.objectStore(storeName)
         const task = await requestToPromise<ChatTask | undefined>(store.get(id))
-        if (!task || task.archived) {
+        if (
+          !task ||
+          task.archived ||
+          (onlyIfNotGenerated && task.titleGenerated)
+        ) {
           return undefined
         }
         const renamed = {

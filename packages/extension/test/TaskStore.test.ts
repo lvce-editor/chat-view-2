@@ -79,3 +79,34 @@ test('keeps a task archived when a background update is saved', async () => {
     }),
   )
 })
+
+test('generated titles preserve live execution state and cannot replace a user title', async () => {
+  const task = createTask('task-1', '2026-01-01T00:00:00.000Z')
+  const store = createMemoryTaskStore([task])
+  await store.save({
+    ...task,
+    events: [
+      {
+        id: 'progress',
+        text: 'Working',
+        timestamp: task.createdAt,
+        type: 'assistant-message',
+      },
+    ],
+    status: 'running',
+  })
+  await expect(
+    store.rename(task.id, 'Generated title', true),
+  ).resolves.toMatchObject({
+    events: [expect.objectContaining({ text: 'Working' })],
+    status: 'running',
+  })
+  await store.rename(task.id, 'User title')
+  await expect(
+    store.rename(task.id, 'Late generated title', true),
+  ).resolves.toBeUndefined()
+  await expect(store.get(task.id)).resolves.toMatchObject({
+    status: 'running',
+    title: 'User title',
+  })
+})

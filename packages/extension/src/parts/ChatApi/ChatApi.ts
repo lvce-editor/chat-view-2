@@ -18,6 +18,7 @@ export interface ChatModel {
 export interface ChatChangedFile {
   readonly additions: number
   readonly deletions: number
+  readonly diff?: string
   readonly path: string
   readonly status: 'added' | 'deleted' | 'modified'
 }

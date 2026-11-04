@@ -115,6 +115,14 @@ export const test: Test = async (api) => {
     'Fix the obvious bug in this Node.js project so that npm test passes. Keep the change scoped to the bug.',
   )
   await waitForTasks(api)
+  // eslint-disable-next-line e2e/no-direct-click
+  await api.Locator('button[name="toggle-changes"]').click()
+  await api
+    .expect(api.Locator('.ChatFileDiff'))
+    .toContainText('--- a/src/add.js')
+  await api
+    .expect(api.Locator('.ChatFileDiff'))
+    .toContainText('+++ b/src/add.js')
   const content = await api.FileSystem.readFile(`${workspace}src/add.js`)
   if (!content.includes('left + right')) {
     throw new Error(`The real file was not fixed: ${content}`)

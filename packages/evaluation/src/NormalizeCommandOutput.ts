@@ -1,7 +1,7 @@
 // Normalize timing fields only for results of known Node test commands. File
 // contents, exit codes, test names, counts, and failures remain part of the key.
 const nodeTestCommand = /^(?:npm (?:run )?test|node --test)(?:\s|$)/u
-const tapDuration = /\bduration_ms:\s*[\d.]+/gu
+const tapDuration = /\bduration_ms(?::\s*|\s+)[\d.]+/gu
 const testDuration = /\([\d.]+(?:ms|s)\)(?=\r?$)/gmu
 
 export const normalizeCommandOutput = (

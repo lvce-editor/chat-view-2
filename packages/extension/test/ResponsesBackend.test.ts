@@ -1197,3 +1197,44 @@ test('preserves web citations and identifies native weather feeds', async () => 
     'Berlin forecast.\n\nSources: [Forecast](https://weather.example.com/berlin), OpenAI weather feed',
   )
 })
+
+test('cancelling a stream drains the current delta before releasing its turn', async () => {
+  const socket = new MockResponsesWebSocket()
+  const controller = new AbortController()
+  const deltaStarted = Promise.withResolvers<void>()
+  const releaseDelta = Promise.withResolvers<void>()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    supportsStreaming: true,
+  })
+  let settled = false
+  const request = backend.runStep({
+    input: [{ content: 'hello', role: 'user' }],
+    modelId: 'gpt-test',
+    async onTextDelta() {
+      deltaStarted.resolve()
+      await releaseDelta.promise
+    },
+    signal: controller.signal,
+    tools: [],
+  })
+  const result = (async (): Promise<unknown> => {
+    try {
+      return await request
+    } catch (error) {
+      settled = true
+      return error
+    }
+  })()
+  socket.open()
+  socket.receive({ delta: 'partial', type: 'response.output_text.delta' })
+  await deltaStarted.promise
+  controller.abort(new Error('stop requested'))
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  expect(socket.readyState).toBe(3)
+  expect(settled).toBe(false)
+  releaseDelta.resolve()
+  await expect(result).resolves.toMatchObject({ message: 'stop requested' })
+  expect(settled).toBe(true)
+})

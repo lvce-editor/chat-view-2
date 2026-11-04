@@ -50,11 +50,13 @@ try {
     process.execPath,
     [
       cli,
-      `--only-extension=${join(root, 'packages/extension')}`,
+      ...(!desktop
+        ? [`--only-extension=${join(root, 'packages/extension')}`]
+        : []),
       `--test-path=${join(root, desktop ? 'packages/desktop-tests' : 'packages/e2e')}`,
       ...(desktop
         ? [
-            `--electron-env=ONLY_EXTENSION=${join(root, 'packages/extension')}`,
+            `--electron-arg=--link=${join(root, 'packages/extension')}`,
             '--timeout=300000',
           ]
         : []),

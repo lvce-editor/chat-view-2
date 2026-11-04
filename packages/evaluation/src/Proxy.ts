@@ -1,4 +1,5 @@
 import type { RawData, WebSocket } from 'ws'
+import { rm } from 'node:fs/promises'
 import {
   createServer,
   type IncomingMessage,
@@ -200,6 +201,7 @@ export const startEvaluationProxy = async (
     ...recorded,
     body: normalize(recorded.body),
   })
+  await rm(options.transcriptPath, { force: true })
   const transcript = createTranscriptWriter(
     options.transcriptPath,
     options.scenarioId,

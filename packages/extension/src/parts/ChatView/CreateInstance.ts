@@ -273,6 +273,15 @@ const setWorkbenchLayoutUrl = async (
     if (!url) {
       return
     }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      await execute(
+        'Layout.setHash',
+        layout === 'ai-native' && taskId
+          ? `#chat-${encodeURIComponent(taskId)}`
+          : '',
+      )
+      return
+    }
     const wasChatPath = isChatPath(url.pathname)
     if (layout === 'ai-native') {
       const assetDir = await execute('Layout.getAssetDir')

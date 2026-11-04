@@ -17,6 +17,7 @@ import type { TaskStore } from '../TaskStore/TaskStore.ts'
 import { appendEvent, createEvent, setStatus } from '../ChatTask/ChatTask.ts'
 import {
   isTaskExecuting,
+  tryWithTaskExecution,
   withTaskExecution,
 } from '../TaskExecution/TaskExecution.ts'
 
@@ -556,26 +557,35 @@ export const createAgentChatApi = ({
     ) {
       return task
     }
-    let recovered = task
-    if (task.streamingText) {
-      recovered = appendEvent(
-        recovered,
-        createEvent({ text: task.streamingText, type: 'assistant-message' }),
+    const result = await tryWithTaskExecution(task.id, async () => {
+      const current = await store.get(task.id)
+      if (!current || !['running', 'stopping'].includes(current.status))
+        return current
+      let recovered = current
+      if (current.streamingText) {
+        recovered = appendEvent(
+          recovered,
+          createEvent({
+            text: current.streamingText,
+            type: 'assistant-message',
+          }),
+        )
+      }
+      const { streamingText: _partial, ...withoutStreaming } = recovered
+      recovered = setStatus(
+        appendEvent(
+          withoutStreaming,
+          createEvent({
+            text: 'This turn was interrupted. Send a message to continue. Applied edits have been kept.',
+            type: 'assistant-message',
+          }),
+        ),
+        'interrupted',
       )
-    }
-    const { streamingText: _partial, ...withoutStreaming } = recovered
-    recovered = setStatus(
-      appendEvent(
-        withoutStreaming,
-        createEvent({
-          text: 'This turn was interrupted. Send a message to continue. Applied edits have been kept.',
-          type: 'assistant-message',
-        }),
-      ),
-      'interrupted',
-    )
-    await store.save(recovered)
-    return recovered
+      await store.save(recovered)
+      return recovered
+    })
+    return result.acquired ? result.value : await store.get(task.id)
   }
 
   return {
@@ -620,17 +630,14 @@ export const createAgentChatApi = ({
           if (!generatedTitle) {
             return
           }
-          const current = await store.get(task.id)
-          if (!current || current.archived || current.titleGenerated) {
-            return
+          const updated = await store.rename(
+            task.id,
+            capitalizeTitle(generatedTitle).slice(0, 80),
+            true,
+          )
+          if (updated) {
+            await notify((await store.get(task.id)) || updated, options, store)
           }
-          const updated = {
-            ...current,
-            title: capitalizeTitle(generatedTitle).slice(0, 80),
-            titleGenerated: true,
-          }
-          await store.save(updated)
-          await notify(updated, options, store)
         } catch {
           // Keep the first-message title when title generation is unavailable.
         }

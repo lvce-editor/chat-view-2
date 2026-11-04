@@ -272,3 +272,60 @@ test('an explicit continuation after interruption starts a fresh response chain 
     resumed.events.filter((event) => event.type === 'user-message'),
   ).toHaveLength(2)
 })
+
+test('recovery cannot overwrite a turn that completed after the initial read', async () => {
+  const task: ChatTask = {
+    createdAt: '2026-11-04T12:00:00Z',
+    events: [],
+    id: 'completion-race',
+    modelId: 'test-model',
+    status: 'running',
+    streamingText: 'Partial answer',
+    title: 'Completing task',
+    updatedAt: '2026-11-04T12:00:00Z',
+  }
+  const { streamingText: _partial, ...completedBase } = task
+  const completed: ChatTask = {
+    ...completedBase,
+    events: [
+      {
+        id: 'answer',
+        text: 'Final answer',
+        timestamp: task.updatedAt,
+        type: 'assistant-message',
+      },
+    ],
+    status: 'completed',
+  }
+  const memory = createMemoryTaskStore([task])
+  let firstRead = true
+  const store = {
+    ...memory,
+    async get(id: string): Promise<ChatTask | undefined> {
+      const snapshot = await memory.get(id)
+      if (firstRead) {
+        firstRead = false
+        await memory.save(completed)
+      }
+      return snapshot
+    },
+  }
+  const backend: AgentBackend = {
+    listModels: async () => [],
+    runStep: jest.fn<AgentBackend['runStep']>(),
+  }
+  const api = createAgentChatApi({
+    backend,
+    store,
+    toolHost: createAgentToolHost(),
+  })
+  await expect(api.getTask(task.id)).resolves.toMatchObject({
+    events: completed.events,
+    status: 'completed',
+  })
+  await expect(memory.get(task.id)).resolves.toMatchObject({
+    events: completed.events,
+    status: 'completed',
+  })
+  expect(backend.runStep).not.toHaveBeenCalled()
+})

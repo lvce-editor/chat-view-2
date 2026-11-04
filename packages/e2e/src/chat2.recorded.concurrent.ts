@@ -124,7 +124,7 @@ export const test: Test = async (api) => {
   try {
     await startMessage(
       api,
-      'Replace first original in a.txt with first updated. Keep the change scoped to that file.',
+      'Replace first original in a.txt with first updated. Keep the change scoped to that file. Preserve all other content and the existing single trailing newline.',
     )
     await api.expect(api.Locator('.ChatTaskStatus-running')).toHaveCount(1)
     // eslint-disable-next-line e2e/no-direct-click
@@ -132,7 +132,7 @@ export const test: Test = async (api) => {
     await api.expect(api.Locator('textarea[name="composer"]')).toHaveValue('')
     await startMessage(
       api,
-      'Replace second original in b.txt with second updated. Keep the change scoped to that file.',
+      'Replace second original in b.txt with second updated. Keep the change scoped to that file. Preserve all other content and the existing single trailing newline.',
     )
     await api.expect(api.Locator('.ChatTaskStatus-running')).toHaveCount(2)
   } finally {

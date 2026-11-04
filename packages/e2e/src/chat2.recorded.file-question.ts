@@ -48,6 +48,7 @@ const prepareChat = async (
     'chat2.selectedModelId': 'gpt-5.4-mini',
     'chat2.supportsStreaming': true,
     'chat2.useMockBackend': false,
+    'files.autoSave': 'off',
   })
 }
 
@@ -113,6 +114,6 @@ export const test: Test = async (api) => {
     .toContainText('session-cookie')
   await api.FileSystem.shouldHaveFile(`${workspace}src/auth.ts`, original)
   // eslint-disable-next-line e2e/no-direct-click
-  await api.Locator('.ChatFileLink').first().click()
+  await api.Locator('.ChatFileLink[name*="auth.ts"]').first().click()
   await api.Editor.shouldHaveText(unsaved)
 }

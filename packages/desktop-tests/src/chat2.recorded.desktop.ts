@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/prefer-readonly-parameter-types */
 // Playwright handles are intentionally mutable test drivers.
-// cspell:ignore requestfailed
+// cspell:ignore requestfailed domcontentloaded
 import type { expect as Expect } from '@playwright/test'
 import type { ElectronApplication, Page } from 'playwright'
 import assert from 'node:assert/strict'
@@ -73,6 +73,8 @@ export const test = async ({
   const toggleLayout = (): Promise<void> => command('toggle ai', layoutOption)
   const newChat = async (): Promise<void> => {
     await page.locator('.ChatSessions .ChatNewTaskButton').click()
+    await expect(page.locator('.ChatMessageUser')).toHaveCount(0)
+    await expect(page.locator('.ChatMessageAssistant')).toHaveCount(0)
     await expect(page.locator('textarea[name="composer"]')).toHaveValue('')
   }
   const submit = async (message: string): Promise<void> => {
@@ -99,11 +101,19 @@ export const test = async ({
     assert.equal(response.status, 200)
   }
   const openFile = async (path: string): Promise<void> => {
-    await page.keyboard.press(`${modifier}+P`)
-    await page.getByRole('combobox').fill(path)
-    await page.getByRole('option').first().click()
+    const parts = path.split('/')
+    const folders = parts.slice(0, -1)
+    for (const folder of folders) {
+      const item = page.getByRole('treeitem', { exact: true, name: folder })
+      if ((await item.getAttribute('aria-expanded')) !== 'true')
+        await item.click()
+    }
+    await page
+      .getByRole('treeitem', { exact: true, name: parts.at(-1) })
+      .dblclick()
   }
   try {
+    await page.locator('.ActivityBar').waitFor({ timeout: 60_000 })
     // Verify the launcher's private application state before writing settings.
     const profile = await electronApp.evaluate(() => ({
       cache: process.env.XDG_CACHE_HOME,
@@ -139,6 +149,7 @@ export const test = async ({
         'chat2.selectedModelId': 'gpt-5.4-mini',
         'chat2.supportsStreaming': true,
         'chat2.useMockBackend': false,
+        'files.autoSave': 'off',
       }),
     )
     for (const [path, contents] of Object.entries(fixtures)) {
@@ -146,7 +157,8 @@ export const test = async ({
       await mkdir(dirname(target), { recursive: true })
       await writeFile(target, contents)
     }
-    await page.reload()
+    process.stdout.write('desktop settings reload\n')
+    await page.reload({ waitUntil: 'domcontentloaded' })
     await page.locator('.ActivityBar').waitFor({ timeout: 60_000 })
     // Select the controlled fixture in the real Open Folder flow.
     await electronApp.evaluate(({ dialog }, folder) => {
@@ -186,6 +198,13 @@ export const test = async ({
     await expect(page.locator('.ChatChecksPassed')).toContainText(
       'checks passed',
     )
+    await page.locator('button[name="toggle-changes"]').click()
+    await expect(page.locator('.ChatFileDiff')).toContainText(
+      '--- a/src/add.js',
+    )
+    await expect(page.locator('.ChatFileDiff')).toContainText(
+      '+++ b/src/add.js',
+    )
     await expect(page.locator('button[name="revert"]')).toHaveCount(0)
     process.stdout.write(
       'desktop applied edit and agent-run project check: pass\n',
@@ -195,12 +214,12 @@ export const test = async ({
     try {
       await newChat()
       await submit(
-        'Replace first original in a.txt with first updated. Keep the change scoped to that file.',
+        'Replace first original in a.txt with first updated. Keep the change scoped to that file. Preserve all other content and the existing single trailing newline.',
       )
       await expect(page.locator('.ChatTaskStatus-running')).toHaveCount(1)
       await newChat()
       await submit(
-        'Replace second original in b.txt with second updated. Keep the change scoped to that file.',
+        'Replace second original in b.txt with second updated. Keep the change scoped to that file. Preserve all other content and the existing single trailing newline.',
       )
       await expect(page.locator('.ChatTaskStatus-running')).toHaveCount(2)
     } finally {
@@ -235,9 +254,11 @@ export const test = async ({
     const composer = page.locator('textarea[name="composer"]')
     await composer.fill('Preserve this desktop draft')
     await expect(page.locator('button[name="submit"]')).toBeEnabled()
+    process.stdout.write(`Desktop before reload: ${page.url()}\n`)
     const hash = URL.parse(page.url())?.hash
     assert.ok(hash)
-    await page.reload()
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    process.stdout.write(`Desktop after reload: ${page.url()}\n`)
     await page.locator('.Workbench.AiNativeLayout').waitFor()
     await expect(composer).toHaveValue('Preserve this desktop draft')
     await expect(page.locator('.ChatTaskStatus-stopped')).toHaveCount(1)
@@ -245,6 +266,7 @@ export const test = async ({
     process.stdout.write('desktop stop, history and draft reload: pass\n')
 
     await toggleLayout()
+    await expect(page.locator('.Workbench.AiNativeLayout')).toHaveCount(0)
     await openFile('src/auth.ts')
     await expect(page.locator('.Editor:visible')).toContainText('disk-token')
     await page.keyboard.press(`${modifier}+A`)
@@ -266,7 +288,7 @@ export const test = async ({
       await readFile(join(workspace, 'src/auth.ts'), 'utf8'),
       fixtures['src/auth.ts'],
     )
-    await page.locator('.ChatFileLink').first().click()
+    await page.locator('.ChatFileLink[name*="auth.ts"]').first().click()
     await expect(page.locator('.Editor:visible')).toContainText(
       'session-cookie',
     )

@@ -1036,11 +1036,15 @@ const visibleChangedFileCount = 3
 const renderChangedFile = (
   file: ChatChangedFile,
   index: number,
+  expanded: boolean,
 ): Dom.TreeNode => {
   return Dom.div(
     `ChatChangedFile ChatChangedFile-${file.status}${index > 0 ? ' ChatChangedFileFollowing' : ''}`,
     [
       Dom.div('ChatChangedFileName', [Dom.textNode(file.path)]),
+      ...(expanded && file.diff
+        ? [Dom.div('ChatFileDiff', [Dom.textNode(file.diff)])]
+        : []),
       Dom.div('ChatChangedFileStats', [
         Dom.div('ChatChangedFileAdditions', [
           Dom.textNode(`+${file.additions || 0}`),
@@ -1102,7 +1106,12 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
         }),
       ]),
     ]),
-    Dom.div('ChatChangedFiles', files.map(renderChangedFile)),
+    Dom.div(
+      'ChatChangedFiles',
+      files.map((file, index) =>
+        renderChangedFile(file, index, changesExpanded),
+      ),
+    ),
     ...(!changesExpanded && hiddenFileCount > 0
       ? [
           Dom.button(

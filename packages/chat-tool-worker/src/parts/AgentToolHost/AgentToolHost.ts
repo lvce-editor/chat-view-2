@@ -1,7 +1,9 @@
+import { createReviewDiff } from '../ReviewDiff/ReviewDiff.ts'
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, sonarjs/cognitive-complexity, unicorn/max-nested-calls, unicorn/no-break-in-nested-loop, unicorn/no-declarations-before-early-exit, unicorn/prefer-code-point, unicorn/prefer-iterator-to-array */
 export interface ChatChangedFile {
   readonly additions: number
   readonly deletions: number
+  readonly diff?: string
   readonly path: string
   readonly status: 'added' | 'deleted' | 'modified'
 }
@@ -569,6 +571,11 @@ export const createAgentToolHost = ({
         changedFiles.set(target.relativePath, {
           additions: (previousChange?.additions || 0) + lineChanges.additions,
           deletions: (previousChange?.deletions || 0) + lineChanges.deletions,
+          diff: createReviewDiff(
+            target.relativePath,
+            originalSnapshot.content,
+            updated,
+          ),
           path: target.relativePath,
           status: originalSnapshot.existed ? 'modified' : 'added',
         })

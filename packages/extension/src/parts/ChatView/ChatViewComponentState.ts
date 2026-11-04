@@ -68,6 +68,7 @@ const isChatTaskEvent = (value: unknown): value is ChatTaskEvent => {
           return (
             isRecord(file) &&
             typeof file.additions === 'number' &&
+            (file.diff === undefined || typeof file.diff === 'string') &&
             typeof file.deletions === 'number' &&
             typeof file.path === 'string' &&
             ['added', 'deleted', 'modified'].includes(String(file.status))

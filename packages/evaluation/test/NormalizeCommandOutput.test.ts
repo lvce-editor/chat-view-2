@@ -35,3 +35,16 @@ void test('normalizes Node test timing while retaining assertions and non-comman
     body('duration_ms: 1.26'),
   )
 })
+
+void test('normalizes the desktop Node spec reporter timings', () => {
+  deepStrictEqual(
+    normalizeCommandOutput(
+      body('✔ adds numbers (1.26ms)\nℹ pass 1\nℹ duration_ms 45.67\n'),
+      getCommand,
+    ),
+    normalizeCommandOutput(
+      body('✔ adds numbers (9.14ms)\nℹ pass 1\nℹ duration_ms 123.45\n'),
+      getCommand,
+    ),
+  )
+})

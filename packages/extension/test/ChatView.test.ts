@@ -1116,6 +1116,36 @@ test('switching to AI-native layout keeps the deployment prefix, query, and sele
   instance.dispose?.()
 })
 
+test('desktop layout changes preserve the served path and encode the selected conversation in the fragment', async () => {
+  const execute = jest.fn(
+    async (command: string, ..._args: readonly unknown[]) => {
+      if (command === 'Layout.getHref') {
+        return 'lvce://-/'
+      }
+      if (command === 'Layout.getSideBarFocusMode') {
+        return false
+      }
+      return undefined
+    },
+  )
+  const instance = await createInstance(
+    undefined,
+    createMockChatApi(),
+    undefined,
+    execute,
+  )
+  const state = instance.getState() as { focusModeEnabled: boolean }
+  state.focusModeEnabled = true
+  await dispatch(instance, { name: 'task:mock-task-2', type: 'click' })
+  await instance.toggleFocusMode()
+  expect(execute).toHaveBeenCalledWith('Layout.setHash', '#chat-mock-task-2')
+  expect(execute).not.toHaveBeenCalledWith(
+    'Layout.setPathName',
+    expect.anything(),
+  )
+  instance.dispose?.()
+})
+
 test('exposes and applies live component state without replacing the chat instance', async () => {
   const instance = await createTestInstance()
   expect(view).toEqual(

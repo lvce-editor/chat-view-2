@@ -331,7 +331,13 @@ const runWebSocketRequest = (
     settled = true
     cleanup()
     closeSocket()
-    reject(error instanceof Error ? error : new Error(String(error)))
+    const failure = error instanceof Error ? error : new Error(String(error))
+    // A cancelled turn still owns its queued delta writes until they drain.
+    // Rejecting sooner lets those writes race the stop state or the next turn.
+    void processing.then(
+      () => reject(failure),
+      () => reject(failure),
+    )
   }
 
   const complete = (): void => {
