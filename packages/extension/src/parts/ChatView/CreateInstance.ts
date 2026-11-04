@@ -372,6 +372,7 @@ export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
 }
 
 const activeRuns = new Map<string, AbortController>()
+const runCompletions = new Map<string, Promise<void>>()
 
 export const createInstance = async (
   context?: ViewContext,
@@ -834,6 +835,7 @@ export const createInstance = async (
     const initialTask = state.selectedTask
     const submissionApi = api
     const controller = new AbortController()
+    const completion = Promise.withResolvers<void>()
     let runningTaskId: string | undefined
     try {
       if (state.focusMode) {
@@ -843,9 +845,19 @@ export const createInstance = async (
       state.composerImages = []
       state.modelPickerOpen = false
       await saveDraft()
-      const latestTask =
+      let latestTask =
         initialTask &&
         (state.tasks.find((task) => task.id === initialTask.id) || initialTask)
+      const previousCompletion =
+        latestTask?.status !== 'running' && latestTask
+          ? runCompletions.get(latestTask.id)
+          : undefined
+      if (previousCompletion) {
+        // Completion can render before the previous backend releases its lock.
+        await previousCompletion
+        latestTask =
+          state.tasks.find((task) => task.id === latestTask?.id) || latestTask
+      }
       const selectedTask = latestTask ? { ...latestTask, modelId } : undefined
       if (selectedTask?.status === 'running') {
         if (!activeRuns.has(selectedTask.id)) {
@@ -860,6 +872,7 @@ export const createInstance = async (
       runningTaskId = selectedTask?.id
       if (runningTaskId) {
         activeRuns.set(runningTaskId, controller)
+        runCompletions.set(runningTaskId, completion.promise)
       }
       const options = {
         attachments,
@@ -867,6 +880,7 @@ export const createInstance = async (
           runningTaskId = task.id
           if (task.status === 'idle' || isWorking(task)) {
             activeRuns.set(task.id, controller)
+            runCompletions.set(task.id, completion.promise)
           }
           if (task.status !== 'idle') {
             releaseReservation()
@@ -887,6 +901,13 @@ export const createInstance = async (
       if (runningTaskId && activeRuns.get(runningTaskId) === controller) {
         activeRuns.delete(runningTaskId)
       }
+      if (
+        runningTaskId &&
+        runCompletions.get(runningTaskId) === completion.promise
+      ) {
+        runCompletions.delete(runningTaskId)
+      }
+      completion.resolve()
     }
   }
 

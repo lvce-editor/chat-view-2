@@ -203,6 +203,62 @@ test('an older turn finishing cannot release a newer pending steering submission
   }
 })
 
+test('a follow-up waits for its own completed turn to release execution', async () => {
+  const terminalShown = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const api = createMockChatApi()
+  jest
+    .spyOn(api, 'createTask')
+    .mockImplementation(
+      async (
+        message,
+        modelId,
+        options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+      ) => {
+        const task: ChatTask = {
+          createdAt: new Date().toISOString(),
+          events: [createEvent({ text: message, type: 'user-message' })],
+          id: 'finishing-turn',
+          modelId,
+          status: 'running',
+          title: 'Finishing turn',
+          updatedAt: new Date().toISOString(),
+        }
+        await options?.onUpdate?.(task)
+        const completed = { ...task, status: 'completed' as const }
+        await options?.onUpdate?.(completed)
+        terminalShown.resolve()
+        await release.promise
+        return completed
+      },
+    )
+  const sendMessage = jest.spyOn(api, 'sendMessage')
+  const instance = await createInstance(undefined, api)
+  try {
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'First message',
+    })
+    const first = instance.submit()
+    await terminalShown.promise
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Follow-up message',
+    })
+    const second = instance.submit()
+    await flushPromises()
+    expect(sendMessage).not.toHaveBeenCalled()
+    release.resolve()
+    await Promise.all([first, second])
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+  } finally {
+    release.resolve()
+    instance.dispose?.()
+  }
+})
+
 test('refreshes changed tasks from another tab without replacing the draft', async () => {
   const channels: TestBroadcastChannel[] = []
   class TestBroadcastChannel extends BroadcastChannel {

@@ -397,6 +397,10 @@ export const createAgentChatApi = ({
               const { checksPassed: passedChecks } = verification
               checksPassed = passedChecks
             }
+            if (steering.get(task.id)?.length) {
+              input = []
+              continue
+            }
             if (result.text) {
               task = await withEvent(
                 task,
@@ -414,6 +418,11 @@ export const createAgentChatApi = ({
             }
             await store.save(task)
             await notify(task, options, store)
+            if (steering.get(task.id)?.length) {
+              task = setStatus(task, 'running')
+              input = []
+              continue
+            }
             return task
           }
           if (result.text) {
