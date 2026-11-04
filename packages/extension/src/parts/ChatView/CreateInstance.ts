@@ -763,6 +763,7 @@ export const createInstance = async (
       return
     }
     if (request !== selectedTaskRequest && state.selectedTask?.id !== task.id) {
+      taskRefreshRequest++
       state.tasks = [
         task,
         ...state.tasks.filter((item) => item.id !== task.id),

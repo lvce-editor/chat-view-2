@@ -259,6 +259,97 @@ test('a follow-up waits for its own completed turn to release execution', async 
   }
 })
 
+test.each([false, true])(
+  'an older task-list refresh cannot restore running status after completion (selected: %s)',
+  async (selected) => {
+    const channels: BroadcastChannel[] = []
+    const originalBroadcastChannel = BroadcastChannel
+    class TestBroadcastChannel extends BroadcastChannel {
+      constructor(name: Readonly<string>) {
+        super(name)
+        channels.push(this)
+      }
+    }
+    Object.defineProperty(globalThis, 'BroadcastChannel', {
+      configurable: true,
+      value: TestBroadcastChannel,
+    })
+    const baseApi = createMockChatApi()
+    const [original] = await baseApi.listTasks(1)
+    if (!original) throw new Error('Expected a mock task')
+    const running: ChatTask = { ...original, status: 'running' }
+    const completed: ChatTask = { ...original, status: 'completed' }
+    const started = Promise.withResolvers<void>()
+    const finish = Promise.withResolvers<void>()
+    const refreshStarted = Promise.withResolvers<void>()
+    const staleList = Promise.withResolvers<readonly ChatTask[]>()
+    let blockRefresh = false
+    const instance = await createInstance(undefined, {
+      ...baseApi,
+      async createTask(
+        _message,
+        _model,
+        options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+      ) {
+        await options?.onUpdate?.(running)
+        started.resolve()
+        await finish.promise
+        return completed
+      },
+      async getTask() {
+        return running
+      },
+      async listTasks() {
+        if (blockRefresh) {
+          refreshStarted.resolve()
+          return staleList.promise
+        }
+        return [original]
+      },
+    })
+    let submission: Promise<void> | undefined
+    try {
+      await dispatch(instance, {
+        name: 'composer',
+        type: 'input',
+        value: 'Start a task',
+      })
+      submission = instance.submit()
+      await started.promise
+      if (!selected) await instance.newChat()
+      blockRefresh = true
+      channels[0]?.onmessage?.(
+        new MessageEvent('message', { data: { type: 'tasks-changed' } }),
+      )
+      await refreshStarted.promise
+      finish.resolve()
+      await submission
+      expect(
+        instance.getState().tasks.find((task) => task.id === original.id)
+          ?.status,
+      ).toBe('completed')
+      staleList.resolve([running])
+      await flushPromises()
+      expect(
+        instance.getState().tasks.find((task) => task.id === original.id)
+          ?.status,
+      ).toBe('completed')
+      expect(instance.getState().selectedTask?.id).toBe(
+        selected ? original.id : undefined,
+      )
+    } finally {
+      finish.resolve()
+      staleList.resolve([running])
+      await submission
+      instance.dispose?.()
+      Object.defineProperty(globalThis, 'BroadcastChannel', {
+        configurable: true,
+        value: originalBroadcastChannel,
+      })
+    }
+  },
+)
+
 test('refreshes changed tasks from another tab without replacing the draft', async () => {
   const channels: TestBroadcastChannel[] = []
   class TestBroadcastChannel extends BroadcastChannel {
