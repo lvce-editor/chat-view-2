@@ -218,6 +218,11 @@ try {
     const failures: string[] = []
     for (const test of tests) {
       const context = await browser.newContext()
+      // Hosted acceptance reaches the loopback replay server from HTTPS.
+      // Grant Chromium's permission only to this test context and site.
+      if (new URL(baseUrl).protocol === 'https:') {
+        await context.grantPermissions(['local-network-access'], { origin })
+      }
       const externalRequests: string[] = []
       // Exported tests must use the deterministic backend without credentials.
       await context.route('**/*', async (route) => {
