@@ -9,6 +9,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, test } from 'node:test'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { EvaluationTranscript } from '../src/Types.ts'
 import { startEvaluationProxy } from '../src/Proxy.ts'
 
@@ -388,10 +389,10 @@ void test('records portable workspace URIs upstream and replays them in another 
     throw new Error('Expected upstream port')
   const proxies: Awaited<ReturnType<typeof startEvaluationProxy>>[] = []
   try {
-    for (const [index, workspaceUri] of [
-      'file:///workspace-one',
-      'file:///workspace-two',
-    ].entries()) {
+    const workspaces = ['workspace-one', 'workspace-two'].map(
+      (name) => pathToFileURL(join(directory, name)).href,
+    )
+    for (const [index, workspaceUri] of workspaces.entries()) {
       const proxy = await startEvaluationProxy({
         apiKey: 'test-key',
         cacheDirectory: join(directory, 'cache'),
@@ -403,7 +404,7 @@ void test('records portable workspace URIs upstream and replays them in another 
         workspaceUri,
       })
       proxies.push(proxy)
-      const input = `${workspaceUri}/src/a.ts\ncwd: ${new URL(workspaceUri).pathname}`
+      const input = `${workspaceUri}/src/a.ts\ncwd: ${fileURLToPath(workspaceUri)}`
       const response = await fetch(`${proxy.origin}/v1/responses`, {
         body: JSON.stringify({ input }),
         headers: { 'Content-Type': 'application/json' },
