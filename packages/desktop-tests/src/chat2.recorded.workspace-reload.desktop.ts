@@ -43,7 +43,7 @@ export const test = async ({
     const search = async (): Promise<void> => {
       await page
         .getByRole('treeitem', { exact: true, name: 'fixture.txt' })
-        .dblclick()
+        .click()
       await expect(page.locator('.Editor:visible')).toContainText(
         'workspace fixture',
       )
@@ -62,7 +62,9 @@ export const test = async ({
       (async (): Promise<void> => {
         await page.keyboard.press(`${modifier}+Shift+P`)
         await page.getByRole('combobox').fill('>reload')
+        process.stdout.write('workspace reload command ready\n')
         await page.getByRole('option').filter({ hasText: reloadOption }).click()
+        process.stdout.write('workspace reload command selected\n')
       })(),
     ])
     await page.locator('.ActivityBar').waitFor({ timeout: 60_000 })

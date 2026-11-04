@@ -115,7 +115,7 @@ export const test = async ({
     }
     await page
       .getByRole('treeitem', { exact: true, name: parts.at(-1) })
-      .dblclick()
+      .click()
     const contents = fixtures[path]
     assert.ok(contents)
     await expect(page.locator('.Editor:visible')).toContainText(contents.trim())
