@@ -4,10 +4,7 @@ import {
   type VirtualDomNode,
 } from '@lvce-editor/virtual-dom-worker'
 
-export interface TreeNode {
-  readonly children: readonly TreeNode[]
-  readonly node: VirtualDomNode
-}
+export type Node = readonly VirtualDomNode[]
 
 const headingTypes = [
   VirtualDomElements.H1,
@@ -18,42 +15,40 @@ const headingTypes = [
   VirtualDomElements.H6,
 ]
 
-export const textNode = (value: string): TreeNode => ({
-  children: [],
-  node: text(value),
-})
+export const textNode = (value: string): Node => [text(value)]
 
 export const node = (
   type: number,
   properties: Readonly<Record<string, unknown>> = {},
-  children: readonly TreeNode[] = [],
-): TreeNode => ({
-  children,
-  node: {
-    ...properties,
-    childCount: children.length,
-    type,
-  },
-})
+  children: readonly Node[] = [],
+): Node => {
+  const childCount = children.length
+  return [
+    {
+      ...properties,
+      childCount,
+      type,
+    },
+    ...children.flat(),
+  ]
+}
 
 export const div = (
   className: string,
-  children: readonly TreeNode[],
+  children: readonly Node[],
   options: Readonly<{
     onClick?: string
     onDragOver?: string
     onDrop?: string
     onKeyDown?: string
     name?: string
-    style?: string
   }> = {},
-): TreeNode => {
+): Node => {
   return node(
     VirtualDomElements.Div,
     {
       className,
       ...(options.onClick && { onClick: options.onClick }),
-      ...(options.style && { style: options.style }),
       ...(options.onDragOver && { onDragOver: options.onDragOver }),
       ...(options.onDrop && { onDrop: options.onDrop }),
       ...(options.onKeyDown && { onKeyDown: options.onKeyDown }),
@@ -63,11 +58,7 @@ export const div = (
   )
 }
 
-export const link = (
-  href: string,
-  label: string,
-  className: string,
-): TreeNode => {
+export const link = (href: string, label: string, className: string): Node => {
   return node(
     VirtualDomElements.A,
     {
@@ -93,7 +84,7 @@ export const button = (
     onMouseDown?: string
     title?: string
   }> = {},
-): TreeNode => {
+): Node => {
   return node(
     VirtualDomElements.Button,
     {
@@ -119,7 +110,7 @@ export const iconButton = (
   iconClassName: string,
   ariaLabel: string,
   title = ariaLabel,
-): TreeNode => {
+): Node => {
   return node(
     VirtualDomElements.Button,
     {
@@ -137,8 +128,8 @@ export const iconButton = (
 export const form = (
   name: string,
   className: string,
-  children: readonly TreeNode[],
-): TreeNode => {
+  children: readonly Node[],
+): Node => {
   return node(
     VirtualDomElements.Form,
     {
@@ -153,9 +144,9 @@ export const form = (
 export const heading = (
   level: 1 | 2 | 3 | 4 | 5 | 6,
   className: string,
-  value: string | readonly TreeNode[],
+  value: string | readonly Node[],
   options: Readonly<{ name?: string; onContextMenu?: string }> = {},
-): TreeNode => {
+): Node => {
   const type = headingTypes[level - 1]
   return node(
     type,
@@ -172,7 +163,7 @@ export const textArea = (
   value: string,
   placeholder: string,
   options: Readonly<{ onPaste?: string }> = {},
-): TreeNode => {
+): Node => {
   return node(VirtualDomElements.TextArea, {
     ariaLabel: 'Message',
     className: 'ChatComposerInput',
@@ -186,8 +177,4 @@ export const textArea = (
     spellcheck: false,
     value,
   })
-}
-
-export const flatten = (tree: TreeNode): readonly VirtualDomNode[] => {
-  return [tree.node, ...tree.children.flatMap(flatten)]
 }
