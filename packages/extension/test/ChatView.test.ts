@@ -844,8 +844,13 @@ test('renders a Sessions sash and resizes the panel with bounded pointer movemen
   instance.handleSessionsSashPointerDown(400, 1000, 100, 100, 280)
   instance.handleSessionsSashPointerMove(450)
   expect(instance.getState().sessionsWidth).toBe(330)
-  expect(instance.render()).toContainEqual(
-    expect.objectContaining({ style: '--ChatSessionsWidth: 330px' }),
+  expect(
+    instance
+      .render()
+      .find((node) => node.className?.startsWith('ChatSessions '))?.className,
+  ).toContain('ChatSessionsWidth-330')
+  expect(instance.getCss?.()).toContain(
+    '.ChatSessionsWidth-330{--ChatSessionsWidth:330px}',
   )
   instance.handleSessionsSashPointerMove(2000)
   expect(instance.getState().sessionsWidth).toBe(680)
@@ -1641,11 +1646,11 @@ test('uses the configured task list font size', async () => {
   })
 
   expect(instance.getState().fontSize).toBe('20px')
-  expect(instance.render()).toContainEqual(
-    expect.objectContaining({
-      className: 'ChatTaskList',
-      style: '--ChatTaskFontFamily: inherit; --ChatTaskFontSize: 20px',
-    }),
+  expect(
+    getNodesByClass(instance.render(), 'ChatTaskList')[0].className,
+  ).toContain('ChatTaskListStyle-')
+  expect(instance.getCss?.()).toContain(
+    '--ChatTaskFontFamily:inherit;--ChatTaskFontSize:20px',
   )
 })
 
@@ -1657,11 +1662,11 @@ test.each([undefined, 20, '', '-2px', 'calc(20px)', '20px; color: red'])(
     })
 
     expect(instance.getState().fontSize).toBe('13px')
-    expect(instance.render()).toContainEqual(
-      expect.objectContaining({
-        className: 'ChatTaskList',
-        style: '--ChatTaskFontFamily: inherit; --ChatTaskFontSize: 13px',
-      }),
+    expect(
+      getNodesByClass(instance.render(), 'ChatTaskList')[0].className,
+    ).toContain('ChatTaskListStyle-')
+    expect(instance.getCss?.()).toContain(
+      '--ChatTaskFontFamily:inherit;--ChatTaskFontSize:13px',
     )
   },
 )
@@ -1682,12 +1687,8 @@ test('uses the configured task list font family', async () => {
   })
 
   expect(instance.getState().fontFamily).toBe('"Fira Code", monospace')
-  expect(instance.render()).toContainEqual(
-    expect.objectContaining({
-      className: 'ChatTaskList',
-      style:
-        '--ChatTaskFontFamily: "Fira Code", monospace; --ChatTaskFontSize: 13px',
-    }),
+  expect(instance.getCss?.()).toContain(
+    '--ChatTaskFontFamily:"Fira Code", monospace;--ChatTaskFontSize:13px',
   )
 })
 
@@ -1699,11 +1700,8 @@ test.each([undefined, 20, '', 'Arial; color: red', 'Arial\nmonospace'])(
     })
 
     expect(instance.getState().fontFamily).toBe('inherit')
-    expect(instance.render()).toContainEqual(
-      expect.objectContaining({
-        className: 'ChatTaskList',
-        style: '--ChatTaskFontFamily: inherit; --ChatTaskFontSize: 13px',
-      }),
+    expect(instance.getCss?.()).toContain(
+      '--ChatTaskFontFamily:inherit;--ChatTaskFontSize:13px',
     )
   },
 )

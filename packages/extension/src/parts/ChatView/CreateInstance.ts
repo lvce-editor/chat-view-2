@@ -52,11 +52,12 @@ import { readAiNativeTheme } from './AiNativeTheme.ts'
 import { isChatViewState } from './ChatViewComponentState.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
-import { render } from './Render.ts'
+import { render, renderCss } from './Render.ts'
 import { readTaskOpenMode } from './TaskOpenMode.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
+  readonly getCss: () => string
   readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
   readonly getState: () => Readonly<ChatViewState>
   readonly handleDragOver: () => void
@@ -1039,6 +1040,9 @@ export const createInstance = async (
         'chat2.focusMode': state.focusMode,
         'chat2.taskRunning': state.selectedTask?.status === 'running',
       }
+    },
+    getCss(): string {
+      return renderCss(state)
     },
     getMenuEntries(menuId: string): readonly MenuEntry[] {
       if (menuId !== titleMenuId || !state.selectedTask) {
