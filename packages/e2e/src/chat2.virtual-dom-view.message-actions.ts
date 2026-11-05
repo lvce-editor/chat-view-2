@@ -2,9 +2,6 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.message-actions'
 
-// Enable after the permission-gated clipboard API is integrated in the runtime package.
-export const skip = 1
-
 export const test: Test = async ({
   ClipBoard,
   Command,
