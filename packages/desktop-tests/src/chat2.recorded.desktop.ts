@@ -187,6 +187,33 @@ export const test = async ({
     await expect(page).toHaveTitle(new RegExp(basename(workspace), 'u'))
     await openFile('src/add.js')
     await toggleLayout()
+    const zoomComposer = page.locator('textarea[name="composer"]')
+    await zoomComposer.focus()
+    const initialZoom = await electronApp.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.webContents.getZoomFactor(),
+    )
+    assert.equal(typeof initialZoom, 'number')
+    await page.keyboard.press(`${modifier}+Shift+Equal`)
+    await expect
+      .poll(() =>
+        electronApp.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]?.webContents.getZoomFactor(),
+        ),
+      )
+      .toBeGreaterThan(initialZoom)
+    await expect(zoomComposer).toHaveValue('')
+    const zoomedIn = await electronApp.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.webContents.getZoomFactor(),
+    )
+    await page.keyboard.press(`${modifier}+Minus`)
+    await expect
+      .poll(() =>
+        electronApp.evaluate(({ BrowserWindow }) =>
+          BrowserWindow.getAllWindows()[0]?.webContents.getZoomFactor(),
+        ),
+      )
+      .toBeLessThan(zoomedIn)
+    await expect(zoomComposer).toHaveValue('')
     process.stdout.write(`Desktop URL: ${page.url()}\n`)
     await page.locator('.Workbench.AiNativeLayout').waitFor()
     await submit(weatherPrompt)

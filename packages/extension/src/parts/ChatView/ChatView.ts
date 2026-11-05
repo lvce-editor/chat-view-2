@@ -72,7 +72,13 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
     },
     {
       name: 'handleKeyDown',
-      params: ['handleKeyDown', 'event.key'],
+      params: [
+        'handleKeyDown',
+        'event.key',
+        'event.ctrlKey',
+        'event.metaKey',
+        'event.shiftKey',
+      ],
     },
     {
       name: 'handleImageDrop',

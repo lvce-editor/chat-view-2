@@ -2206,7 +2206,13 @@ test('registers model picker keydown handling on the view root', async () => {
 
   expect(view.eventListeners).toContainEqual({
     name: 'handleKeyDown',
-    params: ['handleKeyDown', 'event.key'],
+    params: [
+      'handleKeyDown',
+      'event.key',
+      'event.ctrlKey',
+      'event.metaKey',
+      'event.shiftKey',
+    ],
   })
   expect(instance.render()[0]).toEqual(
     expect.objectContaining({ onKeyDown: 'handleKeyDown' }),
