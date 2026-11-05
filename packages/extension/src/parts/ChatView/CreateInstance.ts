@@ -50,6 +50,7 @@ import {
 } from '../TaskStore/TaskStore.ts'
 import { readAiNativeTheme } from './AiNativeTheme.ts'
 import { isChatViewState } from './ChatViewComponentState.ts'
+import { getZoomCommand } from './ChatViewZoom.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render } from './Render.ts'
@@ -68,7 +69,12 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
     selectionStart?: unknown,
     selectionEnd?: unknown,
   ) => Promise<void>
-  readonly handleKeyDown: (key: unknown) => void
+  readonly handleKeyDown: (
+    key: unknown,
+    ctrlKey?: unknown,
+    metaKey?: unknown,
+    shiftKey?: unknown,
+  ) => void
   readonly handleModelPickerOutsideClick: (
     name: unknown,
     value: unknown,
@@ -1313,7 +1319,17 @@ export const createInstance = async (
       state.errorMessage = ''
       await context?.requestRerender()
     },
-    handleKeyDown(key: unknown): void {
+    handleKeyDown(
+      key: unknown,
+      ctrlKey?: unknown,
+      metaKey?: unknown,
+      shiftKey?: unknown,
+    ): void {
+      const zoomCommand = getZoomCommand(key, ctrlKey, metaKey, shiftKey)
+      if (zoomCommand) {
+        void executeCommand(zoomCommand).catch(() => {})
+        return
+      }
       if (key === 'Escape' && state.modelPickerOpen) {
         state.modelPickerOpen = false
       }
