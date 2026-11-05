@@ -31,7 +31,7 @@
     "@babel/standalone": "7.29.12",
     "@lvce-editor/chat-tool-worker": "0.0.0-dev",
     "@lvce-editor/rpc": "6.23.0",
-    "@lvce-editor/rpc-registry": "9.67.0"
+    "@lvce-editor/rpc-registry": "9.67.1"
   },
   "devDependencies": {
     "@lvce-editor/api": "9.54.1",
