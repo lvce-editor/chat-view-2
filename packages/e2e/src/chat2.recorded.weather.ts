@@ -102,7 +102,7 @@ export const test: Test = async (api) => {
   await api.expect(api.Locator('.ChatMessageAssistant')).toContainText('Berlin')
   await api
     .expect(api.Locator('.ChatMessageAssistant'))
-    .toContainText('Sources:')
+    .toContainText('OpenAI weather feed')
   await startMessage(api, 'Which city was that forecast for?', 1)
   // The same task remains completed after its follow-up finishes.
   await waitForTasks(api)
