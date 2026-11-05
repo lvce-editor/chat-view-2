@@ -558,6 +558,53 @@ const collectSearchSources = (
   }
 }
 
+const getMessagePartText = (
+  part: Readonly<Record<string, unknown>>,
+  sources: Map<string, string>,
+): string => {
+  const { annotations: annotationValue, text } = part
+  if (typeof text !== 'string') {
+    return ''
+  }
+  const annotations: readonly unknown[] = Array.isArray(annotationValue)
+    ? annotationValue
+    : []
+  const citations: { end: number; markdown: string }[] = []
+  for (const annotation of annotations) {
+    const citation = getRecord(annotation)
+    if (citation?.type !== 'url_citation') {
+      continue
+    }
+    addSource(sources, citation)
+    if (
+      typeof citation.url !== 'string' ||
+      !Number.isSafeInteger(citation.end_index) ||
+      (citation.end_index as number) < 0 ||
+      (citation.end_index as number) > text.length
+    ) {
+      continue
+    }
+    const url = new URL(citation.url)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      continue
+    }
+    const title =
+      typeof citation.title === 'string'
+        ? citation.title.replaceAll(sourceTitleBrackets, '')
+        : url.hostname
+    citations.push({
+      end: citation.end_index as number,
+      markdown: ` [${title}](${url.href.replaceAll('(', '%28').replaceAll(')', '%29')})`,
+    })
+  }
+  const sortedCitations = citations.toSorted((a, b) => b.end - a.end)
+  let result = text
+  for (const { end, markdown } of sortedCitations) {
+    result = `${result.slice(0, end)}${markdown}${result.slice(end)}`
+  }
+  return result
+}
+
 const collectMessageText = (
   item: Readonly<Record<string, unknown>>,
   sources: Map<string, string>,
@@ -565,25 +612,12 @@ const collectMessageText = (
   if (!Array.isArray(item.content)) {
     return ''
   }
-  const chunks: string[] = []
-  for (const value of item.content) {
+  const chunks = item.content.map((value) => {
     const part = getRecord(value)
-    if (
-      (part?.type === 'output_text' || part?.type === 'text') &&
-      typeof part.text === 'string'
-    ) {
-      chunks.push(part.text)
-      const annotations: readonly unknown[] = Array.isArray(part.annotations)
-        ? part.annotations
-        : []
-      for (const annotation of annotations) {
-        const citation = getRecord(annotation)
-        if (citation?.type === 'url_citation') {
-          addSource(sources, citation)
-        }
-      }
-    }
-  }
+    return part?.type === 'output_text' || part?.type === 'text'
+      ? getMessagePartText(part, sources)
+      : ''
+  })
   return chunks.join('')
 }
 
@@ -608,12 +642,20 @@ const getResponseText = (
   const text =
     chunks.join('') ||
     (typeof response.output_text === 'string' ? response.output_text : '')
-  const links = Array.from(
-    sources,
-    ([url, title]) =>
-      `[${title.replaceAll(sourceTitleBrackets, '')}](${url.replaceAll('(', '%28').replaceAll(')', '%29')})`,
+  const citedUrls = new Set(
+    Array.from(
+      text.matchAll(/\]\((https?:\/\/[^)]+)\)/gu),
+      (match) => match[1],
+    ),
   )
-  const references = [...links, ...feeds]
+  const remainingLinks = [...sources].filter(([url]) => !citedUrls.has(url))
+  const references = [
+    ...remainingLinks.map(
+      ([url, title]) =>
+        `[${title.replaceAll(sourceTitleBrackets, '')}](${url.replaceAll('(', '%28').replaceAll(')', '%29')})`,
+    ),
+    ...feeds,
+  ]
   return references.length > 0
     ? `${text}\n\nSources: ${references.join(', ')}`
     : text

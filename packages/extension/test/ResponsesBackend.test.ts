@@ -1172,6 +1172,7 @@ test('preserves web citations and identifies native weather feeds', async () => 
               {
                 annotations: [
                   {
+                    end_index: 16,
                     title: 'Forecast',
                     type: 'url_citation',
                     url: 'https://weather.example.com/berlin',
@@ -1194,7 +1195,7 @@ test('preserves web citations and identifies native weather feeds', async () => 
     tools: [],
   })
   expect(result.text).toBe(
-    'Berlin forecast.\n\nSources: [Forecast](https://weather.example.com/berlin), OpenAI weather feed',
+    'Berlin forecast. [Forecast](https://weather.example.com/berlin)\n\nSources: OpenAI weather feed',
   )
 })
 
