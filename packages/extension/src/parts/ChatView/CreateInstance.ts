@@ -1327,7 +1327,11 @@ export const createInstance = async (
     ): void {
       const zoomCommand = getZoomCommand(key, ctrlKey, metaKey, shiftKey)
       if (zoomCommand) {
-        void executeCommand(zoomCommand).catch(() => {})
+        // The host's Ctrl/Cmd minus binding already handles zoom out. Route
+        // plus here because Electron does not dispatch that shifted chord.
+        if (zoomCommand === 'Window.zoomIn') {
+          void executeCommand(zoomCommand).catch(() => {})
+        }
         return
       }
       if (key === 'Escape' && state.modelPickerOpen) {

@@ -1354,7 +1354,6 @@ const renderDom = (
             onClick: 'handleModelPickerOutsideClick',
             onDragOver: 'handleDragOver',
             onDrop: 'handleImageDrop',
-            onKeyDown: 'handleKeyDown',
           },
         )
     return Dom.flatten(

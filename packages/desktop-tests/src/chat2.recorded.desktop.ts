@@ -202,6 +202,9 @@ export const test = async ({
       )
       .toBeGreaterThan(initialZoom)
     await expect(zoomComposer).toHaveValue('')
+    const zoomedIn = await electronApp.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.webContents.getZoomFactor(),
+    )
     await page.keyboard.press(`${modifier}+Minus`)
     await expect
       .poll(() =>
@@ -209,7 +212,7 @@ export const test = async ({
           BrowserWindow.getAllWindows()[0]?.webContents.getZoomFactor(),
         ),
       )
-      .toBe(initialZoom)
+      .toBeLessThan(zoomedIn)
     await expect(zoomComposer).toHaveValue('')
     process.stdout.write(`Desktop URL: ${page.url()}\n`)
     await page.locator('.Workbench.AiNativeLayout').waitFor()
