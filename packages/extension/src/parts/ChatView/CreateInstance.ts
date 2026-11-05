@@ -4,6 +4,7 @@ import {
   getPreference,
   getWorkspaceUri,
   setPreference,
+  writeClipboardText as writeClipboardTextApi,
   type MenuEntry,
   type ViewContext,
   type ViewEvent,
@@ -388,6 +389,7 @@ export const createInstance = async (
   execute: ExecuteCommand = executeCommand,
   defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
   imageTransferHost: ImageTransferHost = defaultImageTransferHost,
+  writeClipboardText: (text: string) => Promise<void> = writeClipboardTextApi,
 ): Promise<ActiveChatViewInstance> => {
   let pendingWorkbenchLayout: 'ide' | 'ai-native' | undefined
   let authenticationRejected = false
@@ -1230,7 +1232,7 @@ export const createInstance = async (
           message?.type === 'user-message'
         ) {
           try {
-            await execute('ClipBoard.writeText', message.text)
+            await writeClipboardText(message.text)
           } catch (error) {
             state.errorMessage = `Unable to copy message: ${error instanceof Error ? error.message : String(error)}`
             return

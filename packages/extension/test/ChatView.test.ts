@@ -2048,14 +2048,15 @@ test('expands the changed-file fixture for review', async () => {
 })
 
 test('renders user message actions and shows feedback after copying', async () => {
-  const execute = jest.fn<
-    (id: string, ...args: readonly unknown[]) => Promise<unknown>
-  >(async () => undefined)
+  const writeClipboardText = jest.fn(async (_text: string) => undefined)
   const instance = await createInstance(
     undefined,
     createMockChatApi(),
     undefined,
-    execute,
+    undefined,
+    undefined,
+    undefined,
+    writeClipboardText,
   )
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
 
@@ -2073,10 +2074,7 @@ test('renders user message actions and shows feedback after copying', async () =
 
   await dispatch(instance, { name: copyButton.name, type: 'click' })
 
-  expect(execute).toHaveBeenCalledWith(
-    'ClipBoard.writeText',
-    'Add worker memory usage',
-  )
+  expect(writeClipboardText).toHaveBeenCalledWith('Add worker memory usage')
   const copiedButton = getNodesByClass(
     instance.render() as readonly any[],
     'ChatMessageCopyButton',
@@ -2091,16 +2089,19 @@ test('renders user message actions and shows feedback after copying', async () =
   instance.dispose?.()
 })
 
+const rejectClipboardWrite = async (_text: string): Promise<void> => {
+  throw new Error('Clipboard access denied')
+}
+
 test('surfaces clipboard permission failures without showing copied feedback', async () => {
-  const execute = async (id: string): Promise<unknown> => {
-    if (id === 'ClipBoard.writeText') throw new Error('Clipboard access denied')
-    return undefined
-  }
   const instance = await createInstance(
     undefined,
     createMockChatApi(),
     undefined,
-    execute,
+    undefined,
+    undefined,
+    undefined,
+    rejectClipboardWrite,
   )
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
   const copyButton = getNodesByClass(
