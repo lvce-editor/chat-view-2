@@ -107,3 +107,18 @@ jobs:
           name: replay-desktop
           path: packages/evaluation/results/*.json
           if-no-files-found: ignore
+
+  firefox:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+      - run: npm ci
+      - name: Install Firefox
+        run: npx playwright install --with-deps firefox
+        working-directory: ./packages/e2e
+      - name: Resize populated AI-native chat in Firefox
+        run: npm run e2e:headless -- --browser=firefox --filter=ai-native-sidebar-side
