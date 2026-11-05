@@ -183,7 +183,7 @@ export const textArea = (
     ...(options.onPaste && { onPaste: options.onPaste }),
     placeholder,
     rows: 1,
-    spellcheck: true,
+    spellcheck: false,
     value,
   })
 }
