@@ -28,12 +28,24 @@ export const test: Test = async ({
     '.ChatMessageAssistant .ChatMessageCopyButton',
   )
   await expect(metadata).toHaveCSS('opacity', '0')
+  await expect(assistantMetadata).toHaveCSS('opacity', '0')
   await expect(copyButton).toHaveAttribute('aria-label', 'Copy message')
-  await expect(assistantMetadata).toHaveCount(0)
-  await expect(assistantCopyButton).toHaveCount(0)
+  await expect(assistantMetadata).toHaveCount(1)
+  await expect(assistantCopyButton).toHaveAttribute(
+    'aria-label',
+    'Copy message',
+  )
   // eslint-disable-next-line e2e/no-direct-click
   await copyButton.click()
   await expect(copyButton).toHaveClass('ChatMessageCopyButtonCopied')
   await expect(copyButton).toHaveAttribute('aria-label', 'Copied')
   await ClipBoard.shouldHaveText('Copy this message')
+
+  // eslint-disable-next-line e2e/no-direct-click
+  await assistantCopyButton.click()
+  await expect(assistantCopyButton).toHaveClass('ChatMessageCopyButtonCopied')
+  await expect(assistantCopyButton).toHaveAttribute('aria-label', 'Copied')
+  await ClipBoard.shouldHaveText(
+    'I inspected the relevant files, made the scoped change, and verified the result.',
+  )
 }

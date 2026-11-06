@@ -786,24 +786,20 @@ const renderMessage = (
           ),
         ]
       : []),
-    ...(message.type === 'user-message'
-      ? [
-          Dom.div('ChatMessageMetadata', [
-            Dom.div('ChatMessageTimestamp', [
-              Dom.textNode(formatMessageDate(message.timestamp)),
-            ]),
-            Dom.button(
-              `copy-message:${message.id}`,
-              '',
-              `ChatMessageCopyButton${copied ? ' ChatMessageCopyButtonCopied' : ''}`,
-              {
-                ariaLabel: copied ? 'Copied' : 'Copy message',
-                title: copied ? 'Copied' : 'Copy message',
-              },
-            ),
-          ]),
-        ]
-      : []),
+    Dom.div('ChatMessageMetadata', [
+      Dom.div('ChatMessageTimestamp', [
+        Dom.textNode(formatMessageDate(message.timestamp)),
+      ]),
+      Dom.button(
+        `copy-message:${message.id}`,
+        '',
+        `ChatMessageCopyButton${copied ? ' ChatMessageCopyButtonCopied' : ''}`,
+        {
+          ariaLabel: copied ? 'Copied' : 'Copy message',
+          title: copied ? 'Copied' : 'Copy message',
+        },
+      ),
+    ]),
   ])
 }
 
