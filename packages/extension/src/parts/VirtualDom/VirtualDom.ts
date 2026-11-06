@@ -164,17 +164,22 @@ export const textArea = (
   placeholder: string,
   options: Readonly<{ onPaste?: string; preserveValue?: boolean }> = {},
 ): Node => {
-  return node(VirtualDomElements.TextArea, {
-    ariaLabel: 'Message',
-    className: 'ChatComposerInput',
-    name: 'composer',
-    onBlur: 'handleBlur',
-    onFocus: 'handleFocus',
-    onInput: 'handleInput',
-    ...(options.onPaste && { onPaste: options.onPaste }),
-    placeholder,
-    rows: 1,
-    spellcheck: false,
-    ...(!options.preserveValue && { value }),
-  })
+  // Default text seeds recreated controls without replaying stale live values.
+  return node(
+    VirtualDomElements.TextArea,
+    {
+      ariaLabel: 'Message',
+      className: 'ChatComposerInput',
+      name: 'composer',
+      onBlur: 'handleBlur',
+      onFocus: 'handleFocus',
+      onInput: 'handleInput',
+      ...(options.onPaste && { onPaste: options.onPaste }),
+      placeholder,
+      rows: 1,
+      spellcheck: false,
+      ...(!options.preserveValue && { value }),
+    },
+    options.preserveValue ? [textNode(value)] : [],
+  )
 }
