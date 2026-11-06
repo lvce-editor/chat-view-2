@@ -23,24 +23,12 @@ export const test: Test = async ({
   await firstTask.click()
   const title = Locator('.ChatDetailTitle')
   await expect(title).toContainText('Add worker memory usage')
-  const states = (await Command.execute('Viewlet.getAllStates')) as Record<
-    string,
-    { readonly uid: number; readonly viewId: string }
-  >
-  const chatView = Object.values(states).find(
-    ({ viewId }) => viewId === 'chat2.views.chat',
-  )
-  if (!chatView) {
-    throw new Error('Expected Chat 2 view state')
-  }
-  await Command.execute(
-    'Viewlet.executeViewletCommand',
-    chatView.uid,
-    'handleContextMenu',
-    'chat-title',
-    10,
-    20,
-  )
+  const titleMenuButton = Locator('button[name="title-menu"]')
+  await expect(titleMenuButton).toBeVisible()
+  const renameMenuItem = Locator('.MenuItem')
+  // eslint-disable-next-line e2e/no-direct-click -- exercise the visible title menu trigger
+  await titleMenuButton.click()
+  await expect(renameMenuItem).toContainText('Rename')
   await ContextMenu.selectItem('Rename')
   const input = Locator('input[name="QuickPickInput"]')
   await expect(input).toHaveValue('Add worker memory usage')

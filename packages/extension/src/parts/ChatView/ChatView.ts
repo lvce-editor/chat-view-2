@@ -12,6 +12,10 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
   displayName: 'Chat 2',
   eventListeners: [
     {
+      name: 'handleTitleMenuClick',
+      params: ['handleTitleMenuClick', 'event.clientX', 'event.clientY'],
+    },
+    {
       name: 'handleTaskClick',
       params: [
         'handleTaskClick',

@@ -1327,10 +1327,17 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
   const summary = summarizeTask(task)
   const header = Dom.div('ChatDetailHeader', [
     Dom.button('back', 'Back', 'ChatBackButton'),
-    Dom.heading(1, 'ChatDetailTitle', task.title, {
-      name: 'chat-title',
-      onContextMenu: 'handleContextMenu',
-    }),
+    Dom.div('ChatDetailTitleGroup', [
+      Dom.heading(1, 'ChatDetailTitle', task.title, {
+        name: 'chat-title',
+        onContextMenu: 'handleContextMenu',
+      }),
+      Dom.button('title-menu', '⌄', 'ChatTitleMenuButton', {
+        ariaLabel: 'Open chat menu',
+        onClick: 'handleTitleMenuClick',
+        title: 'Chat menu',
+      }),
+    ]),
     ...renderFocusModeButton(state),
     Dom.button('toggle-sessions', 'Sessions', 'ChatSessionsToggleButton', {
       ariaExpanded: sessionsVisible,

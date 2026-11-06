@@ -90,8 +90,38 @@
 }
 
 .ChatDetailTitle {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   text-transform: none;
+}
+
+.ChatDetailTitleGroup {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.ChatTitleMenuButton {
+  flex: 0 0 auto;
+  padding: 0 2px;
+  color: var(--ChatMutedForeground);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+}
+
+.ChatTitleMenuButton:hover {
+  color: var(--ChatForeground);
+  background: color-mix(in srgb, var(--ChatForeground) 10%, transparent);
+}
+
+.ChatTitleMenuButton:focus-visible {
+  outline: 1px solid var(--ChatForeground);
+  outline-offset: 2px;
 }
 
 .ChatTaskCount {
