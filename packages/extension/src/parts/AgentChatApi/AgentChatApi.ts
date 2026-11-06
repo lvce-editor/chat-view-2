@@ -279,6 +279,9 @@ export const createAgentChatApi = ({
               responseHistory: task.responseHistory,
             }),
             modelId: task.modelId,
+            ...(options?.thinkingMode && {
+              thinkingMode: options.thinkingMode,
+            }),
             onTextDelta: async (delta) => {
               streamedText += delta
               const now = performance.now()

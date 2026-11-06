@@ -41,6 +41,7 @@ export interface ChatViewState {
   readonly preserveComposerValue?: boolean
   readonly selectedModelId: string
   readonly selectedTask: ChatTask | undefined
+  readonly selectedThinkingMode: 'low' | 'medium' | 'high'
   readonly sessionsListVisible: boolean
   readonly sessionsVisible: boolean
   readonly sessionsWidth?: number

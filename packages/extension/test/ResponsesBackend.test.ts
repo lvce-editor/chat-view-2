@@ -416,6 +416,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
     onTextDelta(delta) {
       deltas.push(delta)
     },
+    thinkingMode: 'high',
     tools: [],
   })
   socket.open()
@@ -470,6 +471,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
         },
       ],
       model: 'gpt-test',
+      reasoning: { effort: 'high' },
       type: 'response.create',
     }),
   )

@@ -89,6 +89,10 @@ const createTestInstance = async (
     ) => Promise<readonly File[]>
     readonly getDroppedFiles: (dropId: number) => Promise<readonly File[]>
   },
+  writePreference: (
+    key: string,
+    value: unknown,
+  ) => Promise<void> = async () => {},
 ) => {
   return createInstance(
     undefined,
@@ -97,6 +101,8 @@ const createTestInstance = async (
     undefined,
     undefined,
     imageTransferHost,
+    undefined,
+    writePreference,
   )
 }
 
@@ -2134,6 +2140,45 @@ test('opens the model picker without adding model controls to the header', async
   expect(getNodesByClass(dom, 'ChatModelPickerHidden')).toHaveLength(0)
   expect(getText(dom)).toContain('Models')
   expect(getText(dom)).toContain('GPT-5.4')
+})
+
+test('shows supported thinking modes and marks the selected mode', async () => {
+  const writePreference =
+    jest.fn<(key: string, value: unknown) => Promise<void>>()
+  const instance = await createTestInstance(
+    0,
+    undefined,
+    undefined,
+    writePreference,
+  )
+  const initialDom = instance.render() as readonly any[]
+  const initialOptions = getNodesByClass(initialDom, 'ChatThinkingModeOption')
+  expect(initialOptions).toHaveLength(3)
+  expect(initialOptions).toContainEqual(
+    expect.objectContaining({
+      ariaPressed: true,
+      name: 'thinking-mode:medium',
+    }),
+  )
+
+  await dispatch(instance, { name: 'thinking-mode:high', type: 'click' })
+
+  const updatedOptions = getNodesByClass(
+    instance.render() as readonly any[],
+    'ChatThinkingModeOption',
+  )
+  expect(updatedOptions).toContainEqual(
+    expect.objectContaining({
+      ariaPressed: true,
+      name: 'thinking-mode:high',
+    }),
+  )
+  expect(instance.getState().selectedThinkingMode).toBe('high')
+  expect(writePreference).toHaveBeenCalledWith(
+    'chat2.selectedThinkingMode',
+    'high',
+  )
+  instance.dispose?.()
 })
 
 test('closes the model picker when clicking outside it', async () => {
