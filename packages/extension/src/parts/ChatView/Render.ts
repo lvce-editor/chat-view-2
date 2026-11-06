@@ -934,6 +934,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
     composerImages,
     draft,
     modelPickerOpen,
+    preserveComposerValue = false,
     selectedModelId,
     selectedTask,
   } = state
@@ -946,7 +947,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
   return Dom.div('ChatComposerArea', [
     ...renderStatusPopup(state),
     ...(modelPickerOpen ? [renderModelPicker(state)] : []),
-    Dom.form('composer', 'ChatComposer', [
+    Dom.form('composer-form', 'ChatComposer', [
       ...(composerImages.length > 0
         ? [
             Dom.div(
@@ -985,7 +986,10 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
           ]
         : []),
       Dom.div('ChatComposerInputContainer', [
-        Dom.textArea(draft, placeholder, { onPaste: 'handleImagePaste' }),
+        Dom.textArea(draft, placeholder, {
+          onPaste: 'handleImagePaste',
+          preserveValue: preserveComposerValue,
+        }),
       ]),
       Dom.div('ChatComposerControls', [
         Dom.div('ChatComposerSpacer', []),

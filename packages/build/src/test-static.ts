@@ -193,6 +193,112 @@ try {
     } finally {
       await direct.close()
     }
+    for (const preserveStartupFocus of [false, true]) {
+      const context = await browser.newContext()
+      await context.addInitScript((preserveFocus) => {
+        localStorage.setItem(
+          'settings',
+          JSON.stringify({ 'chat2.useMockBackend': true }),
+        )
+        if (preserveFocus) {
+          globalThis.document.addEventListener('DOMContentLoaded', () => {
+            const control = globalThis.document.createElement('input')
+            control.id = 'startup-focus-control'
+            globalThis.document.body.append(control)
+            control.focus()
+          })
+        }
+      }, preserveStartupFocus)
+      try {
+        const page = await context.newPage()
+        await page.goto(`${baseUrl}chat/`)
+        const composer = page.locator('textarea[name="composer"]')
+        await composer.waitFor()
+        await page.locator('.Workbench.AiNativeLayout').waitFor()
+        if (preserveStartupFocus) {
+          await page.waitForFunction(
+            () =>
+              globalThis.document.activeElement?.id === 'startup-focus-control',
+          )
+          await page.keyboard.type('Keep my startup focus')
+          assert.equal(
+            await page.locator('#startup-focus-control').inputValue(),
+            'Keep my startup focus',
+          )
+          assert.equal(await composer.inputValue(), '')
+        } else {
+          await page.waitForFunction(
+            () =>
+              globalThis.document.activeElement?.getAttribute('name') ===
+              'composer',
+          )
+          await page.keyboard.type('Type without clicking')
+          await page.waitForFunction(
+            (value) =>
+              globalThis.document.querySelector('textarea[name="composer"]')
+                ?.value === value,
+            'Type without clicking',
+          )
+          assert.equal(await composer.inputValue(), 'Type without clicking')
+          await page.reload()
+          await composer.waitFor()
+          await page.waitForFunction(
+            () =>
+              globalThis.document.activeElement?.getAttribute('name') ===
+              'composer',
+          )
+          await page.keyboard.press('ControlOrMeta+A')
+          await page.keyboard.type('Type immediately after reload')
+          await page.waitForFunction(
+            (value) =>
+              globalThis.document.querySelector('textarea[name="composer"]')
+                ?.value === value,
+            'Type immediately after reload',
+          )
+          assert.equal(
+            await composer.inputValue(),
+            'Type immediately after reload',
+          )
+          const control = page.locator('button[name="new-task"]')
+          await control.focus()
+          await page.evaluate(() =>
+            globalThis.dispatchEvent(new Event('resize')),
+          )
+          assert.equal(
+            await control.evaluate(
+              (element) => globalThis.document.activeElement === element,
+            ),
+            true,
+          )
+        }
+        if (!preserveStartupFocus) {
+          await page.locator('button[name="new-task"]').click()
+          await page.waitForFunction(
+            () =>
+              globalThis.document.querySelector('textarea[name="composer"]')
+                ?.value === '',
+          )
+          await page.waitForFunction(
+            () =>
+              globalThis.document.activeElement?.getAttribute('name') ===
+              'composer',
+          )
+          await page.keyboard.type('New draft after clearing')
+          await page.waitForFunction(
+            (value) =>
+              globalThis.document.querySelector('textarea[name="composer"]')
+                ?.value === value,
+            'New draft after clearing',
+          )
+          assert.equal(await composer.inputValue(), 'New draft after clearing')
+        }
+        process.stdout.write(
+          `Direct chat ${preserveStartupFocus ? 'preserves startup focus' : 'focuses composer on load and reload'}: pass\n`,
+        )
+      } finally {
+        await context.close()
+      }
+    }
     const files = await readdir(join(root, 'tests'))
     const tests = files
       .filter(
