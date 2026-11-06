@@ -64,8 +64,12 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(userMessage).toContainText('Center the new chat composer')
   await expect(emptyTitle).toHaveCount(0)
   const detailComposer = Locator('.ChatDetailView .ChatComposer')
+  const composerAreaInConversation = Locator(
+    '.ChatConversationBody > .ChatComposerArea',
+  )
   await expect(detailComposer).toBeVisible()
-  await expect(composerArea).toHaveCSS('position', 'sticky')
+  await expect(composerAreaInConversation).toHaveCount(1)
+  await expect(composerArea).toHaveCSS('position', 'relative')
   await expect(newConversationMessages).toHaveCSS('overflow-y', 'auto')
   await expect(newConversationBody).toHaveCSS('justify-content', 'flex-start')
   const task = Locator('.ChatTaskButton').nth(2)
