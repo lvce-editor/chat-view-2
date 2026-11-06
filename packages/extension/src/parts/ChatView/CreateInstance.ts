@@ -314,7 +314,7 @@ const setWorkbenchLayoutUrl = async (
 }
 
 const activeInstances = new Set<ActiveChatViewInstance>()
-let activeInstance: ActiveChatViewInstance | undefined
+const activeInstanceState: { instance?: ActiveChatViewInstance } = {}
 
 const getPreferredModelId = async (): Promise<string> => {
   try {
@@ -326,7 +326,9 @@ const getPreferredModelId = async (): Promise<string> => {
 }
 
 const getActiveInstance = (): ActiveChatViewInstance | undefined => {
-  return activeInstance || activeInstances.values().toArray().at(-1)
+  return (
+    activeInstanceState.instance || activeInstances.values().toArray().at(-1)
+  )
 }
 
 const getSelectedModelId = (
@@ -1078,8 +1080,8 @@ export const createInstance = async (
       resetCopyFeedback()
       stopWorkingTimer()
       activeInstances.delete(instance)
-      if (activeInstance === instance) {
-        activeInstance = undefined
+      if (activeInstanceState.instance === instance) {
+        activeInstanceState.instance = undefined
       }
     },
     getContext(): Readonly<Record<string, boolean>> {
@@ -1142,7 +1144,7 @@ export const createInstance = async (
       }
       if (event.type === 'input' && event.name === 'composer') {
         state.composerFocused = true
-        activeInstance = instance
+        activeInstanceState.instance = instance
         // Native input can advance while earlier worker renders are still queued.
         // Do not send stale value patches back to the textarea.
         state.draft = getEventString(event)
@@ -1159,7 +1161,7 @@ export const createInstance = async (
       }
       if (event.type === 'focus' && event.name === 'composer') {
         state.composerFocused = true
-        activeInstance = instance
+        activeInstanceState.instance = instance
         return
       }
       if (event.type === 'blur' && event.name === 'composer') {
