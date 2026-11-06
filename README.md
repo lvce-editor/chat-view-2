@@ -31,7 +31,14 @@ not store API keys in its task database.
   optional content hash to reject stale changes.
 - Agent context identifies the workspace by its valid absolute URI, preserving
   non-file schemes such as `memfs`.
-- Each active turn snapshots files before the first edit and can revert them.
+- Conversations retain their original workspace, with separate tool sessions.
+  Edits are applied directly; use Git to review or recover changes.
+- Reads include unsaved editor buffers. Edits reject stale contents and serialize
+  mutations of the same file across concurrent conversations.
+- Drafts, partial responses, and history persist in IndexedDB. Interrupted turns
+  require an explicit follow-up; stopping keeps already-applied edits.
+- Web search returns clickable sources or identifies OpenAI's native data feed.
+  Workspace citations open the referenced file and line.
 - A host contract accepts bounded editor context, diagnostics, and a cancellable
   command executor. When present, it runs up to two focused repository checks
   and returns failures to the model for repair.
@@ -40,19 +47,24 @@ not store API keys in its task database.
 - The backend, tools, persistence, and mock agent are dynamically loaded only
   after the view opens.
 
-The initial UI bundle has a 150 KB uncompressed budget and total JavaScript has
-a 300 KB budget. `npm run check:budgets` enforces both after a production build.
+The initial UI bundle has a 150 KB uncompressed budget, the agent bundle a
+300 KB budget, and the desktop command process a 200 KB budget.
+`npm run check:budgets` enforces these after a production build.
 
 ## Evaluation
 
-The scenario fixtures, headless browser runner, and deterministic recording
-proxy live in `packages/evaluation`. Evaluations invoke the extension's
-headless session commands inside Lvce Editor, exercising the real agent loop,
-API client, tools, editor file-system APIs, and test server without rendering
-the chat UI. Cached model responses can be replayed in CI without an API key or
-another paid request. Run every scenario and its objective checks with
-`npm run evaluation`. See `packages/evaluation/README.md` for the scenario
-format and cache-recording details.
+The e2e tests use the visible Chat 2 composer, real agent loop, workspace tools,
+and Responses protocol with recorded model responses. They cover AI-native
+entry, weather and follow-ups, unsaved-file questions with file links,
+implementation, and concurrent conversations. The static runner also checks
+cold signed-out startup and conversation/draft restoration after a real reload.
+
+`npm run e2e:headless`, `npm run e2e:static`, and `npm run evaluation` replay
+committed recordings. Missing recordings fail without contacting OpenAI,
+even with credentials configured. Coding evaluations also run objective checks
+against the resulting workspace files. Explicit `npm run e2e:record --
+--headless --filter=recorded` and `npm run evaluation:record` can create new
+recordings through the LVCE backend. See [evaluation instructions](packages/evaluation/README.md).
 
 ## Development
 

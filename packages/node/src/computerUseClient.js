@@ -4,25 +4,18 @@ import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)))
-const computerUsePackage = join(
-  packageRoot,
-  'node_modules',
-  '@agent-sh',
-  'computer-use-linux',
-)
-const computerUseWrapper = join(
-  computerUsePackage,
-  'npm',
-  'bin',
-  'computer-use-linux.js',
-)
-const skillPath = join(
-  computerUsePackage,
-  'skills',
-  'computer-use-linux',
-  'SKILL.md',
-)
+const getComputerUsePackage = () =>
+  dirname(
+    fileURLToPath(
+      import.meta.resolve('@agent-sh/computer-use-linux/package.json'),
+    ),
+  )
+
+const getComputerUseWrapper = () =>
+  join(getComputerUsePackage(), 'npm', 'bin', 'computer-use-linux.js')
+
+const getSkillPath = () =>
+  join(getComputerUsePackage(), 'skills', 'computer-use-linux', 'SKILL.md')
 const protocolVersion = '2024-11-05'
 const maximumErrorCharacters = 16_000
 const desktopIdRegex = /^[\w.+-]+(?:\.desktop)?$/u
@@ -223,12 +216,10 @@ const validateUris = (value) => {
     throw new TypeError('uris must be an array of URI strings')
   }
   for (const uri of value) {
-    let parsed
-    try {
-      parsed = new URL(uri)
-    } catch {
+    if (!URL.canParse(uri)) {
       throw new TypeError(`Invalid application URI: ${uri}`)
     }
+    const parsed = new URL(uri)
     if (!supportedUriProtocols.has(parsed.protocol)) {
       throw new TypeError(`Unsupported application URI protocol: ${uri}`)
     }
@@ -241,37 +232,45 @@ const validateUris = (value) => {
  * @param {string[]} uris
  * @returns {Promise<void>}
  */
-const defaultLaunchApplication = (desktopId, uris) =>
-  new Promise((resolvePromise, rejectPromise) => {
+const defaultLaunchApplication = (desktopId, uris) => {
+  const { promise, reject, resolve } = Promise.withResolvers()
+  try {
     const child = spawn('gtk-launch', [desktopId, ...uris], {
       detached: true,
       stdio: 'ignore',
     })
-    child.once('error', rejectPromise)
+    child.once('error', reject)
     child.once('spawn', () => {
       child.unref()
-      resolvePromise()
+      resolve(undefined)
     })
-  })
+  } catch (error) {
+    reject(error)
+  }
+  return promise
+}
 
 /**
  * @param {string[]} arguments_
  * @returns {Promise<void>}
  */
-const defaultRunXdotool = (arguments_) =>
-  new Promise((resolvePromise, rejectPromise) => {
+const defaultRunXdotool = (arguments_) => {
+  const { promise, reject, resolve } = Promise.withResolvers()
+  try {
     const child = spawn('xdotool', arguments_, { stdio: 'ignore' })
-    child.once('error', rejectPromise)
+    child.once('error', reject)
     child.once('exit', (code, signal) => {
       if (code === 0) {
-        resolvePromise()
+        resolve(undefined)
         return
       }
-      rejectPromise(
-        new Error(`xdotool exited (${signal ?? code ?? 'unknown'})`),
-      )
+      reject(new Error(`xdotool exited (${signal ?? code ?? 'unknown'})`))
     })
-  })
+  } catch (error) {
+    reject(error)
+  }
+  return promise
+}
 
 /**
  * @param {Record<string, unknown>} arguments_
@@ -572,13 +571,17 @@ class ComputerUseMcpClient {
       return Promise.reject(new Error('Computer-use MCP server is not running'))
     }
     const id = this.nextRequestId++
-    const result = new Promise((resolve, reject) => {
+    const { promise, reject, resolve } = Promise.withResolvers()
+    try {
       this.pending.set(id, { reject, resolve })
-    })
+    } catch (error) {
+      reject(error)
+      return promise
+    }
     child.stdin.write(
       `${JSON.stringify({ id, jsonrpc: '2.0', method, params })}\n`,
     )
-    return result
+    return promise
   }
 
   async connect() {
@@ -598,7 +601,7 @@ class ComputerUseMcpClient {
     if (process.platform !== 'linux') {
       throw new Error('Computer use is available only on Linux')
     }
-    const child = spawn(process.execPath, [computerUseWrapper, 'mcp'], {
+    const child = spawn(process.execPath, [getComputerUseWrapper(), 'mcp'], {
       env: getComputerUseEnvironment(process.env),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
@@ -695,7 +698,7 @@ const callTool = async (name, arguments_) => {
   return client.request('tools/call', { arguments: toolArguments, name })
 }
 
-const getSkillInstructions = () => readFile(skillPath, 'utf8')
+const getSkillInstructions = () => readFile(getSkillPath(), 'utf8')
 
 process.once('exit', () => client.stop())
 

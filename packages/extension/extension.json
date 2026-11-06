@@ -1,21 +1,34 @@
 {
   "id": "builtin.chat-view-2",
   "name": "Chat 2",
+  "icon": "media/chat.svg",
   "workerName": "Chat 2 Worker",
   "description": "A focused, low-overhead coding agent for Lvce Editor",
   "repository": "https://github.com/lvce-editor/chat-view-2",
   "browser": "dist/chatMain.js",
-  "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"],
+  "contentSecurityPolicy": [
+    "default-src 'none'",
+    "script-src 'self'",
+    "img-src data:",
+    "connect-src https: wss: http://127.0.0.1:* ws://127.0.0.1:* http://localhost:* ws://localhost:*"
+  ],
   "isolated": true,
+  "permissions": ["clipboard.write"],
   "categories": ["Other"],
   "configuration": {
     "chat2.backendUrl": {
       "type": "string",
       "default": ""
     },
+    "chat2.aiNativeTheme": {
+      "type": "string",
+      "enum": ["default", "openai", "claude"],
+      "default": "default",
+      "description": "Color and typography preset for the AI-native Chat 2 layout."
+    },
     "chat2.experimentalFocusMode": {
       "type": "boolean",
-      "default": false,
+      "default": true,
       "description": "Show an experimental control that lets Chat 2 temporarily take over the workbench."
     },
     "chat2.fontFamily": {
@@ -28,10 +41,42 @@
       "default": "13px",
       "description": "Font size for chat task list items, for example 20px."
     },
+    "chat2.openAiWebSearch": {
+      "type": "boolean",
+      "default": true,
+      "description": "Allow OpenAI models to search the web for current information."
+    },
+    "chat2.selectedModelId": {
+      "type": "string",
+      "default": "",
+      "description": "The preferred model for new Chat 2 tasks."
+    },
+    "chat2.titleModelId": {
+      "type": "string",
+      "enum": ["gpt-6-luna", "gpt-5.6-luna"],
+      "default": "gpt-6-luna",
+      "description": "The model used to generate titles for new chats."
+    },
     "chat2.supportsStreaming": {
       "type": "boolean",
       "default": false,
       "description": "Use the Responses WebSocket streaming protocol for a custom chat backend. The editor backend enables it automatically."
+    },
+    "chat2.taskOpenMode": {
+      "type": "string",
+      "enum": ["mousedown", "click"],
+      "default": "mousedown",
+      "description": "Open a chat when pressing a sidebar item or after clicking it."
+    },
+    "chat2.useMockBackend": {
+      "type": "boolean",
+      "default": false,
+      "description": "Use the mock Chat 2 backend for development and testing."
+    },
+    "chat2.computerUseEnabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Enable the optional desktop computer-use tools on supported Electron hosts."
     }
   },
   "activation": [
@@ -42,17 +87,46 @@
     "onCommand:chat2.sendMessage",
     "onCommand:chat2.show",
     "onCommand:chat2.submit",
-    "onCommand:chat2.toggleFocusMode"
+    "onCommand:chat2.toggleFocusMode",
+    "onCommand:chat2.toggleAiNativeLayout",
+    "onCommand:chat2.toggleSessionsList"
   ],
   "rpc": [
     {
       "id": "builtin.chat-view-2.computer-use",
-      "type": "node",
+      "type": "node-process",
       "name": "Chat 2 Computer Use",
-      "url": "node/src/computerUseClient.js"
+      "url": "node/src/computerUseProcess.js"
+    },
+    {
+      "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"],
+      "id": "builtin.chat-view-2.chat-tool-worker",
+      "name": "Chat 2 Tool Worker",
+      "type": "web-worker",
+      "url": "dist/chatToolWorkerMain.js"
+    },
+    {
+      "contentSecurityPolicy": [
+        "default-src 'none'",
+        "script-src 'self' 'unsafe-eval'"
+      ],
+      "id": "builtin.chat-view-2.typescript-evaluation-worker",
+      "name": "Chat 2 TypeScript Evaluation Worker",
+      "type": "web-worker",
+      "url": "dist/typeScriptEvaluationWorkerMain.js"
+    },
+    {
+      "id": "builtin.chat-view-2.commands",
+      "type": "node-process",
+      "name": "Chat 2 Commands",
+      "url": "dist/commandProcessMain.js"
     }
   ],
   "commands": [
+    {
+      "id": "chat2.toggleAiNativeLayout",
+      "label": "View: Toggle AI-Native / IDE Layout"
+    },
     {
       "id": "chat2.createSession",
       "label": "Chat 2: Create Headless Session"
@@ -80,15 +154,19 @@
     {
       "id": "chat2.toggleFocusMode",
       "label": "Chat 2: Toggle Focus Mode"
+    },
+    {
+      "id": "chat2.toggleSessionsList",
+      "label": "Chat 2: Toggle Sessions List"
     }
   ],
   "views": [
     {
-      "css": "chat.css",
+      "css": "media/chat.css",
       "displayName": "Chat 2",
       "id": "chat2.views.chat",
       "title": "Chat 2",
-      "icon": "chat.svg",
+      "icon": "media/chat.svg",
       "kind": "virtualDom",
       "showSideBarHeader": false
     }

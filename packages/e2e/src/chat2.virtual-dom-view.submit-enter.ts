@@ -1,7 +1,6 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.submit-enter'
-export const skip = 1
 
 export const test: Test = async ({
   Command,
@@ -17,19 +16,18 @@ export const test: Test = async ({
   const composer = Locator('textarea[name="composer"]')
   await composer.type('Build a smaller chat view')
   await composer.dispatchEvent('focus', { bubbles: true } as unknown as string)
-  await new Promise((resolve) => {
-    setTimeout(resolve, 200)
-  })
+  await expect(composer).toBeFocused()
+  const submit = Locator('button[name="submit"]')
+  await expect(submit).toHaveAttribute('disabled', null)
   await KeyBoard.press('Enter')
 
-  const detail = Locator('.ChatDetailView')
   const userMessage = Locator('.ChatMessageUser')
   const messages = Locator('.ChatMessage')
   const messageAuthors = Locator('.ChatMessageAuthor')
   const assistantMessage = Locator(
     'text=I inspected the relevant files, made the scoped change, and verified the result.',
   )
-  await expect(detail).toBeVisible()
+  await expect(composer).toHaveValue('')
   await expect(messages).toHaveCount(2)
   await expect(messageAuthors).toHaveCount(0)
   await expect(userMessage).toContainText('Build a smaller chat view')

@@ -8,7 +8,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Command.executeExtensionCommand('chat2.show')
 
   await Locator('textarea[name="composer"]').type('Make a scoped change')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
 
   const changes = Locator('.ChatChanges')
   await expect(changes).toContainText('Edited 5 files')
@@ -20,9 +21,6 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await review.click()
   const changedFiles = Locator('.ChatChangedFile')
   await expect(changedFiles).toHaveCount(5)
-  const revert = Locator('button[name="revert"]')
-  // eslint-disable-next-line e2e/no-direct-click
-  await revert.click()
-  const revertedMessage = Locator('text=Reverted 5 changed files.')
-  await expect(revertedMessage).toBeVisible()
+  const undoButton = Locator('button[name="revert"]')
+  await expect(undoButton).toHaveCount(0)
 }

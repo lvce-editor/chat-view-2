@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   ci:
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: 0
     strategy:
       fail-fast: false
       matrix:
@@ -31,7 +33,7 @@ jobs:
       - name: Compute node modules cache key
         id: nodeModulesCacheKey
         run: |
-          value=$(node scripts/computeNodeModulesCacheKey.ts)
+          value=$(node packages/build/src/computeNodeModulesCacheKey.ts)
           echo "value=$value" >> "$GITHUB_OUTPUT"
         shell: bash
       - uses: actions/cache@v5
@@ -50,17 +52,22 @@ jobs:
       - name: install playwright dependencies
         working-directory: ./packages/e2e
         run: npx playwright install chromium
-        if: steps.npm-cache.outputs.cache-hit != 'true'
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Run headless test
         run: npm run e2e:headless
         env:
           PLAYWRIGHT_BROWSERS_PATH: 0
+      - name: Replay coding evaluations
+        run: npm run evaluation
       - name: Build static site
-        run: node scripts/build-static.ts
+        run: node packages/build/src/build-static.ts
         env:
           PATH_PREFIX: auto
+      - name: Run exported headless tests
+        run: npm run e2e:static
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: 0
       - name: Upload artifact
         if: matrix.os == 'ubuntu-24.04'
         uses: actions/upload-pages-artifact@v5

@@ -17,9 +17,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
     'Archive Add worker memory usage',
   )
   await expect(firstArchiveButton).toHaveAttribute('title', 'Archive')
-  await expect(firstArchiveButton.locator('.ChatTaskArchiveIcon')).toHaveCount(
-    1,
-  )
+  const archiveIcon = firstArchiveButton.locator('.ChatTaskArchiveIcon')
+  await expect(archiveIcon).toHaveCount(1)
 
   // eslint-disable-next-line e2e/no-direct-click
   await firstArchiveButton.click()

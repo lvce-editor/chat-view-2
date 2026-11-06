@@ -4,11 +4,17 @@ import {
   registerCommand,
   registerView,
 } from '@lvce-editor/api'
+import {
+  getUrl,
+  isChatPath,
+  parseChatTaskHash,
+} from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { view, viewId } from '../ChatView/ChatView.ts'
 import {
   newChatInActiveChatViewInstance,
   submitActiveChatViewInstance,
   toggleActiveChatViewFocusMode,
+  toggleActiveChatViewSessionsList,
 } from '../ChatView/CreateInstance.ts'
 import { headlessChatCommands } from '../HeadlessChat/HeadlessChat.ts'
 
@@ -70,13 +76,36 @@ export const activate = async (): Promise<void> => {
     },
     id: 'chat2.submit',
   })
+  for (const id of ['chat2.toggleFocusMode', 'chat2.toggleAiNativeLayout']) {
+    registerCommand({
+      async execute() {
+        if (!(await executeCommand('Layout.getSideBarFocusMode'))) {
+          await executeCommand('SideBar.show', viewId, true)
+        }
+        await toggleActiveChatViewFocusMode()
+      },
+      id,
+    })
+  }
   registerCommand({
-    async execute() {
-      await executeCommand('SideBar.show', viewId, true)
-      await toggleActiveChatViewFocusMode()
+    execute() {
+      return toggleActiveChatViewSessionsList()
     },
-    id: 'chat2.toggleFocusMode',
+    id: 'chat2.toggleSessionsList',
   })
+  try {
+    const href = await executeCommand('Layout.getHref')
+    const url = typeof href === 'string' ? getUrl(href) : undefined
+    if (
+      typeof href === 'string' &&
+      (parseChatTaskHash(href).type === 'task' ||
+        (url !== undefined && isChatPath(url.pathname)))
+    ) {
+      await executeCommand('SideBar.show', viewId, true)
+    }
+  } catch {
+    // The editor may not expose URL commands while the extension is activating.
+  }
 }
 
 export const deactivate = (): void => {}

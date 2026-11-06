@@ -23,7 +23,40 @@ const models: readonly ChatModel[] = [
     label: 'GPT-5.4 Mini',
     planEligible: true,
   },
+  {
+    available: true,
+    id: 'openrouter/test/too-many-requests',
+    label: 'OpenRouter test: too many requests',
+    planEligible: true,
+  },
+  {
+    available: true,
+    id: 'openrouter/test/model-not-found',
+    label: 'OpenRouter test: model not found',
+    planEligible: true,
+  },
+  {
+    available: true,
+    id: 'openrouter/test/api-bad-response',
+    label: 'OpenRouter test: invalid response',
+    planEligible: true,
+  },
 ]
+
+const mockOpenRouterErrors = new Map([
+  [
+    'openrouter/test/too-many-requests',
+    'OpenRouter is rate limiting requests. Please wait a moment and try again. (E_OPENROUTER_TOO_MANY_REQUESTS, 429)',
+  ],
+  [
+    'openrouter/test/model-not-found',
+    'The selected OpenRouter model could not be found. Check the model name and try again. (E_OPENROUTER_MODEL_NOT_FOUND, 404)',
+  ],
+  [
+    'openrouter/test/api-bad-response',
+    "Openrouter reports request as invalid: [ApiIdParam] [previous_response_id] [invalid_id_prefix] Invalid 'previous_response_id': 'gen-123'. Expected an ID that begins with 'resp'. (E_OPENROUTER_API_BAD_RESPONSE, 400)",
+  ],
+])
 
 const taskTitles = [
   'Add worker memory usage',
@@ -104,6 +137,7 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
     createTask(`mock-task-${index + 1}`, title),
   )
   const archivedTaskIds = new Set<string>()
+  const failedOpenRouterTaskIds = new Set<string>()
   let nextTaskId = tasks.length + 1
   const steering = new Map<string, string[]>()
 
@@ -130,6 +164,20 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
           type: 'activity',
         }),
       )
+      const mockOpenRouterError = mockOpenRouterErrors.get(task.modelId)
+      if (mockOpenRouterError && !failedOpenRouterTaskIds.has(task.id)) {
+        failedOpenRouterTaskIds.add(task.id)
+        task = appendEvent(
+          task,
+          createEvent({ message: mockOpenRouterError, type: 'error' }),
+        )
+        task = setStatus(task, 'failed')
+        tasks = [task, ...tasks.filter((item) => item.id !== task.id)].slice(
+          0,
+          20,
+        )
+        return emit(task, options)
+      }
       const updates = steering.get(task.id) || []
       steering.delete(task.id)
       const response =
@@ -154,7 +202,7 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
             {
               additions: 12,
               deletions: 3,
-              path: 'packages/extension/chat.css',
+              path: 'packages/extension/media/chat.css',
               status: 'modified',
             },
             {
@@ -203,7 +251,13 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
       )
       const initial: ChatTask = {
         ...task,
-        events: [createEvent({ text: message, type: 'user-message' })],
+        events: [
+          createEvent({
+            ...(options?.attachments && { attachments: options.attachments }),
+            text: message,
+            type: 'user-message',
+          }),
+        ],
         status: 'idle',
       }
       tasks = [initial, ...tasks].slice(0, 20)
@@ -220,6 +274,21 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
       return tasks
         .filter((task) => !archivedTaskIds.has(task.id))
         .slice(0, Math.max(0, limit))
+    },
+    async renameTask(id, title) {
+      const index = tasks.findIndex((task) => task.id === id)
+      if (index === -1 || archivedTaskIds.has(id)) {
+        return undefined
+      }
+      const task = tasks[index]
+      const renamed = {
+        ...task,
+        title,
+        titleGenerated: true,
+        updatedAt: new Date().toISOString(),
+      }
+      tasks = [...tasks.slice(0, index), renamed, ...tasks.slice(index + 1)]
+      return renamed
     },
     async revertTask(task) {
       const changedFileCount =
@@ -241,7 +310,11 @@ export const createMockChatApi = (delayMs = 0): ChatApi => {
     async sendMessage(task, message, options) {
       const updated = appendEvent(
         task,
-        createEvent({ text: message, type: 'user-message' }),
+        createEvent({
+          ...(options?.attachments && { attachments: options.attachments }),
+          text: message,
+          type: 'user-message',
+        }),
       )
       return run(updated, options)
     },

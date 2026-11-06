@@ -3,10 +3,16 @@ import type {
   AgentToolCall,
   AgentToolDefinition,
   AgentToolModelOutput,
-} from '../AgentToolHost/AgentToolHost.ts'
-import type { ChatModel } from '../ChatApi/ChatApi.ts'
+} from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
+import type {
+  ChatAllowance,
+  ChatImageAttachment,
+  ChatModel,
+  ChatTokenUsage,
+} from '../ChatApi/ChatApi.ts'
 
 export interface AgentInputMessage {
+  readonly attachments?: readonly ChatImageAttachment[]
   readonly content: string
   readonly role: 'user'
 }
@@ -24,17 +30,24 @@ export interface AgentStepOptions {
   readonly modelId: string
   readonly onTextDelta: (delta: string) => void | Promise<void>
   readonly previousResponseId?: string
+  readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly signal?: AbortSignal
   readonly tools: readonly AgentToolDefinition[]
 }
 
 export interface AgentStepResult {
+  readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly responseId: string
   readonly text: string
   readonly toolCalls: readonly AgentToolCall[]
+  readonly usage?: ChatTokenUsage | undefined
 }
 
 export interface AgentBackend {
+  readonly generateTitle?: (message: string, modelId: string) => Promise<string>
+  readonly getAllowance?: (
+    modelId: string,
+  ) => Promise<ChatAllowance | undefined>
   readonly listModels: () => Promise<readonly ChatModel[]>
   readonly runStep: (options: AgentStepOptions) => Promise<AgentStepResult>
 }

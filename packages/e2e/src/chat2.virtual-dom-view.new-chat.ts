@@ -11,7 +11,8 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const detailView = Locator('.ChatDetailView')
   const listView = Locator('.ChatListView')
   await composer.type('Start the first chat')
-  await Command.executeExtensionCommand('chat2.submit')
+  // eslint-disable-next-line e2e/no-direct-click
+  await Locator('button[name="submit"]').click()
   await expect(detailView).toBeVisible()
   await expect(composer).toHaveValue('')
 

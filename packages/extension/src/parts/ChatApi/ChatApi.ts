@@ -5,6 +5,8 @@ export type ChatTaskStatus =
   | 'idle'
   | 'running'
   | 'stopping'
+  | 'stopped'
+  | 'interrupted'
 
 export interface ChatModel {
   readonly available: boolean
@@ -16,8 +18,15 @@ export interface ChatModel {
 export interface ChatChangedFile {
   readonly additions: number
   readonly deletions: number
+  readonly diff?: string
   readonly path: string
   readonly status: 'added' | 'deleted' | 'modified'
+}
+
+export interface ChatImageAttachment {
+  readonly dataUrl: string
+  readonly mimeType: string
+  readonly name: string
 }
 
 interface ChatTaskEventBase {
@@ -26,6 +35,7 @@ interface ChatTaskEventBase {
 }
 
 export interface ChatUserMessageEvent extends ChatTaskEventBase {
+  readonly attachments?: readonly ChatImageAttachment[]
   readonly text: string
   readonly type: 'user-message'
 }
@@ -115,20 +125,43 @@ export type ChatTraceMessage =
   | ChatTraceToolResultMessage
   | ChatTraceUserMessage
 
+export interface ChatTokenUsage {
+  readonly inputTokens: number
+  readonly outputTokens: number
+}
+
+export interface ChatAllowanceWindow {
+  readonly label: string
+  readonly limit: number
+  readonly remaining: number
+  readonly resetAt: string
+}
+
+export interface ChatAllowance {
+  readonly windows: readonly ChatAllowanceWindow[]
+}
+
 export interface ChatTask {
   readonly archived?: boolean
+  readonly contextUsage?:
+    | (ChatTokenUsage & { readonly modelId: string })
+    | undefined
   readonly createdAt: string
   readonly events: readonly ChatTaskEvent[]
   readonly id: string
   readonly modelId: string
+  readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly responseId?: string
   readonly status: ChatTaskStatus
   readonly streamingText?: string
   readonly title: string
+  readonly titleGenerated?: boolean
   readonly updatedAt: string
+  readonly workspaceUri?: string
 }
 
 export interface ChatRunOptions {
+  readonly attachments?: readonly ChatImageAttachment[]
   readonly onTrace?: (message: ChatTraceMessage) => void | Promise<void>
   readonly onUpdate?: (task: ChatTask) => void | Promise<void>
   readonly signal?: AbortSignal
@@ -141,14 +174,25 @@ export interface ChatApi {
     modelId: string,
     options?: ChatRunOptions,
   ) => Promise<ChatTask>
+  readonly getAllowance?: (
+    modelId: string,
+  ) => Promise<ChatAllowance | undefined>
   readonly getTask: (id: string) => Promise<ChatTask | undefined>
   readonly listModels: () => Promise<readonly ChatModel[]>
   readonly listTasks: (limit: number) => Promise<readonly ChatTask[]>
+  readonly renameTask: (
+    id: string,
+    title: string,
+  ) => Promise<ChatTask | undefined>
   readonly revertTask: (task: ChatTask) => Promise<ChatTask>
   readonly sendMessage: (
     task: ChatTask,
     message: string,
     options?: ChatRunOptions,
   ) => Promise<ChatTask>
-  readonly steer: (taskId: string, message: string) => Promise<void>
+  readonly steer: (
+    taskId: string,
+    message: string,
+    attachments?: readonly ChatImageAttachment[],
+  ) => Promise<void>
 }

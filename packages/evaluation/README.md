@@ -14,38 +14,55 @@ results/<id>.json             generated run transcript, not committed
 workspaces/<id>/              generated working copy, not committed
 ```
 
-The cache key covers the complete normalized `/v1/responses` request after the
-proxy pins its model snapshot and any configured temperature. This includes
-tool outputs and previous response IDs, so a cached multi-step run is replayed
-only when the conversation is identical. The proxy never forwards editor
-authentication.
+The cache key covers the complete normalized Responses request, including
+previous response IDs and tool results. Workspace roots are normalized so a
+recording can replay on another machine without ignoring meaningful inputs.
+Production WebSocket events are recorded and replayed using the same protocol
+as chat. Fixtures contain controlled data; review new recordings before committing.
 
-## Run all scenarios
+## Repeat tests without provider cost
 
-From the repository root, run:
+From the repository root:
 
 ```sh
+npm run e2e:headless
 npm run evaluation
+npm run build:static
+npm run e2e:static
+# Official packaged desktop app, with an isolated temporary profile:
+npm run e2e:headless -- --electron --filter=recorded
+
+# Verify the extension bundled in a released app, without linking local source:
+npm run e2e:headless -- --electron --builtin --electron-version=<tag> --filter=recorded
 ```
 
-This builds the extension once, creates a clean workspace for every scenario,
-and launches Lvce Editor in a headless browser. The browser invokes
-`chat2.createSession` and `chat2.sendMessage` directly, avoiding visual typing
-and rendering while still exercising the extension command API, real Chat 2
-agent loop, Responses client, tool calls, editor file-system APIs, and Lvce
-test server. The runner then executes the scenario's objective checks.
+The tests type into the visible Chat 2 composer and assert rendered output and
+workspace changes. Coding evaluations use clean filesystem fixtures and run
+objective checks afterward. Normal commands always replay. A cache miss fails;
+the proxy never contacts the provider in replay mode, even with credentials.
+CI runs these commands without an OpenAI key or LVCE token.
 
-Exact request matches replay the committed response cache. Cache misses are
-sent to OpenAI and saved for future runs.
+## Record new requests explicitly
 
-Copy `.env.example` to the repository-root `.env` and set `OPENAI_API_KEY` when
-recording cache misses. A completely cached run needs no key. When a new
-request needs a missing, empty, or invalid key, the command explains how to fix
-the repository-root `.env` file instead of silently skipping the scenario.
+Copy `.env.example` to the repository-root `.env`, set `LVCE_ACCESS_TOKEN` to an
+access token for the LVCE backend, and set `EVALUATION_UPSTREAM_URL` to its API
+root, for example `https://your-lvce-backend.example/api/v1`. The backend keeps
+the OpenAI credential. Then run the relevant explicit recording command:
 
-Inspect new cache files before committing them. They contain complete model
-inputs, outputs, and workspace tool results. Only controlled evaluation
-fixtures should be recorded.
+```sh
+npm run evaluation:record
+npm run e2e:record -- --headless --filter=recorded
+npm run e2e:static:record
+npm run e2e:record -- --headless --electron --filter=recorded
+```
+
+Recording commands load the local `.env` file. Only missing requests are
+recorded; matching requests replay. Recording can incur provider cost.
+Inspect the generated transcript in `results/` and commit only recordings
+needed for the accepted scenarios. Neither tokens nor HTTP authorization
+headers are stored in recordings. For static recording, build the static site first. On Linux without a display,
+run Electron commands under `xvfb-run -a`. New prompts, tools, or tool outputs require
+new recordings; CI never updates them automatically.
 
 ## Run one scenario manually
 

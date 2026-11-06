@@ -1,0 +1,94 @@
+[
+  {
+    "description": "Execute raw TypeScript in a reusable worker. Export an async or synchronous main function that receives { FileSystem, Workspace }. The worker provides a mock in-memory FileSystem (readFile returns an empty string for unknown URIs and writeFile persists for later calls) and Workspace.uri is file:///workspace/. Return JSON-serializable values.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "code": { "minLength": 1, "type": "string" }
+      },
+      "required": ["code"],
+      "type": "object"
+    },
+    "name": "execute_typescript"
+  },
+  {
+    "description": "Return the currently open workspace root URI. Call this before using file tools that require a URI.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_workspace_uri"
+  },
+  {
+    "description": "Search UTF-8 workspace files for text. Returns bounded URI, line, and preview matches.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "maxResults": { "maximum": 100, "minimum": 1, "type": "integer" },
+        "query": { "minLength": 1, "type": "string" }
+      },
+      "required": ["query"],
+      "type": "object"
+    },
+    "name": "search_workspace"
+  },
+  {
+    "description": "Read a bounded line range from a UTF-8 file inside the workspace. Pass an absolute URI returned by get_workspace_uri or search_workspace.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "endLine": { "minimum": 1, "type": "integer" },
+        "uri": {
+          "description": "Absolute URI of a file inside the current workspace.",
+          "minLength": 1,
+          "type": "string"
+        },
+        "startLine": { "minimum": 1, "type": "integer" }
+      },
+      "required": ["uri"],
+      "type": "object"
+    },
+    "name": "read_file"
+  },
+  {
+    "description": "Atomically replace exactly one text occurrence in a workspace file. Pass an absolute URI inside the current workspace. Pass an empty oldText only when creating a new file.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "expectedHash": { "type": "string" },
+        "newText": { "type": "string" },
+        "oldText": { "type": "string" },
+        "uri": {
+          "description": "Absolute URI of a file inside the current workspace.",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": ["uri", "oldText", "newText"],
+      "type": "object"
+    },
+    "name": "apply_patch"
+  },
+  {
+    "description": "Report editor diagnostics. This portable build returns an unavailable result until Lvce exposes a diagnostics consumer API.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "name": "get_diagnostics"
+  },
+  {
+    "description": "Run a Bash command in the workspace. This tool is available only in the Node host and is disabled on the web platform.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "command": { "minLength": 1, "type": "string" }
+      },
+      "required": ["command"],
+      "type": "object"
+    },
+    "name": "run_command"
+  }
+]

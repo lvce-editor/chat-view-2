@@ -1,0 +1,831 @@
+import { createReviewDiff } from '../ReviewDiff/ReviewDiff.ts'
+/* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/prefer-readonly-parameter-types, sonarjs/cognitive-complexity, unicorn/max-nested-calls, unicorn/no-break-in-nested-loop, unicorn/no-declarations-before-early-exit, unicorn/prefer-code-point, unicorn/prefer-iterator-to-array */
+export interface ChatChangedFile {
+  readonly additions: number
+  readonly deletions: number
+  readonly diff?: string
+  readonly path: string
+  readonly status: 'added' | 'deleted' | 'modified'
+}
+
+export interface AgentFileSystemEntry {
+  readonly name: string
+  readonly type: number
+}
+
+export interface AgentFileSystem {
+  readonly exists: (uri: string) => Promise<boolean>
+  readonly readDirWithFileTypes: (
+    uri: string,
+  ) => Promise<readonly AgentFileSystemEntry[]>
+  readonly readFile: (uri: string) => Promise<string>
+  readonly remove: (uri: string) => Promise<void>
+  readonly writeFile: (
+    uri: string,
+    content: string,
+    expectedContent?: string,
+  ) => Promise<void>
+}
+import definitions from './AgentToolDefinitions.json' with { type: 'json' }
+import { withFileMutation } from './FileMutation.ts'
+
+export interface AgentToolDefinition {
+  readonly description: string
+  readonly inputSchema: Readonly<Record<string, unknown>>
+  readonly name: string
+}
+
+export interface AgentToolCall {
+  readonly arguments: string
+  readonly callId: string
+  readonly name: string
+}
+
+export interface AgentToolImageOutput {
+  readonly detail: 'original'
+  readonly image_url: string
+  readonly type: 'input_image'
+}
+
+export type AgentToolModelOutput = readonly AgentToolImageOutput[]
+
+export interface AgentToolResult {
+  readonly content: string
+  readonly isError: boolean
+  readonly modelOutput?: AgentToolModelOutput
+}
+
+export type TypeScriptExecutionResult =
+  | {
+      readonly result: string
+      readonly success: true
+    }
+  | {
+      readonly error: string
+      readonly success: false
+    }
+
+export interface AgentExternalToolHost {
+  readonly execute: (
+    call: AgentToolCall,
+    signal?: AbortSignal,
+  ) => Promise<AgentToolResult>
+  readonly getDefinitions: () => readonly AgentToolDefinition[]
+  readonly getInstructions: () => string
+}
+
+export interface AgentCommandOptions {
+  readonly onOutput: (chunk: string) => void
+  readonly outputLimit: number
+  readonly signal?: AbortSignal
+  readonly timeoutMs: number
+}
+
+export interface AgentCommandResult {
+  readonly exitCode: number
+  readonly output: string
+}
+
+export interface AgentCommandExecutor {
+  readonly execute: (
+    command: string,
+    options: AgentCommandOptions,
+  ) => Promise<AgentCommandResult>
+}
+
+export interface AgentEditorContext {
+  readonly activeFile?: string
+  readonly diagnostics?: readonly string[]
+  readonly selection?: string
+}
+
+export interface AgentEditorContextProvider {
+  readonly getContext: () => Promise<AgentEditorContext>
+}
+
+export interface AgentVerificationResult {
+  readonly checksPassed: number
+  readonly failed: boolean
+  readonly output: string
+}
+
+export interface AgentFileSystemAccess {
+  readonly allowRead: boolean
+  readonly allowWrite: boolean
+  readonly root: '.'
+}
+
+export interface AgentToolHostOptions {
+  readonly commandExecutor?: AgentCommandExecutor
+  readonly editorContextProvider?: AgentEditorContextProvider
+  readonly externalToolHost?: AgentExternalToolHost
+  readonly fileSystem?: AgentFileSystem
+  readonly fileSystemAccess?: AgentFileSystemAccess
+  readonly typeScriptExecutor?: (
+    code: string,
+  ) => Promise<TypeScriptExecutionResult>
+  readonly workspaceUriProvider?: () => Promise<string>
+}
+
+export interface AgentToolHost {
+  readonly beginTurn: (taskId: string) => void | Promise<void>
+  readonly dispose?: () => Promise<void> | void
+  readonly execute: (
+    call: AgentToolCall,
+    signal?: AbortSignal,
+  ) => Promise<AgentToolResult>
+  readonly getChangedFiles: () =>
+    | readonly ChatChangedFile[]
+    | Promise<readonly ChatChangedFile[]>
+  readonly getDefinitions: () =>
+    | readonly AgentToolDefinition[]
+    | Promise<readonly AgentToolDefinition[]>
+  readonly getWorkspaceContext: () => Promise<string>
+  readonly revert: () => Promise<readonly ChatChangedFile[]>
+  readonly verifyChanges?: (
+    signal?: AbortSignal,
+  ) => Promise<AgentVerificationResult>
+}
+
+interface FileSnapshot {
+  readonly appliedContent: string
+  readonly content: string
+  readonly existed: boolean
+  readonly uri: string
+}
+
+interface ToolArguments {
+  readonly code?: string
+  readonly command?: string
+  readonly endLine?: number
+  readonly expectedHash?: string
+  readonly maxResults?: number
+  readonly newText?: string
+  readonly oldText?: string
+  readonly query?: string
+  readonly startLine?: number
+  readonly uri?: string
+}
+
+const directoryType = 3
+const fileType = 7
+const symlinkTypes = new Set([9, 10, 11])
+const maximumFileCharacters = 256_000
+const maximumFilesToSearch = 500
+const ignoredDirectories = new Set([
+  '.git',
+  '.hg',
+  '.svn',
+  'coverage',
+  'dist',
+  'node_modules',
+])
+const readToolNames = new Set([
+  'get_workspace_uri',
+  'read_file',
+  'search_workspace',
+])
+const writeToolNames = new Set(['apply_patch'])
+
+const unavailable = async (): Promise<never> => {
+  throw new Error('Workspace file system access is unavailable')
+}
+
+const defaultFileSystem: AgentFileSystem = {
+  exists: async () => false,
+  readDirWithFileTypes: unavailable,
+  readFile: unavailable,
+  remove: unavailable,
+  writeFile: unavailable,
+}
+
+const unavailableWorkspace = async (): Promise<string> => {
+  throw new Error('Workspace access is unavailable')
+}
+
+const unavailableTypeScript = async (): Promise<TypeScriptExecutionResult> => ({
+  error: 'TypeScript execution is unavailable',
+  success: false,
+})
+
+export const getWorkspaceContextLabel = (workspaceUri: string): string =>
+  `Current workspace URI: ${workspaceUri}\nWorkspace file tools use absolute URIs, and only URIs inside this workspace are valid.`
+
+const parseArguments = (value: string): ToolArguments => {
+  const parsed: unknown = JSON.parse(value || '{}')
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new TypeError('Tool arguments must be a JSON object')
+  }
+  return parsed
+}
+
+const getWorkspaceBase = async (
+  workspaceUriProvider: () => Promise<string>,
+): Promise<string> => {
+  const workspace = await workspaceUriProvider()
+  if (!workspace) {
+    throw new Error('Open a workspace before running a coding task')
+  }
+  if (!URL.canParse(workspace)) {
+    throw new Error(`Workspace URI is invalid: ${workspace}`)
+  }
+  const url = new URL(workspace)
+  if (url.search || url.hash) {
+    throw new Error(`Workspace URI is invalid: ${workspace}`)
+  }
+  if (!url.pathname.endsWith('/')) {
+    url.pathname += '/'
+  }
+  return url.href
+}
+
+export const getWorkspaceRelativePath = (
+  workspaceUri: string,
+  uri: string,
+): string => {
+  const base = new URL(workspaceUri)
+  const target = new URL(uri)
+  if (
+    target.search ||
+    target.hash ||
+    target.protocol !== base.protocol ||
+    target.host !== base.host ||
+    !target.href.startsWith(base.href)
+  ) {
+    throw new Error(`URI must stay inside the workspace: ${uri}`)
+  }
+  const encodedPath = target.href.slice(base.href.length)
+  const segments = encodedPath.split('/').filter(Boolean)
+  const decodedSegments = segments.map((segment) => decodeURIComponent(segment))
+  if (
+    !encodedPath ||
+    decodedSegments.includes('.git') ||
+    decodedSegments.some(
+      (segment) => segment.includes('/') || segment.includes('\\'),
+    )
+  ) {
+    throw new Error(`URI must stay inside the workspace: ${uri}`)
+  }
+  return decodedSegments.join('/')
+}
+
+const toWorkspaceUri = (workspaceUri: string, relativePath: string): string => {
+  const encodedPath = relativePath
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/')
+  return new URL(encodedPath, workspaceUri).href
+}
+
+const getLines = (text: string): readonly string[] => {
+  if (!text) {
+    return []
+  }
+  const lines = text.split('\n')
+  if (text.endsWith('\n')) {
+    lines.pop()
+  }
+  return lines
+}
+
+export const getLineChanges = (
+  oldText: string,
+  newText: string,
+): Readonly<{ additions: number; deletions: number }> => {
+  const oldLines = getLines(oldText)
+  const newLines = getLines(newText)
+  let prefix = 0
+  while (
+    prefix < oldLines.length &&
+    prefix < newLines.length &&
+    oldLines[prefix] === newLines[prefix]
+  ) {
+    prefix++
+  }
+  let suffix = 0
+  while (
+    suffix < oldLines.length - prefix &&
+    suffix < newLines.length - prefix &&
+    oldLines[oldLines.length - suffix - 1] ===
+      newLines[newLines.length - suffix - 1]
+  ) {
+    suffix++
+  }
+  return {
+    additions: newLines.length - prefix - suffix,
+    deletions: oldLines.length - prefix - suffix,
+  }
+}
+
+const resolveWorkspaceUri = async (
+  uri: string,
+  workspaceUriProvider: () => Promise<string>,
+  fileSystem: AgentFileSystem,
+): Promise<Readonly<{ relativePath: string; uri: string }>> => {
+  const base = await getWorkspaceBase(workspaceUriProvider)
+  const relativePath = getWorkspaceRelativePath(base, uri)
+  const segments = relativePath.split('/')
+  let parent = base
+  for (const segment of segments) {
+    const entries = await fileSystem.readDirWithFileTypes(parent)
+    const entry = entries.find((item) => item.name === segment)
+    if (!entry) {
+      break
+    }
+    if (symlinkTypes.has(entry.type)) {
+      throw new Error(`Symbolic links are not allowed in agent URIs: ${uri}`)
+    }
+    parent = toWorkspaceUri(parent, `${segment}/`)
+  }
+  return { relativePath, uri: new URL(uri).href }
+}
+
+const hashText = (value: string): string => {
+  let hash = 2_166_136_261
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16_777_619)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+const success = (content: string): AgentToolResult => ({
+  content,
+  isError: false,
+})
+
+const failure = (error: unknown): AgentToolResult => ({
+  content: error instanceof Error ? error.message : String(error),
+  isError: true,
+})
+
+export const createAgentToolHost = ({
+  commandExecutor,
+  editorContextProvider,
+  externalToolHost,
+  fileSystem = defaultFileSystem,
+  fileSystemAccess,
+  typeScriptExecutor = unavailableTypeScript,
+  workspaceUriProvider = unavailableWorkspace,
+}: AgentToolHostOptions = {}): AgentToolHost => {
+  if (fileSystemAccess && fileSystemAccess.root !== '.') {
+    throw new Error(
+      `Unsupported agent sandbox root: ${fileSystemAccess.root}. Only "." is supported.`,
+    )
+  }
+  const allowRead =
+    fileSystemAccess === undefined ||
+    fileSystemAccess.allowRead ||
+    fileSystemAccess.allowWrite
+  const allowWrite =
+    fileSystemAccess === undefined || fileSystemAccess.allowWrite
+  let changedFiles = new Map<string, ChatChangedFile>()
+  let snapshots = new Map<string, FileSnapshot>()
+  const observedContents = new Map<string, string>()
+  const availableDefinitions = definitions.filter((definition) => {
+    if (definition.name === 'execute_typescript') {
+      return typeScriptExecutor !== unavailableTypeScript
+    }
+    if (readToolNames.has(definition.name)) {
+      return allowRead
+    }
+    if (writeToolNames.has(definition.name)) {
+      return allowWrite
+    }
+    if (definition.name === 'run_command') {
+      return Boolean(commandExecutor)
+    }
+    if (definition.name === 'get_diagnostics') {
+      return Boolean(editorContextProvider)
+    }
+    return true
+  })
+  const externalDefinitions = externalToolHost?.getDefinitions() || []
+
+  const getEditorContext = async (): Promise<AgentEditorContext> => {
+    const context = (await editorContextProvider?.getContext()) || {}
+    if (context.activeFile) {
+      try {
+        getWorkspaceRelativePath(
+          await getWorkspaceBase(workspaceUriProvider),
+          context.activeFile,
+        )
+      } catch {
+        return {}
+      }
+    }
+    return context
+  }
+
+  const searchWorkspace = async (
+    query: string,
+    maxResults: number,
+    signal?: AbortSignal,
+  ): Promise<string> => {
+    const workspace = await getWorkspaceBase(workspaceUriProvider)
+    const directories = ['']
+    const matches: string[] = []
+    let visitedFiles = 0
+    while (
+      directories.length > 0 &&
+      matches.length < maxResults &&
+      visitedFiles < maximumFilesToSearch
+    ) {
+      signal?.throwIfAborted()
+      const directory = directories.shift() || ''
+      const entries = await fileSystem.readDirWithFileTypes(
+        toWorkspaceUri(workspace, directory),
+      )
+      for (const entry of entries) {
+        const relativePath = directory
+          ? `${directory}/${entry.name}`
+          : entry.name
+        if (
+          entry.type === directoryType &&
+          !ignoredDirectories.has(entry.name)
+        ) {
+          directories.push(relativePath)
+          continue
+        }
+        if (entry.type !== fileType) {
+          continue
+        }
+        visitedFiles++
+        try {
+          const uri = toWorkspaceUri(workspace, relativePath)
+          const content = await fileSystem.readFile(uri)
+          observedContents.set(uri, content)
+          if (content.length > maximumFileCharacters) {
+            continue
+          }
+          const lines = content.split('\n')
+          for (let index = 0; index < lines.length; index++) {
+            if (!lines[index]?.toLowerCase().includes(query.toLowerCase())) {
+              continue
+            }
+
+            matches.push(
+              `${uri}:${index + 1}: ${lines[index]?.trim().slice(0, 240)}`,
+            )
+            if (matches.length >= maxResults) {
+              break
+            }
+          }
+        } catch {
+          // Binary, unreadable, and concurrently removed files are skipped.
+        }
+      }
+    }
+    return matches.length > 0
+      ? matches.join('\n')
+      : `No matches for ${JSON.stringify(query)}`
+  }
+
+  const readWorkspaceFile = async (
+    uri: string,
+    startLine = 1,
+    endLine = startLine + 399,
+  ): Promise<string> => {
+    const target = await resolveWorkspaceUri(
+      uri,
+      workspaceUriProvider,
+      fileSystem,
+    )
+    const content = await fileSystem.readFile(target.uri)
+    observedContents.set(target.uri, content)
+    const lines = content.split('\n')
+    const start = Math.max(1, startLine)
+    const end = Math.min(lines.length, Math.max(start, endLine), start + 399)
+    const body = lines
+      .slice(start - 1, end)
+      .map((line, index) => `${start + index}: ${line}`)
+      .join('\n')
+    return `${body}\n\n[hash ${hashText(content)}; lines ${start}-${end} of ${lines.length}]`
+  }
+
+  const applyPatch = async (
+    uri: string,
+    oldText: string,
+    newText: string,
+    expectedHash?: string,
+    signal?: AbortSignal,
+  ): Promise<string> =>
+    withFileMutation(
+      uri,
+      async () => {
+        const target = await resolveWorkspaceUri(
+          uri,
+          workspaceUriProvider,
+          fileSystem,
+        )
+        const existed = await fileSystem.exists(target.uri)
+        const content = existed ? await fileSystem.readFile(target.uri) : ''
+        const observed = observedContents.get(target.uri)
+        if (observed !== undefined && observed !== content) {
+          throw new Error(
+            `File changed since it was read: ${target.relativePath}. Read the file again before editing.`,
+          )
+        }
+        if (expectedHash && hashText(content) !== expectedHash) {
+          throw new Error(
+            `File changed since it was read: ${target.relativePath}`,
+          )
+        }
+        const originalSnapshot = snapshots.get(target.relativePath) || {
+          appliedContent: content,
+          content,
+          existed,
+          uri: target.uri,
+        }
+        let updated: string
+        if (!existed && oldText === '') {
+          updated = newText
+        } else {
+          const firstIndex = content.indexOf(oldText)
+          const lastIndex = content.lastIndexOf(oldText)
+          if (firstIndex === -1) {
+            throw new Error(
+              `Text to replace was not found in ${target.relativePath}`,
+            )
+          }
+          if (firstIndex !== lastIndex) {
+            throw new Error(
+              `Text to replace is not unique in ${target.relativePath}`,
+            )
+          }
+          updated = `${content.slice(0, firstIndex)}${newText}${content.slice(firstIndex + oldText.length)}`
+        }
+        signal?.throwIfAborted()
+        await fileSystem.writeFile(
+          target.uri,
+          updated,
+          existed ? content : undefined,
+        )
+        observedContents.set(target.uri, updated)
+        snapshots.set(target.relativePath, {
+          ...originalSnapshot,
+          appliedContent: updated,
+        })
+        const previousChange = changedFiles.get(target.relativePath)
+        const lineChanges = getLineChanges(oldText, newText)
+        changedFiles.set(target.relativePath, {
+          additions: (previousChange?.additions || 0) + lineChanges.additions,
+          deletions: (previousChange?.deletions || 0) + lineChanges.deletions,
+          diff: createReviewDiff(
+            target.relativePath,
+            originalSnapshot.content,
+            updated,
+          ),
+          path: target.relativePath,
+          status: originalSnapshot.existed ? 'modified' : 'added',
+        })
+        return `Updated ${target.relativePath} [hash ${hashText(updated)}]`
+      },
+      signal,
+    )
+
+  return {
+    beginTurn() {
+      changedFiles = new Map()
+      snapshots = new Map()
+      observedContents.clear()
+    },
+    async execute(call, signal) {
+      try {
+        signal?.throwIfAborted()
+        if (readToolNames.has(call.name) && !allowRead) {
+          throw new Error(
+            `Tool ${call.name} is disabled by the file system sandbox`,
+          )
+        }
+        if (writeToolNames.has(call.name) && !allowWrite) {
+          throw new Error(
+            `Tool ${call.name} is disabled by the file system sandbox`,
+          )
+        }
+        const args = parseArguments(call.arguments)
+        if (call.name === 'get_workspace_uri') {
+          return success(await getWorkspaceBase(workspaceUriProvider))
+        }
+        if (call.name === 'search_workspace') {
+          if (typeof args.query !== 'string' || !args.query) {
+            throw new TypeError('search_workspace requires query')
+          }
+          return success(
+            await searchWorkspace(
+              args.query,
+              Math.min(100, Math.max(1, args.maxResults ?? 40)),
+              signal,
+            ),
+          )
+        }
+        if (call.name === 'read_file') {
+          if (typeof args.uri !== 'string') {
+            throw new TypeError('read_file requires uri')
+          }
+          return success(
+            await readWorkspaceFile(args.uri, args.startLine, args.endLine),
+          )
+        }
+        if (call.name === 'apply_patch') {
+          if (
+            typeof args.uri !== 'string' ||
+            typeof args.oldText !== 'string' ||
+            typeof args.newText !== 'string'
+          ) {
+            throw new TypeError(
+              'apply_patch requires uri, oldText, and newText',
+            )
+          }
+          return success(
+            await applyPatch(
+              args.uri,
+              args.oldText,
+              args.newText,
+              args.expectedHash,
+              signal,
+            ),
+          )
+        }
+        if (call.name === 'get_diagnostics') {
+          if (!editorContextProvider) {
+            return failure(new Error('Diagnostics are unavailable'))
+          }
+          const context = await getEditorContext()
+          return success(
+            context.diagnostics?.join('\n') || 'No visible diagnostics',
+          )
+        }
+        if (call.name === 'run_command') {
+          if (!commandExecutor || typeof args.command !== 'string') {
+            return failure(new Error('Bash command execution is disabled'))
+          }
+          const result = await commandExecutor.execute(args.command, {
+            onOutput() {},
+            outputLimit: 128_000,
+            ...(signal && { signal }),
+            timeoutMs: 120_000,
+          })
+          return result.exitCode === 0
+            ? success(result.output.slice(0, 128_000))
+            : failure(
+                new Error(
+                  `Command exited with code ${result.exitCode}\n${result.output.slice(0, 128_000)}`,
+                ),
+              )
+        }
+        if (call.name === 'execute_typescript') {
+          if (typeof args.code !== 'string') {
+            throw new TypeError('execute_typescript requires code')
+          }
+          const result = await typeScriptExecutor(args.code)
+          return result.success
+            ? success(result.result)
+            : failure(new Error(result.error))
+        }
+        if (externalToolHost) {
+          return externalToolHost.execute(call, signal)
+        }
+        return failure(new Error(`Unknown tool: ${call.name}`))
+      } catch (error) {
+        return failure(error)
+      }
+    },
+    getChangedFiles() {
+      return [...changedFiles.values()]
+    },
+    getDefinitions() {
+      return [...availableDefinitions, ...externalDefinitions]
+    },
+    async getWorkspaceContext() {
+      try {
+        const workspace = await getWorkspaceBase(workspaceUriProvider)
+        const agentsUri = toWorkspaceUri(workspace, 'AGENTS.md')
+        const editorContext = await getEditorContext()
+        const contextParts = [
+          getWorkspaceContextLabel(workspace),
+          commandExecutor
+            ? 'Project commands are available. Run relevant verification after editing.'
+            : 'Project commands are unavailable on this host. Report checks that could not run; use available editor diagnostics.',
+        ]
+        if (externalToolHost) {
+          contextParts.push(externalToolHost.getInstructions())
+        }
+        if (fileSystemAccess) {
+          contextParts.push(
+            allowWrite
+              ? 'File system sandbox: read and write access is limited to .'
+              : 'File system sandbox: read-only access is limited to .',
+          )
+        }
+        if (editorContext?.activeFile) {
+          contextParts.push(`Active file: ${editorContext.activeFile}`)
+        }
+        if (editorContext?.selection) {
+          contextParts.push(
+            `Selection:\n${editorContext.selection.slice(0, 8000)}`,
+          )
+        }
+        if (editorContext?.diagnostics?.length) {
+          contextParts.push(
+            `Visible diagnostics:\n${editorContext.diagnostics.slice(0, 50).join('\n')}`,
+          )
+        }
+        const rootEntries = await fileSystem.readDirWithFileTypes(workspace)
+        const entries = rootEntries.toSorted((left, right) =>
+          left.name.localeCompare(right.name),
+        )
+        const entryNames = entries
+          .slice(0, 80)
+          .map(
+            (entry) => entry.name + (entry.type === directoryType ? '/' : ''),
+          )
+        contextParts.push(`Workspace root entries:\n${entryNames.join('\n')}`)
+        if (
+          entries.some(
+            (entry) => entry.name === 'AGENTS.md' && entry.type === fileType,
+          )
+        ) {
+          const contents = await fileSystem.readFile(agentsUri)
+          const instructions = contents.slice(0, 16_000)
+          contextParts.push(
+            `Repository instructions from AGENTS.md:\n${instructions}`,
+          )
+        }
+        return contextParts.join('\n\n')
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error)
+        return `Workspace context is unavailable: ${detail}\nAnswer general questions without workspace access. Workspace tools require an open workspace.`
+      }
+    },
+    async revert() {
+      if (!allowWrite) {
+        throw new Error('File writes are disabled by the file system sandbox')
+      }
+      const reverted: ChatChangedFile[] = []
+      for (const [path, snapshot] of snapshots) {
+        const currentlyExists = await fileSystem.exists(snapshot.uri)
+        const currentContent = currentlyExists
+          ? await fileSystem.readFile(snapshot.uri)
+          : ''
+        if (currentContent !== snapshot.appliedContent) {
+          throw new Error(
+            `Cannot revert ${path} because it changed after the agent edit`,
+          )
+        }
+        if (snapshot.existed) {
+          await fileSystem.writeFile(snapshot.uri, snapshot.content)
+        } else if (await fileSystem.exists(snapshot.uri)) {
+          await fileSystem.remove(snapshot.uri)
+        }
+        reverted.push({ additions: 0, deletions: 0, path, status: 'modified' })
+      }
+      changedFiles = new Map()
+      snapshots = new Map()
+      return reverted
+    },
+    ...(commandExecutor && {
+      async verifyChanges(signal?: AbortSignal) {
+        const workspace = await getWorkspaceBase(workspaceUriProvider)
+        const packageUri = toWorkspaceUri(workspace, 'package.json')
+        if (!(await fileSystem.exists(packageUri)) || changedFiles.size === 0) {
+          return { checksPassed: 0, failed: false, output: '' }
+        }
+        const packageJson = JSON.parse(
+          await fileSystem.readFile(packageUri),
+        ) as {
+          readonly scripts?: Readonly<Record<string, string>>
+        }
+        const scripts = packageJson.scripts || {}
+        const checks = ['type-check', 'test', 'lint']
+          .filter((name) => typeof scripts[name] === 'string')
+          .slice(0, 2)
+        let checksPassed = 0
+        const outputs: string[] = []
+        for (const check of checks) {
+          signal?.throwIfAborted()
+          const result = await commandExecutor.execute(`npm run ${check}`, {
+            onOutput() {},
+            outputLimit: 128_000,
+            ...(signal && { signal }),
+            timeoutMs: 120_000,
+          })
+          outputs.push(`$ npm run ${check}\n${result.output.slice(0, 128_000)}`)
+          if (result.exitCode !== 0) {
+            return {
+              checksPassed,
+              failed: true,
+              output: outputs.join('\n\n'),
+            }
+          }
+          checksPassed++
+        }
+        return {
+          checksPassed,
+          failed: false,
+          output: outputs.join('\n\n'),
+        }
+      },
+    }),
+  }
+}

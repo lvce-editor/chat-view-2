@@ -1,9 +1,10 @@
+/* eslint-disable unicorn/no-await-expression-member */
 import { expect, test } from '@jest/globals'
+import { createAgentToolHost } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { createAgentToolHost } from '../src/parts/AgentToolHost/AgentToolHost.ts'
 import {
   createNodeCommandExecutor,
   isNodeRuntime,
@@ -53,9 +54,9 @@ test('runs Bash commands from a file URI workspace', async () => {
     })
 
     expect(result).toEqual({ exitCode: 0, output: basename(workspace) })
-    const definitions = createAgentToolHost({ commandExecutor: executor })
-      .getDefinitions()
-      .map((definition) => definition.name)
+    const definitions = (
+      await createAgentToolHost({ commandExecutor: executor }).getDefinitions()
+    ).map((definition) => definition.name)
     expect(definitions).toContain('run_command')
   } finally {
     await rm(workspace, { recursive: true })
@@ -104,4 +105,53 @@ test('stops a command when it is aborted', async () => {
     exitCode: 130,
     output: '\nCommand was aborted',
   })
+})
+
+test('a command that ignores termination still stops within its timeout', async () => {
+  if (process.platform === 'win32') {
+    return
+  }
+  const executor = createExecutor(async () => process.cwd())
+  const result = await executor.execute(
+    `trap '' TERM; while true; do :; done`,
+    {
+      onOutput() {},
+      outputLimit: 1024,
+      timeoutMs: 100,
+    },
+  )
+  expect(result.exitCode).toBe(124)
+})
+
+test('kills its running command when the command process exits', async () => {
+  if (process.platform === 'win32') {
+    return
+  }
+  let exit: (() => void) | undefined
+  const executor = createNodeCommandExecutor({
+    getWorkspaceFolder: async () => process.cwd(),
+    runtime: {
+      getBuiltinModule: process.getBuiltinModule,
+      kill: process.kill,
+      off() {
+        exit = undefined
+      },
+      once(_event: string, listener: () => void) {
+        exit = listener
+      },
+      platform: process.platform,
+      versions: process.versions,
+    },
+  })
+  if (!executor) {
+    throw new Error('Expected a Node command executor')
+  }
+  const result = executor.execute(`trap '' TERM; while true; do :; done`, {
+    onOutput() {},
+    outputLimit: 1024,
+    timeoutMs: 5000,
+  })
+  setTimeout(() => exit?.(), 50)
+  expect((await result).exitCode).not.toBe(0)
+  expect(exit).toBeUndefined()
 })

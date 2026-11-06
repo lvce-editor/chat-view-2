@@ -1,4 +1,4 @@
-import type { AgentFileSystemAccess } from '../AgentToolHost/AgentToolHost.ts'
+import type { AgentFileSystemAccess } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import type { ChatApi, ChatTask, ChatTraceMessage } from '../ChatApi/ChatApi.ts'
 import {
   createDefaultChatApi,
