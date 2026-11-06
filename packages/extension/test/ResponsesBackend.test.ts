@@ -264,19 +264,8 @@ test('sends image attachments with their MIME-aware data URLs', async () => {
 
 test('enables OpenAI web search by default and omits it when disabled', async () => {
   for (const [openAiWebSearch, modelId, expectedTools] of [
-    [
-      true,
-      'gpt-5-test',
-      [
-        { type: 'web_search' },
-        { model: 'gpt-image-2.5-sunburst', type: 'image_generation' },
-      ],
-    ],
-    [
-      false,
-      'gpt-5-test',
-      [{ model: 'gpt-image-2.5-sunburst', type: 'image_generation' }],
-    ],
+    [true, 'gpt-5-test', [{ type: 'web_search' }]],
+    [false, 'gpt-5-test', []],
     [true, 'openrouter/anthropic/claude', []],
   ] as const) {
     const fetchMock = jest
@@ -486,10 +475,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
       type: 'response.create',
     }),
   )
-  expect(JSON.parse(socket.sent[0]).tools).toEqual([
-    { type: 'web_search' },
-    { model: 'gpt-image-2.5-sunburst', type: 'image_generation' },
-  ])
+  expect(JSON.parse(socket.sent[0]).tools).toEqual([{ type: 'web_search' }])
   expect(JSON.parse(socket.sent[0])).not.toHaveProperty('stream')
 })
 
@@ -515,9 +501,7 @@ test('omits web search from Responses WebSocket requests when disabled', async (
   })
   await resultPromise
 
-  expect(JSON.parse(socket.sent[0] || '{}').tools).toEqual([
-    { model: 'gpt-image-2.5-sunburst', type: 'image_generation' },
-  ])
+  expect(JSON.parse(socket.sent[0] || '{}').tools).toEqual([])
 })
 
 test('explicitly describes registered computer-use access to the agent', async () => {

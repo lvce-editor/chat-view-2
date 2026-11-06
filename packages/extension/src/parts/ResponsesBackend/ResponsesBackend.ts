@@ -131,6 +131,16 @@ const getAgentInstructions = (options: AgentStepOptions): string =>
 const supportsImageGenerationTool = (modelId: string): boolean =>
   /^(?:openai\/)?gpt-[56](?:[.-]|$)/iu.test(modelId)
 
+const requestsImageGeneration = (input: AgentStepOptions['input']): boolean =>
+  input.some(
+    (item) =>
+      'role' in item &&
+      item.role === 'user' &&
+      /\b(?:image|picture|illustration|photo|artwork|drawing|logo|icon|draw|paint)\b/iu.test(
+        item.content,
+      ),
+  )
+
 const createResponseRequest = (
   options: AgentStepOptions,
   openAiWebSearch: boolean,
@@ -157,7 +167,8 @@ const createResponseRequest = (
     !options.modelId.toLowerCase().startsWith('openrouter/')
       ? [{ type: 'web_search' }]
       : []),
-    ...(supportsImageGenerationTool(options.modelId)
+    ...(supportsImageGenerationTool(options.modelId) &&
+    requestsImageGeneration(options.input)
       ? [{ model: 'gpt-image-2.5-sunburst', type: 'image_generation' }]
       : []),
   ],
