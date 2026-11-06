@@ -659,7 +659,7 @@
   color: var(--ChatMutedForeground);
   pointer-events: var(--ChatMetadataPointerEvents, none);
   opacity: var(--ChatMetadataOpacity, 0);
-  transition: opacity 80ms ease-out;
+  transition: opacity 30ms ease-out;
 }
 
 .ChatMessage:hover,
