@@ -1,4 +1,5 @@
 import type {
+  ChatAllowance,
   ChatImageAttachment,
   ChatModel,
   ChatTask,
@@ -11,6 +12,13 @@ export interface ChatComposerImage {
   readonly id: string
   readonly name: string
   readonly status: 'error' | 'loading' | 'ready'
+}
+
+export interface ChatStatusPopup {
+  readonly allowance?: ChatAllowance | undefined
+  readonly modelId: string
+  readonly phase: 'loading' | 'ready' | 'error'
+  readonly taskId?: string | undefined
 }
 
 export interface ChatViewState {
@@ -35,6 +43,7 @@ export interface ChatViewState {
   readonly sessionsListVisible: boolean
   readonly sessionsVisible: boolean
   readonly sessionsWidth?: number
+  readonly statusPopup?: ChatStatusPopup | undefined
   readonly taskOpenMode: TaskOpenMode
   readonly tasks: readonly ChatTask[]
   readonly workingSeconds: number

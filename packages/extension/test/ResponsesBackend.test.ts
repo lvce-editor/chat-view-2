@@ -1239,3 +1239,102 @@ test('cancelling a stream drains the current delta before releasing its turn', a
   await expect(result).resolves.toMatchObject({ message: 'stop requested' })
   expect(settled).toBe(true)
 })
+
+test('loads authoritative allowance without sending a model request', async () => {
+  const allowance = {
+    windows: [
+      {
+        label: 'Monthly limit',
+        limit: 1000,
+        remaining: 800.5,
+        resetAt: '2026-12-01T00:00:00Z',
+      },
+    ],
+  }
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(Response.json(allowance))
+  const backend = createResponsesBackend({
+    accessToken: 'token',
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+  await expect(backend.getAllowance?.('gpt-test')).resolves.toEqual(allowance)
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(fetchMock).toHaveBeenCalledWith(
+    'https://backend.example.com/api/v1/status',
+    expect.objectContaining({ credentials: 'include' }),
+  )
+  await expect(
+    backend.getAllowance?.('openrouter/provider/model'),
+  ).resolves.toBeUndefined()
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+})
+
+test('rejects invalid allowance and supports older backends', async () => {
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(
+      Response.json({
+        windows: [
+          { label: 'Monthly', limit: 100, remaining: -1, resetAt: 'bad' },
+        ],
+      }),
+    )
+    .mockResolvedValueOnce(new Response('', { status: 404 }))
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+  await expect(backend.getAllowance?.('gpt-test')).rejects.toThrow(
+    'invalid window',
+  )
+  await expect(backend.getAllowance?.('gpt-test')).resolves.toBeUndefined()
+})
+
+test('retains provider context usage from HTTP responses', async () => {
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: jest.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'response-usage',
+        output: [],
+        usage: { input_tokens: 1200, output_tokens: 50 },
+      }),
+    ),
+  })
+  const result = await backend.runStep({
+    input: [{ content: 'Hello', role: 'user' }],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+  expect(result.usage).toEqual({ inputTokens: 1200, outputTokens: 50 })
+})
+
+test('retains provider context usage from WebSocket responses', async () => {
+  const socket = new MockResponsesWebSocket()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    supportsStreaming: true,
+  })
+  const pending = backend.runStep({
+    input: [{ content: 'Hello', role: 'user' }],
+    modelId: 'gpt-test',
+    onTextDelta() {},
+    tools: [],
+  })
+  socket.open()
+  socket.receive({
+    response: {
+      id: 'response-usage',
+      output: [],
+      usage: { input_tokens: 1200, output_tokens: 50 },
+    },
+    type: 'response.completed',
+  })
+  await expect(pending).resolves.toMatchObject({
+    usage: { inputTokens: 1200, outputTokens: 50 },
+  })
+})

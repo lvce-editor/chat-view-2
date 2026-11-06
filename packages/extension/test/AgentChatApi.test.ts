@@ -33,12 +33,14 @@ test('runs a multi-step tool loop and records a compact event history', async ()
           name: 'read_file',
         },
       ],
+      usage: { inputTokens: 100, outputTokens: 10 },
     })
     .mockResolvedValueOnce({
       responseHistory: [{ content: 'Finished', role: 'assistant' }],
       responseId: 'response-2',
       text: 'The repository is ready.',
       toolCalls: [],
+      usage: { inputTokens: 200, outputTokens: 20 },
     })
   const backend: AgentBackend = {
     async listModels() {
@@ -105,6 +107,13 @@ test('runs a multi-step tool loop and records a compact event history', async ()
     },
   })
 
+  expect(task.contextUsage).toEqual({
+    inputTokens: 200,
+    modelId: 'gpt-test',
+    outputTokens: 20,
+  })
+  const storedTask = await api.getTask(task.id)
+  expect(storedTask?.contextUsage).toEqual(task.contextUsage)
   expect(task.status).toBe('completed')
   expect(execute).toHaveBeenCalledWith(
     expect.objectContaining({ name: 'read_file' }),
