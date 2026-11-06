@@ -14,23 +14,13 @@ import type { ChatViewState } from './ChatViewState.ts'
 import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 import { applyLayoutClasses } from './ApplyLayoutClasses.ts'
+import { formatMessageDate } from './FormatMessageDate.ts'
 
 const fileUriPattern = /^(?:file|memfs|remote-ssh|html|opfs):\/\//u
 const fileCitationPattern =
   /cite((?:file|memfs|remote-ssh|html|opfs):\/\/[^\s]+)/gu
 const fileCitationLabelBrackets = /[[\]]/gu
 const relativeFilePattern = /^(?:\.\/)?[\w.-]+\/[\w./%#:-]+$/u
-const getMessageDateFormatter = (() => {
-  let messageDateFormatter: Intl.DateTimeFormat | undefined
-  return (): Intl.DateTimeFormat => {
-    messageDateFormatter ??= new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    })
-    return messageDateFormatter
-  }
-})()
-
 const toCssClassToken = (value: string): string =>
   Array.from(value, (character) => character.codePointAt(0)?.toString(16)).join(
     '_',
@@ -41,13 +31,6 @@ const getTaskListStyleClass = (fontFamily: string, fontSize: string): string =>
 
 const getSessionsWidthClass = (width: number): string =>
   `ChatSessionsWidth-${width}`
-
-const formatMessageDate = (timestamp: string): string => {
-  const date = new Date(timestamp)
-  return Number.isNaN(date.getTime())
-    ? timestamp
-    : getMessageDateFormatter().format(date)
-}
 
 const isRunning = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'

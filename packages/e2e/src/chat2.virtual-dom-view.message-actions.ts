@@ -20,6 +20,7 @@ export const test: Test = async ({
   await Locator('button[name="submit"]').click()
 
   const metadata = Locator('.ChatMessageUser .ChatMessageMetadata')
+  const timestamp = Locator('.ChatMessageUser .ChatMessageTimestamp')
   const copyButton = Locator('.ChatMessageUser .ChatMessageCopyButton')
   const assistantMetadata = Locator(
     '.ChatMessageAssistant .ChatMessageMetadata',
@@ -29,6 +30,8 @@ export const test: Test = async ({
   )
   await expect(metadata).toHaveCSS('opacity', '0')
   await expect(assistantMetadata).toHaveCSS('opacity', '0')
+  await timestamp.hover()
+  await expect(timestamp).toContainText('ago')
   await expect(copyButton).toHaveAttribute('aria-label', 'Copy message')
   await expect(assistantMetadata).toHaveCount(1)
   await expect(assistantCopyButton).toHaveAttribute(
