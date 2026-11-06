@@ -38,6 +38,7 @@ export interface ChatViewState {
   readonly loginRequired: boolean
   readonly modelPickerOpen: boolean
   readonly models: readonly ChatModel[]
+  readonly preserveComposerValue?: boolean
   readonly selectedModelId: string
   readonly selectedTask: ChatTask | undefined
   readonly sessionsListVisible: boolean

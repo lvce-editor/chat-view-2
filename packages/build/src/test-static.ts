@@ -233,6 +233,12 @@ try {
               'composer',
           )
           await page.keyboard.type('Type without clicking')
+          await page.waitForFunction(
+            (value) =>
+              globalThis.document.querySelector('textarea[name="composer"]')
+                ?.value === value,
+            'Type without clicking',
+          )
           assert.equal(await composer.inputValue(), 'Type without clicking')
           await page.reload()
           await composer.waitFor()
@@ -243,6 +249,12 @@ try {
           )
           await page.keyboard.press('Control+A')
           await page.keyboard.type('Type immediately after reload')
+          await page.waitForFunction(
+            (value) =>
+              globalThis.document.querySelector('textarea[name="composer"]')
+                ?.value === value,
+            'Type immediately after reload',
+          )
           assert.equal(
             await composer.inputValue(),
             'Type immediately after reload',
@@ -258,6 +270,27 @@ try {
             ),
             true,
           )
+        }
+        if (!preserveStartupFocus) {
+          await page.locator('button[name="new-task"]').click()
+          await page.waitForFunction(
+            () =>
+              globalThis.document.querySelector('textarea[name="composer"]')
+                ?.value === '',
+          )
+          await page.waitForFunction(
+            () =>
+              globalThis.document.activeElement?.getAttribute('name') ===
+              'composer',
+          )
+          await page.keyboard.type('New draft after clearing')
+          await page.waitForFunction(
+            (value) =>
+              globalThis.document.querySelector('textarea[name="composer"]')
+                ?.value === value,
+            'New draft after clearing',
+          )
+          assert.equal(await composer.inputValue(), 'New draft after clearing')
         }
         process.stdout.write(
           `Direct chat ${preserveStartupFocus ? 'preserves startup focus' : 'focuses composer on load and reload'}: pass\n`,

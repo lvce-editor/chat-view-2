@@ -162,7 +162,7 @@ export const heading = (
 export const textArea = (
   value: string,
   placeholder: string,
-  options: Readonly<{ onPaste?: string }> = {},
+  options: Readonly<{ onPaste?: string; preserveValue?: boolean }> = {},
 ): Node => {
   return node(VirtualDomElements.TextArea, {
     ariaLabel: 'Message',
@@ -175,6 +175,6 @@ export const textArea = (
     placeholder,
     rows: 1,
     spellcheck: false,
-    value,
+    ...(!options.preserveValue && { value }),
   })
 }

@@ -3068,3 +3068,42 @@ test('status from a previous model is hidden after a model change', async () => 
   expect(getNodesByClass(instance.render(), 'ChatStatusPopup')).toHaveLength(0)
   instance.dispose?.()
 })
+
+test.each(['new-chat', 'paste', 'restored-state'] as const)(
+  'preserves native composer edits until an explicit %s draft change',
+  async (change) => {
+    const instance = await createInstance(undefined, createMockChatApi())
+    try {
+      await dispatch(instance, {
+        name: 'composer',
+        type: 'input',
+        value: 'Native draft',
+      })
+      const nativeDom = instance.render()
+      const nativeInput = getNodesByClass(nativeDom, 'ChatComposerInput')[0]
+      expect(instance.getState().draft).toBe('Native draft')
+      expect(nativeInput.value).toBeUndefined()
+      // The renderer's focus restoration must resolve the textarea, not its form.
+      expect(nativeDom.find((node) => node.name === 'composer')).toBe(
+        nativeInput,
+      )
+      let expected: string
+      if (change === 'new-chat') {
+        await instance.newChat()
+        expected = ''
+      } else if (change === 'paste') {
+        await instance.handleImagePaste([], ' Pasted', 12, 12)
+        expected = 'Native draft Pasted'
+      } else {
+        instance.setState({ ...instance.getState(), draft: 'Restored draft' })
+        expected = 'Restored draft'
+      }
+      expect(instance.getState().draft).toBe(expected)
+      expect(
+        getNodesByClass(instance.render(), 'ChatComposerInput')[0].value,
+      ).toBe(expected)
+    } finally {
+      instance.dispose?.()
+    }
+  },
+)
