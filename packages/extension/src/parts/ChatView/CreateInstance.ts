@@ -100,6 +100,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
     name: unknown,
     button: unknown,
   ) => Promise<void>
+  readonly handleTitleMenuClick: (x: unknown, y: unknown) => Promise<void>
   readonly newChat: (requestRerender?: boolean) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderFocus: (
@@ -1087,6 +1088,22 @@ export const createInstance = async (
     })
   }
 
+  const handleTitleMenuClick = async (
+    x: unknown,
+    y: unknown,
+  ): Promise<void> => {
+    const { selectedTask } = state
+    if (!selectedTask) {
+      return
+    }
+    contextMenuTaskId = selectedTask.id
+    await context?.showContextMenu(
+      titleMenuId,
+      typeof x === 'number' && Number.isFinite(x) ? x : 0,
+      typeof y === 'number' && Number.isFinite(y) ? y : 0,
+    )
+  }
+
   const completeLogin = async (): Promise<void> => {
     try {
       await execute('Layout.signIn')
@@ -1558,6 +1575,7 @@ export const createInstance = async (
       }
       await openTask(name.slice('task:'.length))
     },
+    handleTitleMenuClick,
     newChat,
     render(): readonly VirtualDomNode[] {
       return render({ ...state, preserveComposerValue })

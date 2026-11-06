@@ -633,8 +633,27 @@ test('renames the selected chat from its title context menu', async () => {
       }),
     )
 
+    const titleMenuButton = instance
+      .render()
+      .find((node) =>
+        node.className?.split(' ').includes('ChatTitleMenuButton'),
+      )
+    expect(titleMenuButton).toEqual(
+      expect.objectContaining({
+        ariaLabel: 'Open chat menu',
+        name: 'title-menu',
+        type: VirtualDomElements.Button,
+      }),
+    )
+
+    await instance.handleTitleMenuClick(15, 25)
+    expect(showContextMenu).toHaveBeenLastCalledWith('chat2.title', 15, 25)
+    expect(instance.getMenuEntries('chat2.title')).toEqual([
+      expect.objectContaining({ id: 'rename-chat', label: 'Rename' }),
+    ])
+
     await dispatchTitleContextMenu(instance)
-    expect(showContextMenu).toHaveBeenCalledWith('chat2.title', 10, 20)
+    expect(showContextMenu).toHaveBeenLastCalledWith('chat2.title', 10, 20)
     expect(instance.getMenuEntries('chat2.title')).toEqual([
       expect.objectContaining({ id: 'rename-chat', label: 'Rename' }),
     ])
