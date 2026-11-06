@@ -314,7 +314,9 @@ const setWorkbenchLayoutUrl = async (
 }
 
 const activeInstances = new Set<ActiveChatViewInstance>()
-const activeInstanceState: { instance?: ActiveChatViewInstance } = {}
+const activeInstanceState: { instance: ActiveChatViewInstance | undefined } = {
+  instance: undefined,
+}
 
 const getPreferredModelId = async (): Promise<string> => {
   try {
