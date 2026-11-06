@@ -6,7 +6,11 @@ import type {
   AgentStepOptions,
   AgentStepResult,
 } from '../AgentBackend/AgentBackend.ts'
-import type { ChatModel } from '../ChatApi/ChatApi.ts'
+import type {
+  ChatAllowance,
+  ChatModel,
+  ChatTokenUsage,
+} from '../ChatApi/ChatApi.ts'
 
 export interface ResponsesBackendOptions {
   readonly accessToken?: string
@@ -33,6 +37,7 @@ interface ResponseEvent {
     readonly error?: { readonly message?: string }
     readonly id?: string
     readonly output?: readonly unknown[]
+    readonly usage?: unknown
   }
   readonly type?: string
 }
@@ -304,6 +309,7 @@ const runWebSocketRequest = (
   let opened = false
   let processing = Promise.resolve()
   let responseId = ''
+  let usage: ChatTokenUsage | undefined
   let settled = false
   let text = ''
 
@@ -347,7 +353,12 @@ const runWebSocketRequest = (
     settled = true
     cleanup()
     closeSocket()
-    resolve({ responseId, text, toolCalls: [...toolCalls.values()] })
+    resolve({
+      responseId,
+      text,
+      toolCalls: [...toolCalls.values()],
+      ...(usage && { usage }),
+    })
   }
 
   const handleAbort = (): void => {
@@ -380,6 +391,7 @@ const runWebSocketRequest = (
     }
     if (event.type === 'response.completed') {
       responseId = event.response?.id || responseId
+      usage = parseTokenUsage(event.response?.usage)
       if (event.response) {
         text = getResponseText(event.response) || text
       }
@@ -510,6 +522,52 @@ const getRecord = (
   value && typeof value === 'object'
     ? (value as Readonly<Record<string, unknown>>)
     : undefined
+
+const isTokenCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+
+const parseTokenUsage = (value: unknown): ChatTokenUsage | undefined => {
+  const usage = getRecord(value)
+  if (
+    !usage ||
+    !isTokenCount(usage.input_tokens) ||
+    !isTokenCount(usage.output_tokens)
+  ) {
+    return undefined
+  }
+  return { inputTokens: usage.input_tokens, outputTokens: usage.output_tokens }
+}
+
+const parseAllowance = (value: unknown): ChatAllowance => {
+  const record = getRecord(value)
+  if (!Array.isArray(record?.windows)) {
+    throw new TypeError('Usage allowance returned an invalid response')
+  }
+  const windows = record.windows.map((value: unknown) => {
+    const window = getRecord(value)
+    if (
+      !window ||
+      typeof window.label !== 'string' ||
+      !isTokenCount(window.limit) ||
+      window.limit === 0 ||
+      typeof window.remaining !== 'number' ||
+      !Number.isFinite(window.remaining) ||
+      window.remaining < 0 ||
+      window.remaining > window.limit ||
+      typeof window.resetAt !== 'string' ||
+      !Number.isFinite(Date.parse(window.resetAt))
+    ) {
+      throw new Error('Usage allowance returned an invalid window')
+    }
+    return {
+      label: window.label,
+      limit: window.limit,
+      remaining: window.remaining,
+      resetAt: window.resetAt,
+    }
+  })
+  return { windows }
+}
 
 const sourceTitleBrackets = /[\u{5B}\u{5D}]/gu
 const feedLabels = new Map([
@@ -694,6 +752,9 @@ const readResponse = async (response: Response): Promise<AgentStepResult> => {
     throw new Error('The model returned an invalid response')
   }
   return {
+    ...(parseTokenUsage(value.usage) && {
+      usage: parseTokenUsage(value.usage),
+    }),
     responseId: typeof value.id === 'string' ? value.id : '',
     text: getResponseText(value),
     toolCalls: getResponseToolCalls(value),
@@ -853,6 +914,22 @@ export const createResponsesBackend = ({
       }
       return result.text
     },
+    async getAllowance(modelId) {
+      // OpenRouter uses the connected account's credits, not LVCE's allowance.
+      if (modelId.startsWith('openrouter/')) {
+        return undefined
+      }
+      const response = await authenticatedFetch(getApiUrl(root, '/v1/status'), {
+        credentials: 'include',
+      })
+      if (response.status === 404) {
+        return undefined
+      }
+      if (!response.ok) {
+        throw new Error(`Could not load usage allowance (${response.status})`)
+      }
+      return parseAllowance(await response.json())
+    },
     async listModels() {
       const response = await authenticatedFetch(getApiUrl(root, '/v1/models'), {
         credentials: 'include',
@@ -929,6 +1006,9 @@ export const createResponsesBackend = ({
         }
         return {
           responseHistory: [...openRouterInput, ...value.output],
+          ...(parseTokenUsage(value.usage) && {
+            usage: parseTokenUsage(value.usage),
+          }),
           responseId: typeof value.id === 'string' ? value.id : '',
           text: getResponseText(value),
           toolCalls: getResponseToolCalls(value),

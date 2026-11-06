@@ -2908,3 +2908,202 @@ test('focus layout classes track new conversations and place one fade above chan
   expect(getNodesByClass(newConversation, 'ChatMessagesEmpty')).toHaveLength(1)
   expect(getNodesByClass(newConversation, 'ChatComposerFade')).toHaveLength(0)
 })
+
+test('/status opens above the composer without creating a turn and closes with Escape', async () => {
+  const api = createMockChatApi(0)
+  const createTask = jest.fn(api.createTask)
+  const instance = await createInstance(undefined, { ...api, createTask })
+  const initialTasks = instance.getState().tasks
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: ' /status ',
+  })
+  await instance.submit()
+  expect(createTask).not.toHaveBeenCalled()
+  expect(instance.getState().tasks).toEqual(initialTasks)
+  expect(instance.getState().draft).toBe('')
+  const dom = instance.render()
+  expect(getText(dom)).toContain('No session yet')
+  expect(getText(dom)).toContain('Unavailable')
+  expect(
+    dom.findIndex((node: any) => node.className === 'ChatStatusPopup'),
+  ).toBeLessThan(
+    dom.findIndex((node: any) => node.className === 'ChatComposer'),
+  )
+  instance.handleKeyDown('Escape')
+  expect(getNodesByClass(instance.render(), 'ChatStatusPopup')).toHaveLength(0)
+  instance.dispose?.()
+})
+
+test('/status shows session context and authoritative allowance, and normal messages still send', async () => {
+  const api = createMockChatApi(0)
+  const task = await api.createTask('First message', 'gpt-5.6-luna')
+  const getTask = async (id: string) => {
+    const saved = await api.getTask(id)
+    return (
+      saved && {
+        ...saved,
+        contextUsage: {
+          inputTokens: 1200,
+          modelId: saved.modelId,
+          outputTokens: 50,
+        },
+      }
+    )
+  }
+  const getAllowance = jest.fn(async () => ({
+    windows: [
+      {
+        label: 'Weekly limit',
+        limit: 1000,
+        remaining: 650,
+        resetAt: '2026-11-12T00:00:00Z',
+      },
+    ],
+  }))
+  const sendMessage = jest.fn(api.sendMessage)
+  const instance = await createInstance(undefined, {
+    ...api,
+    getAllowance,
+    getTask,
+    sendMessage,
+  })
+  await dispatch(instance, { name: `task:${task.id}`, type: 'click' })
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: '/status',
+  })
+  await instance.submit()
+  expect(sendMessage).not.toHaveBeenCalled()
+  expect(getText(instance.render())).toContain(task.id)
+  expect(getText(instance.render())).toContain('1,250 tokens used')
+  expect(getText(instance.render())).toContain('65% left')
+  await dispatch(instance, { name: 'close-status', type: 'click' })
+  expect(getNodesByClass(instance.render(), 'ChatStatusPopup')).toHaveLength(0)
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: 'Follow up',
+  })
+  await instance.submit()
+  expect(sendMessage).toHaveBeenCalledTimes(1)
+  instance.dispose?.()
+})
+
+test('late allowance results cannot reopen status after switching sessions or closing', async () => {
+  const api = createMockChatApi(0)
+  const pending = Promise.withResolvers<{ windows: readonly [] }>()
+  const instance = await createInstance(undefined, {
+    ...api,
+    getAllowance: () => pending.promise,
+  })
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: '/status',
+  })
+  const submission = instance.submit()
+  await flushPromises()
+  expect(getText(instance.render())).toContain('Loading usage allowance')
+  await instance.newChat()
+  pending.resolve({ windows: [] })
+  await submission
+  expect(instance.getState().statusPopup).toBeUndefined()
+  instance.dispose?.()
+})
+
+test('status reports allowance errors with retry guidance', async () => {
+  const api = createMockChatApi(0)
+  const getAllowance = jest
+    .fn<NonNullable<typeof api.getAllowance>>()
+    .mockRejectedValue(new Error('Offline'))
+  const instance = await createInstance(undefined, { ...api, getAllowance })
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: '/status',
+  })
+  await instance.submit()
+  expect(getText(instance.render())).toContain('Run /status to retry')
+  instance.dispose?.()
+})
+
+test('late status requests cannot reopen a dismissed popup', async () => {
+  const api = createMockChatApi(0)
+  const pending = Promise.withResolvers<{ windows: readonly [] }>()
+  const instance = await createInstance(undefined, {
+    ...api,
+    getAllowance: () => pending.promise,
+  })
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: '/status',
+  })
+  const submission = instance.submit()
+  await flushPromises()
+  await dispatch(instance, { name: 'close-status', type: 'click' })
+  pending.resolve({ windows: [] })
+  await submission
+  expect(instance.getState().statusPopup).toBeUndefined()
+  instance.dispose?.()
+})
+
+test('status from a previous model is hidden after a model change', async () => {
+  const api = createMockChatApi(0)
+  const instance = await createInstance(undefined, api)
+  const [firstModel, secondModel] = instance.getState().models
+  if (!firstModel || !secondModel) throw new Error('Expected two mock models')
+  instance.setState({ ...instance.getState(), selectedModelId: firstModel.id })
+  await dispatch(instance, {
+    name: 'composer',
+    type: 'input',
+    value: '/status',
+  })
+  await instance.submit()
+  expect(getNodesByClass(instance.render(), 'ChatStatusPopup')).toHaveLength(1)
+  instance.setState({ ...instance.getState(), selectedModelId: secondModel.id })
+  expect(getNodesByClass(instance.render(), 'ChatStatusPopup')).toHaveLength(0)
+  instance.dispose?.()
+})
+
+test.each(['new-chat', 'paste', 'restored-state'] as const)(
+  'preserves native composer edits until an explicit %s draft change',
+  async (change) => {
+    const instance = await createInstance(undefined, createMockChatApi())
+    try {
+      await dispatch(instance, {
+        name: 'composer',
+        type: 'input',
+        value: 'Native draft',
+      })
+      const nativeDom = instance.render()
+      const nativeInput = getNodesByClass(nativeDom, 'ChatComposerInput')[0]
+      expect(instance.getState().draft).toBe('Native draft')
+      expect(nativeInput.value).toBeUndefined()
+      // The renderer's focus restoration must resolve the textarea, not its form.
+      expect(nativeDom.find((node) => node.name === 'composer')).toBe(
+        nativeInput,
+      )
+      let expected: string
+      if (change === 'new-chat') {
+        await instance.newChat()
+        expected = ''
+      } else if (change === 'paste') {
+        await instance.handleImagePaste([], ' Pasted', 12, 12)
+        expected = 'Native draft Pasted'
+      } else {
+        instance.setState({ ...instance.getState(), draft: 'Restored draft' })
+        expected = 'Restored draft'
+      }
+      expect(instance.getState().draft).toBe(expected)
+      expect(
+        getNodesByClass(instance.render(), 'ChatComposerInput')[0].value,
+      ).toBe(expected)
+    } finally {
+      instance.dispose?.()
+    }
+  },
+)

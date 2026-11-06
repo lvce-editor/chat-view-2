@@ -193,6 +193,7 @@ export const createAgentChatApi = ({
       )
       if (restartInterrupted) {
         const {
+          contextUsage: _contextUsage,
           responseHistory: _responseHistory,
           responseId: _responseId,
           ...rest
@@ -317,6 +318,9 @@ export const createAgentChatApi = ({
             task
           task = {
             ...taskWithoutStreamingText,
+            contextUsage: result.usage
+              ? { ...result.usage, modelId: task.modelId }
+              : undefined,
             ...(result.responseHistory && {
               responseHistory: result.responseHistory,
             }),
@@ -653,6 +657,9 @@ export const createAgentChatApi = ({
       })()
       const result = await run(task, message, options)
       return withStoredTitle(result, await store.get(task.id))
+    },
+    getAllowance(modelId) {
+      return backend.getAllowance?.(modelId) || Promise.resolve(undefined)
     },
     async getTask(id) {
       return recoverTask(await store.get(id))

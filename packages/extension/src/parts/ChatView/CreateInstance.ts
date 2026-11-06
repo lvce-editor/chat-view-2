@@ -486,6 +486,7 @@ export const createInstance = async (
     writeDraft(draftWorkspace, state.selectedTask?.id, state.draft)
   let selectedTaskRequest = 0
   let focusComposerRequest = false
+  let preserveComposerValue = false
   let windowTitleQueue = Promise.resolve()
   let windowTitleActive = false
   const getWorkspaceTitle = async (): Promise<string> => {
@@ -669,6 +670,7 @@ export const createInstance = async (
         state.errorMessage = ''
       }
       state.models = nextModels
+      state.statusPopup = undefined
       state.selectedModelId = getSelectedModelId(
         nextModels,
         state.selectedModelId,
@@ -696,9 +698,11 @@ export const createInstance = async (
     taskRefreshRequest++
     selectedTaskRequest++
     resetCopyFeedback()
+    state.statusPopup = undefined
     state.selectedTask = undefined
     await setChatTaskHash(execute)
     state.draft = ''
+    preserveComposerValue = false
     await saveDraft()
     state.composerImages = []
     state.activityExpanded = false
@@ -743,6 +747,7 @@ export const createInstance = async (
       if (disposed || request !== selectedTaskRequest) {
         return
       }
+      state.statusPopup = undefined
       state.selectedTask = task
       scrollToLatestTurn = state.focusMode && Boolean(task)
       syncWorkingTimer(state.selectedTask)
@@ -753,6 +758,7 @@ export const createInstance = async (
         await setChatTaskHash(execute)
       }
       state.draft = (await readDraft(draftWorkspace, task?.id)) || ''
+      preserveComposerValue = false
       state.composerImages = []
       state.activityExpanded = false
       state.changesExpanded = false
@@ -804,6 +810,7 @@ export const createInstance = async (
       if (!selectedTask || selectedTask.archived) {
         archivedTaskIds.add(selectedTaskId)
         selectedTaskRequest++
+        state.statusPopup = undefined
         state.selectedTask = undefined
         syncWorkingTimer(undefined)
         await setChatTaskHash(execute)
@@ -816,8 +823,37 @@ export const createInstance = async (
     await context?.requestRerender()
   }
 
+  const showStatus = async (): Promise<void> => {
+    const popup = {
+      modelId: state.selectedModelId,
+      phase: 'loading' as const,
+      taskId: state.selectedTask?.id,
+    }
+    state.statusPopup = popup
+    state.modelPickerOpen = false
+    state.draft = ''
+    preserveComposerValue = false
+    focusComposerRequest = !focusComposerRequest
+    await saveDraft()
+    await context?.requestRerender()
+    try {
+      const allowance = await api.getAllowance?.(popup.modelId)
+      if (disposed || state.statusPopup !== popup) return
+      state.statusPopup = { ...popup, allowance, phase: 'ready' }
+    } catch {
+      if (disposed || state.statusPopup !== popup) return
+      state.statusPopup = { ...popup, phase: 'error' }
+    }
+    await context?.requestRerender()
+  }
+
   const submit = async (requestRerender = false): Promise<void> => {
     const message = state.draft.trim()
+    if (message === '/status' && !state.loginRequired) {
+      await showStatus()
+      return
+    }
+    state.statusPopup = undefined
     const attachments = state.composerImages.flatMap((image) =>
       image.status === 'ready' && image.attachment ? [image.attachment] : [],
     )
@@ -852,6 +888,7 @@ export const createInstance = async (
         scrollToLatestTurn = true
       }
       state.draft = ''
+      preserveComposerValue = false
       state.composerImages = []
       state.modelPickerOpen = false
       await saveDraft()
@@ -1101,7 +1138,10 @@ export const createInstance = async (
       }
       if (event.type === 'input' && event.name === 'composer') {
         state.composerFocused = true
+        // Native input can advance while earlier worker renders are still queued.
+        // Do not send stale value patches back to the textarea.
         state.draft = getEventString(event)
+        preserveComposerValue = true
         await saveDraft()
         return
       }
@@ -1158,6 +1198,11 @@ export const createInstance = async (
         }
         return
       }
+      if (event.name === 'close-status') {
+        state.statusPopup = undefined
+        focusComposerRequest = !focusComposerRequest
+        return
+      }
       if (event.name === 'submit') {
         // Rendering is serialized behind this event by the host.
         void submit()
@@ -1199,6 +1244,7 @@ export const createInstance = async (
         return
       }
       if (event.name === 'model-picker') {
+        state.statusPopup = undefined
         state.modelPickerOpen = !state.modelPickerOpen
         return
       }
@@ -1262,6 +1308,7 @@ export const createInstance = async (
         const id = event.name.slice(6)
         const model = state.models.find((item) => item.id === id)
         if (model?.available && model.planEligible) {
+          state.statusPopup = undefined
           state.selectedModelId = id
           state.modelPickerOpen = false
           await setPreference('chat2.selectedModelId', id)
@@ -1321,6 +1368,7 @@ export const createInstance = async (
           ? Math.max(start, Math.min(selectionEnd, state.draft.length))
           : start
       state.draft = `${state.draft.slice(0, start)}${text}${state.draft.slice(end)}`
+      preserveComposerValue = false
       await saveDraft()
       state.errorMessage = ''
       await context?.requestRerender()
@@ -1340,6 +1388,11 @@ export const createInstance = async (
         }
         return
       }
+      if (key === 'Escape' && state.statusPopup) {
+        state.statusPopup = undefined
+        focusComposerRequest = !focusComposerRequest
+        void context?.requestRerender()
+      }
       if (key === 'Escape' && state.modelPickerOpen) {
         state.modelPickerOpen = false
       }
@@ -1347,6 +1400,7 @@ export const createInstance = async (
     handleModelPickerOutsideClick(name: unknown, value: unknown): void {
       if (name === 'composer' && typeof value === 'string') {
         state.draft = value
+        preserveComposerValue = true
         void saveDraft().catch((error: unknown) => {
           state.errorMessage =
             error instanceof Error ? error.message : String(error)
@@ -1437,7 +1491,7 @@ export const createInstance = async (
     },
     newChat,
     render(): readonly VirtualDomNode[] {
-      return render(state)
+      return render({ ...state, preserveComposerValue })
     },
     renderFocus(
       oldContext: Readonly<Record<string, boolean>>,
@@ -1480,6 +1534,7 @@ export const createInstance = async (
       if (!isChatViewState(newState)) {
         throw new TypeError('Chat 2 state must be a valid state object')
       }
+      preserveComposerValue = false
       Object.assign(state, {
         ...newState,
         composerImages: newState.composerImages || [],

@@ -851,11 +851,90 @@ const getSelectedModelLabel = (state: Readonly<ChatViewState>): string => {
   )
 }
 
+const formatStatusTokens = (value: number): string =>
+  Math.floor(value).toLocaleString('en-US')
+
+const renderStatusPopup = (
+  state: Readonly<ChatViewState>,
+): readonly Dom.Node[] => {
+  const { selectedModelId, selectedTask: task, statusPopup: popup } = state
+  if (
+    !popup ||
+    popup.taskId !== task?.id ||
+    popup.modelId !== selectedModelId
+  ) {
+    return []
+  }
+  const usage = task?.contextUsage
+  const contextText =
+    usage && usage.modelId === selectedModelId
+      ? `${formatStatusTokens(usage.inputTokens + usage.outputTokens)} tokens used (${formatStatusTokens(usage.inputTokens)} input + ${formatStatusTokens(usage.outputTokens)} output; last response)`
+      : 'Unavailable — no response usage for this model'
+  const windows = popup.allowance?.windows || []
+  const allowanceText =
+    popup.phase === 'loading'
+      ? 'Loading usage allowance…'
+      : popup.phase === 'error'
+        ? 'Could not load usage allowance. Run /status to retry.'
+        : selectedModelId.startsWith('openrouter/')
+          ? 'Unavailable — managed by your OpenRouter account'
+          : 'Unavailable — this backend does not report an allowance'
+  return [
+    Dom.node(
+      VirtualDomElements.Div,
+      {
+        ariaLabel: 'Session status',
+        className: 'ChatStatusPopup',
+        role: 'region',
+      },
+      [
+        Dom.div('ChatStatusHeader', [
+          Dom.heading(2, 'ChatStatusTitle', 'Status'),
+          Dom.button('close-status', 'Close', 'ChatStatusClose', {
+            ariaLabel: 'Close status',
+          }),
+        ]),
+        Dom.div('ChatStatusRow', [
+          Dom.div('ChatStatusLabel', [Dom.textNode('Session')]),
+          Dom.div('ChatStatusValue', [
+            Dom.textNode(task?.id || 'No session yet'),
+          ]),
+        ]),
+        Dom.div('ChatStatusRow', [
+          Dom.div('ChatStatusLabel', [Dom.textNode('Context')]),
+          Dom.div('ChatStatusValue', [Dom.textNode(contextText)]),
+        ]),
+        ...(windows.length > 0
+          ? windows.map((window) => {
+              const percent = Math.floor(
+                (window.remaining / window.limit) * 100,
+              )
+              return Dom.div('ChatStatusRow', [
+                Dom.div('ChatStatusLabel', [Dom.textNode(window.label)]),
+                Dom.div('ChatStatusValue', [
+                  Dom.textNode(
+                    `${percent}% left (${formatStatusTokens(window.remaining)} / ${formatStatusTokens(window.limit)} virtual tokens; resets ${new Date(window.resetAt).toLocaleString()})`,
+                  ),
+                ]),
+              ])
+            })
+          : [
+              Dom.div('ChatStatusRow', [
+                Dom.div('ChatStatusLabel', [Dom.textNode('Usage limit')]),
+                Dom.div('ChatStatusValue', [Dom.textNode(allowanceText)]),
+              ]),
+            ]),
+      ],
+    ),
+  ]
+}
+
 const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
   const {
     composerImages,
     draft,
     modelPickerOpen,
+    preserveComposerValue = false,
     selectedModelId,
     selectedTask,
   } = state
@@ -866,8 +945,9 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
       ? 'Ask for a follow-up change'
       : 'Describe a programming task'
   return Dom.div('ChatComposerArea', [
+    ...renderStatusPopup(state),
     ...(modelPickerOpen ? [renderModelPicker(state)] : []),
-    Dom.form('composer', 'ChatComposer', [
+    Dom.form('composer-form', 'ChatComposer', [
       ...(composerImages.length > 0
         ? [
             Dom.div(
@@ -906,7 +986,10 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
           ]
         : []),
       Dom.div('ChatComposerInputContainer', [
-        Dom.textArea(draft, placeholder, { onPaste: 'handleImagePaste' }),
+        Dom.textArea(draft, placeholder, {
+          onPaste: 'handleImagePaste',
+          preserveValue: preserveComposerValue,
+        }),
       ]),
       Dom.div('ChatComposerControls', [
         Dom.div('ChatComposerSpacer', []),
@@ -916,7 +999,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
           'ChatModelButton',
           { ariaExpanded: modelPickerOpen },
         ),
-        running
+        running && draft.trim() !== '/status'
           ? Dom.button('stop', '■', 'ChatSubmitButton', {
               ariaLabel: 'Stop task',
               title: 'Stop task',
@@ -926,7 +1009,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
               disabled:
                 (!draft.trim() && composerImages.length === 0) ||
                 composerImages.some((image) => image.status !== 'ready') ||
-                !selectedModelId,
+                (!selectedModelId && draft.trim() !== '/status'),
               title: 'Send message',
             }),
       ]),
