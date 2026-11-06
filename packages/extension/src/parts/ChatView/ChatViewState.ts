@@ -24,6 +24,7 @@ export interface ChatStatusPopup {
 export interface ChatViewState {
   readonly activityExpanded: boolean
   readonly aiNativeTheme: AiNativeTheme
+  readonly assistantMessageFontFamily: string
   readonly changesExpanded: boolean
   readonly composerFocused: boolean
   readonly composerImages: readonly ChatComposerImage[]
@@ -49,5 +50,6 @@ export interface ChatViewState {
   readonly statusPopup?: ChatStatusPopup | undefined
   readonly taskOpenMode: TaskOpenMode
   readonly tasks: readonly ChatTask[]
+  readonly userMessageFontFamily: string
   readonly workingSeconds: number
 }

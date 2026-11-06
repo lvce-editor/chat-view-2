@@ -20,6 +20,11 @@
       "type": "string",
       "default": ""
     },
+    "chat2.assistantMessageFontFamily": {
+      "type": "string",
+      "default": "Georgia, 'Times New Roman', serif",
+      "description": "Font family for assistant messages, including streamed responses."
+    },
     "chat2.aiNativeTheme": {
       "type": "string",
       "enum": ["default", "openai", "claude"],
@@ -40,6 +45,11 @@
       "type": "string",
       "default": "13px",
       "description": "Font size for chat task list items, for example 20px."
+    },
+    "chat2.userMessageFontFamily": {
+      "type": "string",
+      "default": "sans-serif",
+      "description": "Font family for user messages."
     },
     "chat2.openAiWebSearch": {
       "type": "boolean",

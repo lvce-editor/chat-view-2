@@ -1538,11 +1538,17 @@ export const render = (
 }
 
 export const renderCss = (state: Readonly<ChatViewState>): string => {
-  const { fontFamily, fontSize, sessionsWidth } = state
+  const {
+    assistantMessageFontFamily,
+    fontFamily,
+    fontSize,
+    sessionsWidth,
+    userMessageFontFamily,
+  } = state
   const taskListClass = getTaskListStyleClass(fontFamily, fontSize)
   const sessionsWidthCss =
     sessionsWidth === undefined
       ? ''
       : `.${getSessionsWidthClass(sessionsWidth)}{--ChatSessionsWidth:${sessionsWidth}px}`
-  return `.${taskListClass}{--ChatTaskFontFamily:${fontFamily};--ChatTaskFontSize:${fontSize}}${sessionsWidthCss}`
+  return `.${taskListClass}{--ChatTaskFontFamily:${fontFamily};--ChatTaskFontSize:${fontSize}}.ChatMessageAssistant .ChatMessageText{font-family:${assistantMessageFontFamily}}.ChatMessageUser .ChatMessageText{font-family:${userMessageFontFamily}}${sessionsWidthCss}`
 }
