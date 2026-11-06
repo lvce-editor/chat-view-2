@@ -247,7 +247,7 @@ try {
               globalThis.document.activeElement?.getAttribute('name') ===
               'composer',
           )
-          await page.keyboard.press('Control+A')
+          await page.keyboard.press('ControlOrMeta+A')
           await page.keyboard.type('Type immediately after reload')
           await page.waitForFunction(
             (value) =>
