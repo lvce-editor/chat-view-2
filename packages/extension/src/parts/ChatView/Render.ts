@@ -760,6 +760,44 @@ const renderMessageText = (text: string): readonly Dom.Node[] => {
   return children
 }
 
+const renderMessageImages = (
+  message: Extract<
+    ChatTaskEvent,
+    { type: 'assistant-message' | 'user-message' }
+  >,
+): readonly Dom.Node[] => {
+  const images =
+    message.type === 'user-message' ? message.attachments : message.images
+  if (!images?.length) {
+    return []
+  }
+  return [
+    Dom.div(
+      'ChatMessageImages',
+      images.map((image, index) =>
+        Dom.node(
+          VirtualDomElements.Button,
+          {
+            ariaLabel: `Enlarge ${image.name}`,
+            buttonType: 'button',
+            className: 'ChatMessageImageButton',
+            name: `open-image:${message.id}:${index}`,
+            onClick: 'handleClick',
+            title: `Enlarge ${image.name}`,
+          },
+          [
+            Dom.node(VirtualDomElements.Img, {
+              alt: image.name,
+              className: 'ChatMessageImage',
+              src: image.dataUrl,
+            }),
+          ],
+        ),
+      ),
+    ),
+  ]
+}
+
 const renderMessage = (
   message: Extract<
     ChatTaskEvent,
@@ -772,20 +810,7 @@ const renderMessage = (
   const copied = message.id === copiedMessageId
   return Dom.div(`ChatMessage ${roleClass}`, [
     Dom.div('ChatMessageText', renderMessageTextWithCode(message.text)),
-    ...(message.type === 'user-message' && message.attachments?.length
-      ? [
-          Dom.div(
-            'ChatMessageImages',
-            message.attachments.map((attachment) =>
-              Dom.node(VirtualDomElements.Img, {
-                alt: attachment.name,
-                className: 'ChatMessageImage',
-                src: attachment.dataUrl,
-              }),
-            ),
-          ),
-        ]
-      : []),
+    ...renderMessageImages(message),
     Dom.div('ChatMessageMetadata', [
       Dom.div('ChatMessageTimestamp', [
         Dom.textNode(formatMessageDate(message.timestamp)),
@@ -802,6 +827,45 @@ const renderMessage = (
     ]),
   ])
 }
+
+const renderImagePreview = (
+  image: NonNullable<ChatViewState['imagePreview']>,
+): Dom.Node =>
+  Dom.node(
+    VirtualDomElements.Div,
+    {
+      ariaLabel: 'Image preview',
+      ariaModal: true,
+      className: 'ChatImagePreviewOverlay',
+      name: 'image-preview-overlay',
+      onClick: 'handleImagePreviewOverlayClick',
+      role: 'dialog',
+      tabIndex: -1,
+    },
+    [
+      Dom.button('close-image-preview', '×', 'ChatImagePreviewCloseButton', {
+        ariaLabel: 'Close image preview',
+        title: 'Close image preview',
+      }),
+      Dom.node(VirtualDomElements.Img, {
+        alt: image.name,
+        className: 'ChatImagePreview',
+        src: image.dataUrl,
+      }),
+    ],
+  )
+
+const renderErrorBanners = (
+  summaryErrorMessage: string,
+  errorMessage: string,
+): readonly Dom.Node[] => [
+  ...(summaryErrorMessage
+    ? [Dom.div('ChatErrorBanner', [Dom.textNode(summaryErrorMessage)])]
+    : []),
+  ...(errorMessage
+    ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
+    : []),
+]
 
 const renderStreamingMessage = (text: string): Dom.Node => {
   return Dom.div('ChatMessage ChatMessageAssistant ChatMessageStreaming', [
@@ -1253,6 +1317,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
     copiedMessageId,
     errorMessage,
     focusMode,
+    imagePreview,
     selectedTask: task,
     sessionsVisible,
   } = state
@@ -1282,12 +1347,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
     ...renderedMessages.slice(lastUserMessageIndex),
     ...(task.streamingText ? [renderStreamingMessage(task.streamingText)] : []),
     renderActivity(state),
-    ...(summary.errorMessage
-      ? [Dom.div('ChatErrorBanner', [Dom.textNode(summary.errorMessage)])]
-      : []),
-    ...(errorMessage
-      ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-      : []),
+    ...renderErrorBanners(summary.errorMessage, errorMessage),
   ]
   const messageContent =
     focusMode && lastUserMessageIndex !== -1
@@ -1301,12 +1361,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
             ? [renderStreamingMessage(task.streamingText)]
             : []),
           renderActivity(state),
-          ...(summary.errorMessage
-            ? [Dom.div('ChatErrorBanner', [Dom.textNode(summary.errorMessage)])]
-            : []),
-          ...(errorMessage
-            ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
-            : []),
+          ...renderErrorBanners(summary.errorMessage, errorMessage),
         ]
   const changes = renderChanges(state)
   const composer = renderComposer(state)
@@ -1316,7 +1371,11 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
   if (focusMode) {
     return Dom.div(
       getRootClassName(state, 'ChatDetailView'),
-      [header, Dom.div('ChatConversationBody', [messages, changes, composer])],
+      [
+        header,
+        Dom.div('ChatConversationBody', [messages, changes, composer]),
+        ...(imagePreview ? [renderImagePreview(imagePreview)] : []),
+      ],
       {
         onClick: 'handleModelPickerOutsideClick',
         onDragOver: 'handleDragOver',
@@ -1327,7 +1386,13 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
   }
   return Dom.div(
     getRootClassName(state, 'ChatDetailView'),
-    [header, messages, changes, composer],
+    [
+      header,
+      messages,
+      changes,
+      composer,
+      ...(imagePreview ? [renderImagePreview(imagePreview)] : []),
+    ],
     {
       onClick: 'handleModelPickerOutsideClick',
       onDragOver: 'handleDragOver',

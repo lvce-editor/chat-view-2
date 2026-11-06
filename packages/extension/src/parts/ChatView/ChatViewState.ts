@@ -34,6 +34,7 @@ export interface ChatViewState {
   readonly focusModeEnabled: boolean
   readonly fontFamily: string
   readonly fontSize: string
+  readonly imagePreview?: ChatImageAttachment | undefined
   readonly loginPending: boolean
   readonly loginRequired: boolean
   readonly modelPickerOpen: boolean
