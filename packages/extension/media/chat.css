@@ -1133,7 +1133,8 @@
   background: linear-gradient(to bottom, transparent, var(--ChatBackground));
 }
 
-.ChatMessagesActive {
+.ChatConversationBody > .ChatMessagesActive {
+  overflow: hidden;
   padding-bottom: 0;
 }
 
@@ -1150,6 +1151,10 @@
   margin-top: auto;
 }
 
+.ChatConversationBody > .ChatMessages > .ChatComposerAreaActive {
+  position: static;
+}
+
 .ChatMessagesContentAiNative {
   box-sizing: border-box;
   display: flex;
@@ -1161,10 +1166,11 @@
   margin-inline: auto;
 }
 
-.ChatMessagesContentActive {
+.ChatConversationBody > .ChatMessages > .ChatMessagesContentActive {
   /* Avoid measuring the entire conversation as an auto flex basis on resize. */
   flex: 1 1 0px;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .ChatTurnLatestAiNative {

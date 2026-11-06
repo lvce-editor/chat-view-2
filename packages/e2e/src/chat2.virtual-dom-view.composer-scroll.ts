@@ -13,6 +13,7 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   const composer = Locator('textarea[name="composer"]')
   const submit = Locator('button[name="submit"]')
   const messages = Locator('.ChatMessages')
+  const messageContent = Locator('.ChatMessagesContent')
   const composerArea = Locator('.ChatMessages > .ChatComposerArea')
   const messageTable = Locator('.ChatMessageUser .ChatMessageTable')
   const longMessage = [
@@ -30,14 +31,14 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   // eslint-disable-next-line e2e/no-direct-click
   await submit.click()
 
-  await expect(messages).toHaveCSS('overflow-y', 'auto')
+  await expect(messages).toHaveCSS('overflow-y', 'hidden')
+  await expect(messageContent).toHaveCSS('overflow-y', 'auto')
   await expect(messageTable).toHaveCount(1)
-  await expect(composerArea).toHaveCSS('position', 'sticky')
-  await expect(composerArea).toHaveCSS('bottom', '0px')
-  await messages.dispatchEvent('wheel', {
+  await expect(composerArea).toHaveCSS('position', 'static')
+  await messageContent.dispatchEvent('wheel', {
     bubbles: true,
     deltaY: 1000,
   } as unknown as string)
-  await expect(messages).not.toHaveJSProperty('scrollTop', 0)
+  await expect(messageContent).not.toHaveJSProperty('scrollTop', 0)
   await expect(composerArea).toBeVisible()
 }
