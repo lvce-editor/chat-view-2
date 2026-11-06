@@ -52,17 +52,16 @@ const isChatTaskEvent = (value: unknown): value is ChatTaskEvent => {
         ['completed', 'failed', 'running'].includes(value.status)
       )
     case 'assistant-message':
-    case 'user-message':
       return (
         typeof value.text === 'string' &&
-        (value.attachments === undefined ||
-          (Array.isArray(value.attachments) &&
-            value.attachments.every(
-              (attachment) =>
-                isRecord(attachment) &&
-                typeof attachment.dataUrl === 'string' &&
-                typeof attachment.mimeType === 'string' &&
-                typeof attachment.name === 'string',
+        (value.images === undefined ||
+          (Array.isArray(value.images) &&
+            value.images.every(
+              (image) =>
+                isRecord(image) &&
+                typeof image.dataUrl === 'string' &&
+                typeof image.mimeType === 'string' &&
+                typeof image.name === 'string',
             )))
       )
     case 'changes':
@@ -86,6 +85,19 @@ const isChatTaskEvent = (value: unknown): value is ChatTaskEvent => {
       return (
         typeof value.status === 'string' &&
         taskStatuses.has(value.status as ChatTaskStatus)
+      )
+    case 'user-message':
+      return (
+        typeof value.text === 'string' &&
+        (value.attachments === undefined ||
+          (Array.isArray(value.attachments) &&
+            value.attachments.every(
+              (attachment) =>
+                isRecord(attachment) &&
+                typeof attachment.dataUrl === 'string' &&
+                typeof attachment.mimeType === 'string' &&
+                typeof attachment.name === 'string',
+            )))
       )
     default:
       return false
@@ -122,6 +134,7 @@ const booleanStateKeys = [
 ] as const
 
 const stringStateKeys = [
+  'assistantMessageFontFamily',
   'copiedMessageId',
   'draft',
   'errorMessage',
@@ -129,6 +142,7 @@ const stringStateKeys = [
   'fontSize',
   'selectedModelId',
   'selectedThinkingMode',
+  'userMessageFontFamily',
 ] as const
 
 export const isChatViewState = (value: unknown): value is ChatViewState => {
@@ -155,6 +169,11 @@ export const isChatViewState = (value: unknown): value is ChatViewState => {
     return false
   }
   return (
+    (value.imagePreview === undefined ||
+      (isRecord(value.imagePreview) &&
+        typeof value.imagePreview.dataUrl === 'string' &&
+        typeof value.imagePreview.mimeType === 'string' &&
+        typeof value.imagePreview.name === 'string')) &&
     (value.sessionsWidth === undefined ||
       (typeof value.sessionsWidth === 'number' &&
         Number.isFinite(value.sessionsWidth) &&

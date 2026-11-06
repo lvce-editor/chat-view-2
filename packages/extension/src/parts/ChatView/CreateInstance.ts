@@ -52,7 +52,14 @@ import {
 import { readAiNativeTheme } from './AiNativeTheme.ts'
 import { isChatViewState } from './ChatViewComponentState.ts'
 import { getZoomCommand } from './ChatViewZoom.ts'
-import { readFontFamily } from './FontFamily.ts'
+import {
+  assistantMessageFontFamilyPreference,
+  defaultAssistantMessageFontFamily,
+  defaultUserMessageFontFamily,
+  readFontFamily,
+  readMessageFontFamily,
+  userMessageFontFamilyPreference,
+} from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { render, renderCss } from './Render.ts'
 import { readTaskOpenMode } from './TaskOpenMode.ts'
@@ -453,6 +460,16 @@ export const createInstance = async (
   const preferredModelId =
     saved.selectedModelId || (await getPreferredModelId())
   const fontFamily = await readFontFamily(readPreference)
+  const assistantMessageFontFamily = await readMessageFontFamily(
+    assistantMessageFontFamilyPreference,
+    defaultAssistantMessageFontFamily,
+    readPreference,
+  )
+  const userMessageFontFamily = await readMessageFontFamily(
+    userMessageFontFamilyPreference,
+    defaultUserMessageFontFamily,
+    readPreference,
+  )
   const fontSize = await readFontSize(readPreference)
   const aiNativeTheme = await readAiNativeTheme(readPreference)
   const taskOpenMode = await readTaskOpenMode(readPreference)
@@ -485,6 +502,7 @@ export const createInstance = async (
   const state: MutableChatViewState = {
     activityExpanded: false,
     aiNativeTheme,
+    assistantMessageFontFamily,
     changesExpanded: false,
     composerFocused: false,
     composerImages: [],
@@ -507,6 +525,7 @@ export const createInstance = async (
     sessionsVisible: false,
     taskOpenMode,
     tasks,
+    userMessageFontFamily,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
         ? getWorkingSeconds(selectedTask)
@@ -1201,6 +1220,33 @@ export const createInstance = async (
         void completeLogin()
         return
       }
+      if (event.type === 'click' && event.name?.startsWith('open-image:')) {
+        const [, eventId, indexValue] = event.name.split(':')
+        const message = state.selectedTask?.events.find(
+          (item) => item.id === eventId,
+        )
+        const index = Number(indexValue)
+        let image
+        if (message?.type === 'user-message') {
+          image = message.attachments?.[index]
+        } else if (message?.type === 'assistant-message') {
+          image = message.images?.[index]
+        }
+        if (image) {
+          state.imagePreview = image
+          await context?.requestRerender()
+        }
+        return
+      }
+      if (
+        event.type === 'click' &&
+        (event.name === 'close-image-preview' ||
+          event.name === 'image-preview-overlay')
+      ) {
+        state.imagePreview = undefined
+        await context?.requestRerender()
+        return
+      }
       if (state.loginRequired) {
         return
       }
@@ -1472,6 +1518,11 @@ export const createInstance = async (
         if (zoomCommand === 'Window.zoomIn') {
           void executeCommand(zoomCommand).catch(() => {})
         }
+        return
+      }
+      if (key === 'Escape' && state.imagePreview) {
+        state.imagePreview = undefined
+        void context?.requestRerender()
         return
       }
       if (key === 'Escape' && state.statusPopup) {

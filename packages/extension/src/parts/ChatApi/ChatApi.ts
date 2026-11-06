@@ -42,6 +42,7 @@ export interface ChatUserMessageEvent extends ChatTaskEventBase {
 }
 
 export interface ChatAssistantMessageEvent extends ChatTaskEventBase {
+  readonly images?: readonly ChatImageAttachment[]
   readonly text: string
   readonly type: 'assistant-message'
 }

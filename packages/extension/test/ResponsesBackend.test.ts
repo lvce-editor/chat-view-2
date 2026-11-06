@@ -264,8 +264,8 @@ test('sends image attachments with their MIME-aware data URLs', async () => {
 
 test('enables OpenAI web search by default and omits it when disabled', async () => {
   for (const [openAiWebSearch, modelId, expectedTools] of [
-    [true, 'gpt-test', [{ type: 'web_search' }]],
-    [false, 'gpt-test', []],
+    [true, 'gpt-5-test', [{ type: 'web_search' }]],
+    [false, 'gpt-5-test', []],
     [true, 'openrouter/anthropic/claude', []],
   ] as const) {
     const fetchMock = jest
@@ -412,7 +412,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
         type: 'function-call-output',
       },
     ],
-    modelId: 'gpt-test',
+    modelId: 'gpt-5-test',
     onTextDelta(delta) {
       deltas.push(delta)
     },
@@ -470,7 +470,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
           type: 'function_call_output',
         },
       ],
-      model: 'gpt-test',
+      model: 'gpt-5-test',
       reasoning: { effort: 'high' },
       type: 'response.create',
     }),
@@ -489,7 +489,7 @@ test('omits web search from Responses WebSocket requests when disabled', async (
   })
   const resultPromise = backend.runStep({
     input: [{ content: 'Answer from model knowledge.', role: 'user' }],
-    modelId: 'gpt-test',
+    modelId: 'gpt-5-test',
     onTextDelta() {},
     tools: [],
   })
@@ -691,7 +691,7 @@ test('surfaces backend errors without retrying unsafe work', async () => {
   await expect(
     backend.runStep({
       input: [{ content: 'Work', role: 'user' }],
-      modelId: 'gpt-test',
+      modelId: 'gpt-5-test',
       onTextDelta() {},
       tools: [],
     }),
@@ -782,7 +782,7 @@ test('keeps generic error handling for other providers', async () => {
   await expect(
     backend.runStep({
       input: [{ content: 'Work', role: 'user' }],
-      modelId: 'gpt-test',
+      modelId: 'gpt-5-test',
       onTextDelta() {},
       tools: [],
     }),
@@ -800,7 +800,7 @@ test('surfaces backend WebSocket error messages', async () => {
 
   const result = backend.runStep({
     input: [{ content: 'Work', role: 'user' }],
-    modelId: 'gpt-test',
+    modelId: 'gpt-5-test',
     onTextDelta() {},
     tools: [],
   })
@@ -1023,7 +1023,7 @@ test('does not refresh or resubmit after an opened stream fails', async () => {
   })
   const result = backend.runStep({
     input: [{ content: 'hello', role: 'user' }],
-    modelId: 'gpt-test',
+    modelId: 'gpt-5-test',
     onTextDelta() {},
     tools: [],
   })
@@ -1192,7 +1192,7 @@ test('preserves web citations and identifies native weather feeds', async () => 
   })
   const result = await backend.runStep({
     input: [],
-    modelId: 'gpt-test',
+    modelId: 'gpt-5-test',
     onTextDelta() {},
     tools: [],
   })
@@ -1314,6 +1314,47 @@ test('retains provider context usage from HTTP responses', async () => {
   expect(result.usage).toEqual({ inputTokens: 1200, outputTokens: 50 })
 })
 
+test('returns generated images from HTTP Responses and requests image generation', async () => {
+  const image = {
+    output_format: 'png',
+    result: 'aGVsbG8=',
+    type: 'image_generation_call',
+  }
+  const fetchMock = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(Response.json({ id: 'response-image', output: [image] }))
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: fetchMock,
+  })
+
+  await expect(
+    backend.runStep({
+      input: [{ content: 'Draw a cat', role: 'user' }],
+      modelId: 'gpt-5-test',
+      onTextDelta() {},
+      tools: [],
+    }),
+  ).resolves.toMatchObject({
+    images: [
+      {
+        dataUrl: 'data:image/png;base64,aGVsbG8=',
+        mimeType: 'image/png',
+        name: 'Generated image 1.png',
+      },
+    ],
+  })
+  const body = fetchMock.mock.calls[0]?.[1]?.body
+  if (typeof body !== 'string') {
+    throw new TypeError('Expected a JSON request body')
+  }
+  const request = JSON.parse(body)
+  expect(request.tools).toContainEqual({
+    model: 'gpt-image-2.5-sunburst',
+    type: 'image_generation',
+  })
+})
+
 test('retains provider context usage from WebSocket responses', async () => {
   const socket = new MockResponsesWebSocket()
   const backend = createResponsesBackend({
@@ -1338,5 +1379,43 @@ test('retains provider context usage from WebSocket responses', async () => {
   })
   await expect(pending).resolves.toMatchObject({
     usage: { inputTokens: 1200, outputTokens: 50 },
+  })
+})
+
+test('returns generated images from completed WebSocket Responses', async () => {
+  const socket = new MockResponsesWebSocket()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    supportsStreaming: true,
+  })
+  const pending = backend.runStep({
+    input: [{ content: 'Draw a cat', role: 'user' }],
+    modelId: 'gpt-5-test',
+    onTextDelta() {},
+    tools: [],
+  })
+  socket.open()
+  socket.receive({
+    response: {
+      id: 'response-image',
+      output: [
+        {
+          output_format: 'webp',
+          result: 'aGVsbG8=',
+          type: 'image_generation_call',
+        },
+      ],
+    },
+    type: 'response.completed',
+  })
+
+  await expect(pending).resolves.toMatchObject({
+    images: [
+      {
+        dataUrl: 'data:image/webp;base64,aGVsbG8=',
+        mimeType: 'image/webp',
+      },
+    ],
   })
 })

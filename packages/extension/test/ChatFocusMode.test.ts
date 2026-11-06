@@ -5,6 +5,7 @@ import { toggleFocusMode } from '../src/parts/ChatFocusMode/ChatFocusMode.ts'
 const createState = (): ChatViewState => ({
   activityExpanded: false,
   aiNativeTheme: 'default',
+  assistantMessageFontFamily: "Georgia, 'Times New Roman', serif",
   changesExpanded: false,
   composerFocused: false,
   composerImages: [],
@@ -26,6 +27,7 @@ const createState = (): ChatViewState => ({
   sessionsVisible: false,
   taskOpenMode: 'mousedown',
   tasks: [],
+  userMessageFontFamily: 'sans-serif',
   workingSeconds: 0,
 })
 

@@ -24,6 +24,7 @@ export interface ChatStatusPopup {
 export interface ChatViewState {
   readonly activityExpanded: boolean
   readonly aiNativeTheme: AiNativeTheme
+  readonly assistantMessageFontFamily: string
   readonly changesExpanded: boolean
   readonly composerFocused: boolean
   readonly composerImages: readonly ChatComposerImage[]
@@ -34,6 +35,7 @@ export interface ChatViewState {
   readonly focusModeEnabled: boolean
   readonly fontFamily: string
   readonly fontSize: string
+  readonly imagePreview?: ChatImageAttachment | undefined
   readonly loginPending: boolean
   readonly loginRequired: boolean
   readonly modelPickerOpen: boolean
@@ -48,5 +50,6 @@ export interface ChatViewState {
   readonly statusPopup?: ChatStatusPopup | undefined
   readonly taskOpenMode: TaskOpenMode
   readonly tasks: readonly ChatTask[]
+  readonly userMessageFontFamily: string
   readonly workingSeconds: number
 }

@@ -37,6 +37,7 @@ export interface AgentStepOptions {
 }
 
 export interface AgentStepResult {
+  readonly images?: readonly ChatImageAttachment[]
   readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly responseId: string
   readonly text: string

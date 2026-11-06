@@ -161,6 +161,7 @@ test('contributes every preference read by Chat 2', async () => {
     [
       'chat2.backendUrl',
       'chat2.aiNativeTheme',
+      'chat2.assistantMessageFontFamily',
       'chat2.computerUseEnabled',
       'chat2.experimentalFocusMode',
       'chat2.fontFamily',
@@ -171,6 +172,7 @@ test('contributes every preference read by Chat 2', async () => {
       'chat2.taskOpenMode',
       'chat2.titleModelId',
       'chat2.useMockBackend',
+      'chat2.userMessageFontFamily',
     ].toSorted((a, b) => a.localeCompare(b)),
   )
 })

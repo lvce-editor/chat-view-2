@@ -1019,6 +1019,63 @@ test('submits image attachments and keeps a small preview in the message history
   )
 })
 
+test('renders generated assistant images and opens a dismissible image preview', async () => {
+  const instance = await createTestInstance()
+  const image = {
+    dataUrl: 'data:image/png;base64,aGVsbG8=',
+    mimeType: 'image/png',
+    name: 'Generated image 1.png',
+  }
+  const message = createEvent({
+    images: [image],
+    text: 'Here is the image.',
+    type: 'assistant-message',
+  })
+  const task: ChatTask = {
+    createdAt: '2026-01-01T00:00:00.000Z',
+    events: [message],
+    id: 'task-image-preview',
+    modelId: 'gpt-test',
+    status: 'completed',
+    title: 'Image',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+  instance.setState({ ...instance.getState(), selectedTask: task })
+
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      alt: image.name,
+      className: 'ChatMessageImage',
+      src: image.dataUrl,
+    }),
+  )
+  await dispatch(instance, {
+    name: `open-image:${message.id}:0`,
+    type: 'click',
+  })
+  expect(
+    getNodesByClass(instance.render(), 'ChatImagePreviewOverlay'),
+  ).toHaveLength(1)
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      className: 'ChatImagePreview',
+      src: image.dataUrl,
+    }),
+  )
+  await dispatch(instance, { name: 'close-image-preview', type: 'click' })
+  expect(
+    getNodesByClass(instance.render(), 'ChatImagePreviewOverlay'),
+  ).toHaveLength(0)
+  await dispatch(instance, {
+    name: `open-image:${message.id}:0`,
+    type: 'click',
+  })
+  instance.handleKeyDown('Escape')
+  expect(
+    getNodesByClass(instance.render(), 'ChatImagePreviewOverlay'),
+  ).toHaveLength(0)
+})
+
 test('loads pasted image files once and submits the decoded image bytes', async () => {
   const imageBytes = Promise.withResolvers<ArrayBuffer>()
   const file = {
@@ -1720,6 +1777,60 @@ test('uses the configured task list font family', async () => {
     '--ChatTaskFontFamily:"Fira Code", monospace;--ChatTaskFontSize:13px',
   )
 })
+
+test('uses the role-specific message font defaults', async () => {
+  const instance = await createTestInstance()
+
+  expect(instance.getState().assistantMessageFontFamily).toBe(
+    "Georgia, 'Times New Roman', serif",
+  )
+  expect(instance.getState().userMessageFontFamily).toBe('sans-serif')
+  expect(instance.getCss?.()).toContain(
+    ".ChatMessageAssistant .ChatMessageText{font-family:Georgia, 'Times New Roman', serif}",
+  )
+})
+
+test('reads independent role-specific message font preferences', async () => {
+  const instance = await createTestInstance(0, async (key) => {
+    if (key === 'chat2.assistantMessageFontFamily') {
+      return '"Fira Code", monospace'
+    }
+    if (key === 'chat2.userMessageFontFamily') {
+      return 'Arial, sans-serif'
+    }
+  })
+
+  expect(instance.getState().assistantMessageFontFamily).toBe(
+    '"Fira Code", monospace',
+  )
+  expect(instance.getState().userMessageFontFamily).toBe('Arial, sans-serif')
+  expect(instance.getCss?.()).toContain(
+    '.ChatMessageAssistant .ChatMessageText{font-family:"Fira Code", monospace}',
+  )
+  expect(instance.getCss?.()).toContain(
+    '.ChatMessageUser .ChatMessageText{font-family:Arial, sans-serif}',
+  )
+})
+
+test.each([
+  ['chat2.assistantMessageFontFamily', "Georgia, 'Times New Roman', serif"],
+  ['chat2.userMessageFontFamily', 'sans-serif'],
+])(
+  'uses the role default for invalid message font family %s',
+  async (preferenceKey, expected) => {
+    for (const fontFamily of ['', 'Arial; color: red', 'Arial\nmonospace']) {
+      const instance = await createTestInstance(0, async (key) => {
+        return key === preferenceKey ? fontFamily : undefined
+      })
+
+      const stateKey =
+        preferenceKey === 'chat2.assistantMessageFontFamily'
+          ? 'assistantMessageFontFamily'
+          : 'userMessageFontFamily'
+      expect(instance.getState()[stateKey]).toBe(expected)
+    }
+  },
+)
 
 test.each([undefined, 20, '', 'Arial; color: red', 'Arial\nmonospace'])(
   'falls back for invalid task list font family %p',
