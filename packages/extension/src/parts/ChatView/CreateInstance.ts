@@ -406,6 +406,7 @@ export const createInstance = async (
   defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
   imageTransferHost: ImageTransferHost = defaultImageTransferHost,
   writeClipboardText: (text: string) => Promise<void> = writeClipboardTextApi,
+  writePreference: typeof setPreference = setPreference,
 ): Promise<ActiveChatViewInstance> => {
   let pendingWorkbenchLayout: 'ide' | 'ai-native' | undefined
   let authenticationRejected = false
@@ -1356,7 +1357,7 @@ export const createInstance = async (
             state.selectedThinkingMode = 'medium'
           }
           state.modelPickerOpen = false
-          await setPreference('chat2.selectedModelId', id)
+          await writePreference('chat2.selectedModelId', id)
         }
       }
       if (event.name?.startsWith('thinking-mode:')) {
@@ -1369,7 +1370,7 @@ export const createInstance = async (
           selectedModel?.thinkingModes?.includes(mode)
         ) {
           state.selectedThinkingMode = mode
-          await setPreference('chat2.selectedThinkingMode', mode)
+          await writePreference('chat2.selectedThinkingMode', mode)
         }
       }
     },
