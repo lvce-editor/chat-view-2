@@ -2053,11 +2053,34 @@ test('expands the changed-file fixture for review', async () => {
   expect(getText(dom)).not.toContain('Show 2 more files  ⌄')
 })
 
-test('renders user message actions and shows feedback after copying', async () => {
+test('renders message actions for both roles and shows feedback after copying', async () => {
   const writeClipboardText = jest.fn(async (_text: string) => undefined)
+  const userMessage = createEvent({
+    text: 'Add worker memory usage',
+    type: 'user-message',
+  })
+  const assistantMessage = createEvent({
+    text: 'I inspected the files and completed the change.',
+    type: 'assistant-message',
+  })
+  const task: ChatTask = {
+    createdAt: new Date().toISOString(),
+    events: [userMessage, assistantMessage],
+    id: 'mock-task-1',
+    modelId: 'gpt-5.4',
+    status: 'completed',
+    title: userMessage.text,
+    updatedAt: new Date().toISOString(),
+  }
+  const api = {
+    ...createMockChatApi(),
+    async getTask() {
+      return task
+    },
+  }
   const instance = await createInstance(
     undefined,
-    createMockChatApi(),
+    api,
     undefined,
     undefined,
     undefined,
@@ -2067,10 +2090,13 @@ test('renders user message actions and shows feedback after copying', async () =
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
 
   const dom = instance.render() as readonly any[]
-  expect(getNodesByClass(dom, 'ChatMessageMetadata')).toHaveLength(1)
-  expect(getNodesByClass(dom, 'ChatMessageTimestamp')).toHaveLength(1)
-  expect(getNodesByClass(dom, 'ChatMessageCopyButton')).toHaveLength(1)
-  const copyButton = getNodesByClass(dom, 'ChatMessageCopyButton')[0]
+  expect(getNodesByClass(dom, 'ChatMessageMetadata')).toHaveLength(2)
+  expect(getNodesByClass(dom, 'ChatMessageTimestamp')).toHaveLength(2)
+  expect(getNodesByClass(dom, 'ChatMessageCopyButton')).toHaveLength(2)
+  const copyButton = getNodesByClass(dom, 'ChatMessageCopyButton').find(
+    (button) => button.name === `copy-message:${userMessage.id}`,
+  )
+  expect(copyButton).toBeDefined()
   expect(copyButton).toEqual(
     expect.objectContaining({
       ariaLabel: 'Copy message',
@@ -2081,11 +2107,32 @@ test('renders user message actions and shows feedback after copying', async () =
   await dispatch(instance, { name: copyButton.name, type: 'click' })
 
   expect(writeClipboardText).toHaveBeenCalledWith('Add worker memory usage')
-  const copiedButton = getNodesByClass(
+  const copiedUserButton = getNodesByClass(
     instance.render() as readonly any[],
     'ChatMessageCopyButton',
-  )[0]
-  expect(copiedButton).toEqual(
+  ).find((button) => button.name === `copy-message:${userMessage.id}`)
+  expect(copiedUserButton).toEqual(
+    expect.objectContaining({
+      ariaLabel: 'Copied',
+      className: 'ChatMessageCopyButton ChatMessageCopyButtonCopied',
+      title: 'Copied',
+    }),
+  )
+
+  const assistantCopyButton = getNodesByClass(
+    instance.render() as readonly any[],
+    'ChatMessageCopyButton',
+  ).find((button) => button.name === `copy-message:${assistantMessage.id}`)
+  expect(assistantCopyButton).toBeDefined()
+  await dispatch(instance, { name: assistantCopyButton.name, type: 'click' })
+  expect(writeClipboardText).toHaveBeenLastCalledWith(
+    'I inspected the files and completed the change.',
+  )
+  const copiedAssistantButton = getNodesByClass(
+    instance.render() as readonly any[],
+    'ChatMessageCopyButton',
+  ).find((button) => button.name === `copy-message:${assistantMessage.id}`)
+  expect(copiedAssistantButton).toEqual(
     expect.objectContaining({
       ariaLabel: 'Copied',
       className: 'ChatMessageCopyButton ChatMessageCopyButtonCopied',
