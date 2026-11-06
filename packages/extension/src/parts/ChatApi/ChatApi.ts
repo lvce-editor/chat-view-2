@@ -125,8 +125,27 @@ export type ChatTraceMessage =
   | ChatTraceToolResultMessage
   | ChatTraceUserMessage
 
+export interface ChatTokenUsage {
+  readonly inputTokens: number
+  readonly outputTokens: number
+}
+
+export interface ChatAllowanceWindow {
+  readonly label: string
+  readonly limit: number
+  readonly remaining: number
+  readonly resetAt: string
+}
+
+export interface ChatAllowance {
+  readonly windows: readonly ChatAllowanceWindow[]
+}
+
 export interface ChatTask {
   readonly archived?: boolean
+  readonly contextUsage?:
+    | (ChatTokenUsage & { readonly modelId: string })
+    | undefined
   readonly createdAt: string
   readonly events: readonly ChatTaskEvent[]
   readonly id: string
@@ -155,6 +174,9 @@ export interface ChatApi {
     modelId: string,
     options?: ChatRunOptions,
   ) => Promise<ChatTask>
+  readonly getAllowance?: (
+    modelId: string,
+  ) => Promise<ChatAllowance | undefined>
   readonly getTask: (id: string) => Promise<ChatTask | undefined>
   readonly listModels: () => Promise<readonly ChatModel[]>
   readonly listTasks: (limit: number) => Promise<readonly ChatTask[]>

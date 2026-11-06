@@ -4,7 +4,12 @@ import type {
   AgentToolDefinition,
   AgentToolModelOutput,
 } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
-import type { ChatImageAttachment, ChatModel } from '../ChatApi/ChatApi.ts'
+import type {
+  ChatAllowance,
+  ChatImageAttachment,
+  ChatModel,
+  ChatTokenUsage,
+} from '../ChatApi/ChatApi.ts'
 
 export interface AgentInputMessage {
   readonly attachments?: readonly ChatImageAttachment[]
@@ -35,10 +40,14 @@ export interface AgentStepResult {
   readonly responseId: string
   readonly text: string
   readonly toolCalls: readonly AgentToolCall[]
+  readonly usage?: ChatTokenUsage | undefined
 }
 
 export interface AgentBackend {
   readonly generateTitle?: (message: string, modelId: string) => Promise<string>
+  readonly getAllowance?: (
+    modelId: string,
+  ) => Promise<ChatAllowance | undefined>
   readonly listModels: () => Promise<readonly ChatModel[]>
   readonly runStep: (options: AgentStepOptions) => Promise<AgentStepResult>
 }

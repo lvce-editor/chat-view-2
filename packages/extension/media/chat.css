@@ -1248,3 +1248,72 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+.ChatStatusPopup {
+  position: absolute;
+  inset-inline: 16px;
+  bottom: 100%;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: 12px;
+  max-height: 40vh;
+  overflow: auto;
+  background: var(--ChatInputBackground);
+  color: var(--ChatForeground);
+  border: 1px solid var(--ChatBorder);
+  border-radius: 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ChatStatusHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ChatStatusTitle {
+  margin: 0;
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.ChatStatusClose {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ChatStatusClose:hover {
+  background: var(--ChatHoverBackground);
+}
+
+.ChatStatusClose:focus-visible {
+  outline: 1px solid var(--ChatFocusBorder);
+  outline-offset: 2px;
+}
+
+.ChatStatusRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
+.ChatStatusLabel {
+  flex: 0 0 84px;
+  font-weight: 600;
+}
+
+.ChatStatusValue {
+  flex: 1 1 160px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
