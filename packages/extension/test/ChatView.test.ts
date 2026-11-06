@@ -8,7 +8,11 @@ import type { BackendConfiguration } from '../src/parts/BackendConfiguration/Bac
 import type { ChatRunOptions, ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createEvent } from '../src/parts/ChatTask/ChatTask.ts'
 import { view } from '../src/parts/ChatView/ChatView.ts'
-import { createInstance } from '../src/parts/ChatView/CreateInstance.ts'
+import {
+  createInstance,
+  newChatInActiveChatViewInstance,
+  submitActiveChatViewInstance,
+} from '../src/parts/ChatView/CreateInstance.ts'
 import {
   createMockChatApi,
   mockResponse,
@@ -3107,3 +3111,59 @@ test.each(['new-chat', 'paste', 'restored-state'] as const)(
     }
   },
 )
+
+test('submit command targets the focused composer instead of a later hidden instance', async () => {
+  const focusedApi = createMockChatApi()
+  const hiddenApi = createMockChatApi()
+  const focusedCreate = jest.spyOn(focusedApi, 'createTask')
+  const hiddenCreate = jest.spyOn(hiddenApi, 'createTask')
+  const focused = await createInstance(undefined, focusedApi)
+  const hidden = await createInstance(undefined, hiddenApi)
+  try {
+    await dispatch(hidden, {
+      name: 'composer',
+      type: 'input',
+      value: 'Hidden draft',
+    })
+    await dispatch(hidden, { name: 'composer', type: 'blur' })
+    await dispatch(focused, { name: 'composer', type: 'focus' })
+    await dispatch(focused, {
+      name: 'composer',
+      type: 'input',
+      value: 'Visible draft',
+    })
+    await submitActiveChatViewInstance()
+    expect(focusedCreate).toHaveBeenCalledTimes(1)
+    expect(hiddenCreate).not.toHaveBeenCalled()
+    expect(hidden.getState().draft).toBe('Hidden draft')
+  } finally {
+    focused.dispose?.()
+    hidden.dispose?.()
+  }
+})
+
+test('new chat command remembers the last composer after focus moves away', async () => {
+  const first = await createTestInstance()
+  const second = await createTestInstance()
+  try {
+    await dispatch(second, {
+      name: 'composer',
+      type: 'input',
+      value: 'Other draft',
+    })
+    await dispatch(second, { name: 'composer', type: 'blur' })
+    await dispatch(first, { name: 'composer', type: 'focus' })
+    await dispatch(first, {
+      name: 'composer',
+      type: 'input',
+      value: 'Active draft',
+    })
+    await dispatch(first, { name: 'composer', type: 'blur' })
+    await newChatInActiveChatViewInstance()
+    expect(first.getState().draft).toBe('')
+    expect(second.getState().draft).toBe('Other draft')
+  } finally {
+    first.dispose?.()
+    second.dispose?.()
+  }
+})
