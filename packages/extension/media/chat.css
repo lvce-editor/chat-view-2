@@ -1144,8 +1144,6 @@
 }
 
 .ChatComposerAreaActive {
-  position: sticky;
-  bottom: 0;
   flex: 0 0 auto;
   margin-top: auto;
 }

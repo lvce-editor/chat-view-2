@@ -1316,12 +1316,11 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
   const composer = renderComposer(state)
   const messages = Dom.div('ChatMessages', [
     Dom.div('ChatMessagesContent', messageContent),
-    ...(focusMode ? [changes, composer] : []),
   ])
   if (focusMode) {
     return Dom.div(
       getRootClassName(state, 'ChatDetailView'),
-      [header, Dom.div('ChatConversationBody', [messages])],
+      [header, Dom.div('ChatConversationBody', [messages, changes, composer])],
       {
         onClick: 'handleModelPickerOutsideClick',
         onDragOver: 'handleDragOver',
@@ -1446,9 +1445,9 @@ const renderDom = (
                     ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
                     : []),
                 ]),
-                renderChanges(state),
-                renderComposer(state),
               ]),
+              renderChanges(state),
+              renderComposer(state),
             ]),
           ],
           {

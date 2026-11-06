@@ -13,7 +13,8 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   const composer = Locator('textarea[name="composer"]')
   const submit = Locator('button[name="submit"]')
   const messages = Locator('.ChatMessages')
-  const composerArea = Locator('.ChatMessages > .ChatComposerArea')
+  const conversationBody = Locator('.ChatConversationBody')
+  const composerArea = Locator('.ChatConversationBody > .ChatComposerArea')
   const messageTable = Locator('.ChatMessageUser .ChatMessageTable')
   const longMessage = [
     'Long conversation with a table:',
@@ -31,9 +32,10 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   await submit.click()
 
   await expect(messages).toHaveCSS('overflow-y', 'auto')
+  await expect(conversationBody).toHaveCSS('flex-direction', 'column')
   await expect(messageTable).toHaveCount(1)
-  await expect(composerArea).toHaveCSS('position', 'sticky')
-  await expect(composerArea).toHaveCSS('bottom', '0px')
+  await expect(composerArea).toHaveCSS('position', 'relative')
+  await expect(composerArea).toBeVisible()
   await messages.dispatchEvent('wheel', {
     bubbles: true,
     deltaY: 1000,
