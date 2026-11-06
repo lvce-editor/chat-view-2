@@ -8,6 +8,7 @@ import type {
 } from '../AgentBackend/AgentBackend.ts'
 import type {
   ChatAllowance,
+  ChatImageAttachment,
   ChatModel,
   ChatTokenUsage,
 } from '../ChatApi/ChatApi.ts'
@@ -127,6 +128,9 @@ const getAgentInstructions = (options: AgentStepOptions): string =>
     ? `${defaultAgentInstructions}\n\n${computerUseInstructions}`
     : defaultAgentInstructions
 
+const supportsImageGenerationTool = (modelId: string): boolean =>
+  /^(?:openai\/)?gpt-[56](?:[.-]|$)/iu.test(modelId)
+
 const createResponseRequest = (
   options: AgentStepOptions,
   openAiWebSearch: boolean,
@@ -153,8 +157,43 @@ const createResponseRequest = (
     !options.modelId.toLowerCase().startsWith('openrouter/')
       ? [{ type: 'web_search' }]
       : []),
+    ...(supportsImageGenerationTool(options.modelId)
+      ? [{ model: 'gpt-image-2.5-sunburst', type: 'image_generation' }]
+      : []),
   ],
 })
+
+const getResponseImages = (response: {
+  readonly output?: readonly unknown[]
+}): readonly ChatImageAttachment[] => {
+  if (!Array.isArray(response.output)) {
+    return []
+  }
+  return response.output.flatMap((value, index) => {
+    const item = getRecord(value)
+    if (
+      item?.type !== 'image_generation_call' ||
+      typeof item.result !== 'string'
+    ) {
+      return []
+    }
+    const format =
+      typeof item.output_format === 'string' ? item.output_format : 'png'
+    const mimeType =
+      format === 'jpeg'
+        ? 'image/jpeg'
+        : format === 'webp'
+          ? 'image/webp'
+          : 'image/png'
+    return [
+      {
+        dataUrl: `data:${mimeType};base64,${item.result}`,
+        mimeType,
+        name: `Generated image ${index + 1}.${format === 'jpeg' ? 'jpg' : format}`,
+      },
+    ]
+  })
+}
 
 const parseModels = (value: unknown): readonly ChatModel[] => {
   if (!value || typeof value !== 'object') {
@@ -316,6 +355,7 @@ const runWebSocketRequest = (
   let opened = false
   let processing = Promise.resolve()
   let responseId = ''
+  let eventResponse: ResponseEvent['response']
   let usage: ChatTokenUsage | undefined
   let settled = false
   let text = ''
@@ -360,10 +400,12 @@ const runWebSocketRequest = (
     settled = true
     cleanup()
     closeSocket()
+    const images = eventResponse ? getResponseImages(eventResponse) : []
     resolve({
       responseId,
       text,
       toolCalls: [...toolCalls.values()],
+      ...(images.length > 0 && { images }),
       ...(usage && { usage }),
     })
   }
@@ -397,6 +439,7 @@ const runWebSocketRequest = (
       return
     }
     if (event.type === 'response.completed') {
+      eventResponse = event.response
       responseId = event.response?.id || responseId
       usage = parseTokenUsage(event.response?.usage)
       if (event.response) {
@@ -758,7 +801,9 @@ const readResponse = async (response: Response): Promise<AgentStepResult> => {
   if (!value) {
     throw new Error('The model returned an invalid response')
   }
+  const images = getResponseImages(value)
   return {
+    ...(images.length > 0 && { images }),
     ...(parseTokenUsage(value.usage) && {
       usage: parseTokenUsage(value.usage),
     }),
@@ -1011,7 +1056,9 @@ export const createResponsesBackend = ({
         if (!value || !Array.isArray(value.output)) {
           throw new Error('OpenRouter returned an invalid response')
         }
+        const images = getResponseImages(value)
         return {
+          ...(images.length > 0 && { images }),
           responseHistory: [...openRouterInput, ...value.output],
           ...(parseTokenUsage(value.usage) && {
             usage: parseTokenUsage(value.usage),

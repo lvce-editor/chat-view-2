@@ -1176,6 +1176,33 @@ export const createInstance = async (
         void completeLogin()
         return
       }
+      if (event.type === 'click' && event.name?.startsWith('open-image:')) {
+        const [, eventId, indexValue] = event.name.split(':')
+        const message = state.selectedTask?.events.find(
+          (item) => item.id === eventId,
+        )
+        const index = Number(indexValue)
+        let image
+        if (message?.type === 'user-message') {
+          image = message.attachments?.[index]
+        } else if (message?.type === 'assistant-message') {
+          image = message.images?.[index]
+        }
+        if (image) {
+          state.imagePreview = image
+          await context?.requestRerender()
+        }
+        return
+      }
+      if (
+        event.type === 'click' &&
+        (event.name === 'close-image-preview' ||
+          event.name === 'image-preview-overlay')
+      ) {
+        state.imagePreview = undefined
+        await context?.requestRerender()
+        return
+      }
       if (state.loginRequired) {
         return
       }
@@ -1445,6 +1472,11 @@ export const createInstance = async (
         if (zoomCommand === 'Window.zoomIn') {
           void executeCommand(zoomCommand).catch(() => {})
         }
+        return
+      }
+      if (key === 'Escape' && state.imagePreview) {
+        state.imagePreview = undefined
+        void context?.requestRerender()
         return
       }
       if (key === 'Escape' && state.statusPopup) {

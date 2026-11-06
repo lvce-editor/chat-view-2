@@ -408,10 +408,14 @@ export const createAgentChatApi = ({
               input = []
               continue
             }
-            if (result.text) {
+            if (result.text || result.images?.length) {
               task = await withEvent(
                 task,
-                createEvent({ text: result.text, type: 'assistant-message' }),
+                createEvent({
+                  ...(result.images?.length && { images: result.images }),
+                  text: result.text,
+                  type: 'assistant-message',
+                }),
                 store,
                 options,
               )
@@ -432,10 +436,14 @@ export const createAgentChatApi = ({
             }
             return task
           }
-          if (result.text) {
+          if (result.text || result.images?.length) {
             task = await withEvent(
               task,
-              createEvent({ text: result.text, type: 'assistant-message' }),
+              createEvent({
+                ...(result.images?.length && { images: result.images }),
+                text: result.text,
+                type: 'assistant-message',
+              }),
               store,
               options,
             )
