@@ -378,9 +378,16 @@ try {
           const composer = page.locator('textarea[name="composer"]')
           await composer.fill('Preserve this draft across a real reload')
           await page.locator('button[name="submit"]:not([disabled])').waitFor()
-          const messages = await page
-            .locator('.ChatMessageUser, .ChatMessageAssistant')
-            .allTextContents()
+          const messages = (
+            await page
+              .locator('.ChatMessageUser, .ChatMessageAssistant')
+              .allTextContents()
+          ).map((message) =>
+            message.replace(
+              /(?:\d+ (?:seconds?|minutes?|hours?|days?|weeks?|months?|years?) ago|in \d+ (?:seconds?|minutes?|hours?|days?|weeks?|months?|years?))$/u,
+              '',
+            ),
+          )
           const hash = new URL(page.url()).hash
           process.stdout.write(
             `Static conversation before reload: ${page.url()}\n`,
@@ -397,9 +404,16 @@ try {
           )
           assert.equal(new URL(page.url()).hash, hash)
           assert.deepEqual(
-            await page
-              .locator('.ChatMessageUser, .ChatMessageAssistant')
-              .allTextContents(),
+            (
+              await page
+                .locator('.ChatMessageUser, .ChatMessageAssistant')
+                .allTextContents()
+            ).map((message) =>
+              message.replace(
+                /(?:\d+ (?:seconds?|minutes?|hours?|days?|weeks?|months?|years?) ago|in \d+ (?:seconds?|minutes?|hours?|days?|weeks?|months?|years?))$/u,
+                '',
+              ),
+            ),
             messages,
           )
           process.stdout.write(
