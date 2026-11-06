@@ -13,6 +13,7 @@
     "connect-src https: wss: http://127.0.0.1:* ws://127.0.0.1:* http://localhost:* ws://localhost:*"
   ],
   "isolated": true,
+  "permissions": ["clipboard.write"],
   "categories": ["Other"],
   "configuration": {
     "chat2.backendUrl": {

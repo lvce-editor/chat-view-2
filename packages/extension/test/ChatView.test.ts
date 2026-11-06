@@ -844,8 +844,13 @@ test('renders a Sessions sash and resizes the panel with bounded pointer movemen
   instance.handleSessionsSashPointerDown(400, 1000, 100, 100, 280)
   instance.handleSessionsSashPointerMove(450)
   expect(instance.getState().sessionsWidth).toBe(330)
-  expect(instance.render()).toContainEqual(
-    expect.objectContaining({ style: '--ChatSessionsWidth: 330px' }),
+  expect(
+    instance
+      .render()
+      .find((node) => node.className?.startsWith('ChatSessions '))?.className,
+  ).toContain('ChatSessionsWidth-330')
+  expect(instance.getCss?.()).toContain(
+    '.ChatSessionsWidth-330{--ChatSessionsWidth:330px}',
   )
   instance.handleSessionsSashPointerMove(2000)
   expect(instance.getState().sessionsWidth).toBe(680)
@@ -1641,11 +1646,11 @@ test('uses the configured task list font size', async () => {
   })
 
   expect(instance.getState().fontSize).toBe('20px')
-  expect(instance.render()).toContainEqual(
-    expect.objectContaining({
-      className: 'ChatTaskList',
-      style: '--ChatTaskFontFamily: inherit; --ChatTaskFontSize: 20px',
-    }),
+  expect(
+    getNodesByClass(instance.render(), 'ChatTaskList')[0].className,
+  ).toContain('ChatTaskListStyle-')
+  expect(instance.getCss?.()).toContain(
+    '--ChatTaskFontFamily:inherit;--ChatTaskFontSize:20px',
   )
 })
 
@@ -1657,11 +1662,11 @@ test.each([undefined, 20, '', '-2px', 'calc(20px)', '20px; color: red'])(
     })
 
     expect(instance.getState().fontSize).toBe('13px')
-    expect(instance.render()).toContainEqual(
-      expect.objectContaining({
-        className: 'ChatTaskList',
-        style: '--ChatTaskFontFamily: inherit; --ChatTaskFontSize: 13px',
-      }),
+    expect(
+      getNodesByClass(instance.render(), 'ChatTaskList')[0].className,
+    ).toContain('ChatTaskListStyle-')
+    expect(instance.getCss?.()).toContain(
+      '--ChatTaskFontFamily:inherit;--ChatTaskFontSize:13px',
     )
   },
 )
@@ -1682,12 +1687,8 @@ test('uses the configured task list font family', async () => {
   })
 
   expect(instance.getState().fontFamily).toBe('"Fira Code", monospace')
-  expect(instance.render()).toContainEqual(
-    expect.objectContaining({
-      className: 'ChatTaskList',
-      style:
-        '--ChatTaskFontFamily: "Fira Code", monospace; --ChatTaskFontSize: 13px',
-    }),
+  expect(instance.getCss?.()).toContain(
+    '--ChatTaskFontFamily:"Fira Code", monospace;--ChatTaskFontSize:13px',
   )
 })
 
@@ -1699,11 +1700,8 @@ test.each([undefined, 20, '', 'Arial; color: red', 'Arial\nmonospace'])(
     })
 
     expect(instance.getState().fontFamily).toBe('inherit')
-    expect(instance.render()).toContainEqual(
-      expect.objectContaining({
-        className: 'ChatTaskList',
-        style: '--ChatTaskFontFamily: inherit; --ChatTaskFontSize: 13px',
-      }),
+    expect(instance.getCss?.()).toContain(
+      '--ChatTaskFontFamily:inherit;--ChatTaskFontSize:13px',
     )
   },
 )
@@ -2050,14 +2048,15 @@ test('expands the changed-file fixture for review', async () => {
 })
 
 test('renders user message actions and shows feedback after copying', async () => {
-  const execute = jest.fn<
-    (id: string, ...args: readonly unknown[]) => Promise<unknown>
-  >(async () => undefined)
+  const writeClipboardText = jest.fn(async (_text: string) => undefined)
   const instance = await createInstance(
     undefined,
     createMockChatApi(),
     undefined,
-    execute,
+    undefined,
+    undefined,
+    undefined,
+    writeClipboardText,
   )
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
 
@@ -2075,10 +2074,7 @@ test('renders user message actions and shows feedback after copying', async () =
 
   await dispatch(instance, { name: copyButton.name, type: 'click' })
 
-  expect(execute).toHaveBeenCalledWith(
-    'ClipBoard.writeText',
-    'Add worker memory usage',
-  )
+  expect(writeClipboardText).toHaveBeenCalledWith('Add worker memory usage')
   const copiedButton = getNodesByClass(
     instance.render() as readonly any[],
     'ChatMessageCopyButton',
@@ -2093,16 +2089,19 @@ test('renders user message actions and shows feedback after copying', async () =
   instance.dispose?.()
 })
 
+const rejectClipboardWrite = async (_text: string): Promise<void> => {
+  throw new Error('Clipboard access denied')
+}
+
 test('surfaces clipboard permission failures without showing copied feedback', async () => {
-  const execute = async (id: string): Promise<unknown> => {
-    if (id === 'ClipBoard.writeText') throw new Error('Clipboard access denied')
-    return undefined
-  }
   const instance = await createInstance(
     undefined,
     createMockChatApi(),
     undefined,
-    execute,
+    undefined,
+    undefined,
+    undefined,
+    rejectClipboardWrite,
   )
   await dispatch(instance, { name: 'task:mock-task-1', type: 'click' })
   const copyButton = getNodesByClass(

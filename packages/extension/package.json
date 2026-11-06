@@ -34,7 +34,7 @@
     "@lvce-editor/rpc-registry": "9.67.1"
   },
   "devDependencies": {
-    "@lvce-editor/api": "9.54.0",
+    "@lvce-editor/api": "9.54.1",
     "@lvce-editor/virtual-dom-worker": "11.25.2",
     "jest": "^30.5.2",
     "ts-jest": "^29.4.15"

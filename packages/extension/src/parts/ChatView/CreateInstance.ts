@@ -4,6 +4,7 @@ import {
   getPreference,
   getWorkspaceUri,
   setPreference,
+  writeClipboardText as writeClipboardTextApi,
   type MenuEntry,
   type ViewContext,
   type ViewEvent,
@@ -53,11 +54,12 @@ import { isChatViewState } from './ChatViewComponentState.ts'
 import { getZoomCommand } from './ChatViewZoom.ts'
 import { readFontFamily } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
-import { render } from './Render.ts'
+import { render, renderCss } from './Render.ts'
 import { readTaskOpenMode } from './TaskOpenMode.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
+  readonly getCss: () => string
   readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
   readonly getState: () => Readonly<ChatViewState>
   readonly handleDragOver: () => void
@@ -387,6 +389,7 @@ export const createInstance = async (
   execute: ExecuteCommand = executeCommand,
   defaultApiHost: DefaultChatApiHost = defaultChatApiHost,
   imageTransferHost: ImageTransferHost = defaultImageTransferHost,
+  writeClipboardText: (text: string) => Promise<void> = writeClipboardTextApi,
 ): Promise<ActiveChatViewInstance> => {
   let pendingWorkbenchLayout: 'ide' | 'ai-native' | undefined
   let authenticationRejected = false
@@ -1046,6 +1049,9 @@ export const createInstance = async (
         'chat2.taskRunning': state.selectedTask?.status === 'running',
       }
     },
+    getCss(): string {
+      return renderCss(state)
+    },
     getMenuEntries(menuId: string): readonly MenuEntry[] {
       if (menuId !== titleMenuId || !state.selectedTask) {
         return []
@@ -1226,7 +1232,7 @@ export const createInstance = async (
           message?.type === 'user-message'
         ) {
           try {
-            await execute('ClipBoard.writeText', message.text)
+            await writeClipboardText(message.text)
           } catch (error) {
             state.errorMessage = `Unable to copy message: ${error instanceof Error ? error.message : String(error)}`
             return

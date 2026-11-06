@@ -31,6 +31,17 @@ const getMessageDateFormatter = (() => {
   }
 })()
 
+const toCssClassToken = (value: string): string =>
+  Array.from(value, (character) => character.codePointAt(0)?.toString(16)).join(
+    '_',
+  )
+
+const getTaskListStyleClass = (fontFamily: string, fontSize: string): string =>
+  `ChatTaskListStyle-${toCssClassToken(fontFamily + '-' + fontSize)}`
+
+const getSessionsWidthClass = (width: number): string =>
+  `ChatSessionsWidth-${width}`
+
 const formatMessageDate = (timestamp: string): string => {
   const date = new Date(timestamp)
   return Number.isNaN(date.getTime())
@@ -62,7 +73,7 @@ const getStatusLabel = (task: ChatTask): string => {
 const renderTask = (
   task: ChatTask,
   taskOpenMode: ChatViewState['taskOpenMode'],
-): Dom.TreeNode => {
+): Dom.Node => {
   const status = getStatusLabel(task)
   return Dom.div('ChatTaskItem', [
     Dom.button(
@@ -91,7 +102,7 @@ const renderTaskList = (
   fontFamily: string,
   fontSize: string,
   taskOpenMode: ChatViewState['taskOpenMode'],
-): Dom.TreeNode => {
+): Dom.Node => {
   if (tasks.length === 0) {
     return Dom.div('ChatEmptyState', [
       Dom.heading(2, 'ChatEmptyTitle', 'Start with a programming task'),
@@ -103,11 +114,8 @@ const renderTaskList = (
     ])
   }
   return Dom.div(
-    'ChatTaskList',
+    `ChatTaskList ${getTaskListStyleClass(fontFamily, fontSize)}`,
     tasks.map((task) => renderTask(task, taskOpenMode)),
-    {
-      style: `--ChatTaskFontFamily: ${fontFamily}; --ChatTaskFontSize: ${fontSize}`,
-    },
   )
 }
 
@@ -180,8 +188,8 @@ const trimUrl = (value: string): string => {
   return url
 }
 
-const renderMessageTextWithUrls = (text: string): readonly Dom.TreeNode[] => {
-  const children: Dom.TreeNode[] = []
+const renderMessageTextWithUrls = (text: string): readonly Dom.Node[] => {
+  const children: Dom.Node[] = []
   let previousIndex = 0
   for (const match of text.matchAll(urlPattern)) {
     const matchIndex = match.index
@@ -199,9 +207,7 @@ const renderMessageTextWithUrls = (text: string): readonly Dom.TreeNode[] => {
   return children
 }
 
-const renderMessageTextWithoutBold = (
-  text: string,
-): readonly Dom.TreeNode[] => {
+const renderMessageTextWithoutBold = (text: string): readonly Dom.Node[] => {
   const normalizedText = text.replaceAll(
     fileCitationPattern,
     (_marker: string, destination: string) => {
@@ -212,7 +218,7 @@ const renderMessageTextWithoutBold = (
       return `[${label || 'Source'}](${uri})`
     },
   )
-  const children: Dom.TreeNode[] = []
+  const children: Dom.Node[] = []
   let previousIndex = 0
   let link = findNextMarkdownLink(normalizedText, previousIndex)
   while (link) {
@@ -340,10 +346,10 @@ const renderMarkdownHeadingLine = (
   lineStart: number,
   previousOffset: number,
 ): {
-  readonly children: readonly Dom.TreeNode[]
+  readonly children: readonly Dom.Node[]
   readonly previousOffset: number
 } => {
-  const children: Dom.TreeNode[] = []
+  const children: Dom.Node[] = []
   if (lineStart > previousOffset) {
     children.push(
       ...renderMessageInlineText(text.slice(previousOffset, lineStart)),
@@ -370,7 +376,7 @@ const renderTableCell = (
   cell: string,
   type: number,
   alignment: string,
-): Dom.TreeNode => {
+): Dom.Node => {
   return Dom.node(
     type,
     {
@@ -389,8 +395,8 @@ const renderMarkdownTable = (
   header: MarkdownTableRow,
   rows: readonly MarkdownTableRow[],
   alignments: readonly string[],
-): Dom.TreeNode => {
-  const renderRow = (row: MarkdownTableRow, type: number): Dom.TreeNode =>
+): Dom.Node => {
+  const renderRow = (row: MarkdownTableRow, type: number): Dom.Node =>
     Dom.node(
       VirtualDomElements.Tr,
       {},
@@ -551,8 +557,8 @@ const createJsonToken = (
   return undefined
 }
 
-const renderJsonCode = (text: string): readonly Dom.TreeNode[] => {
-  const children: Dom.TreeNode[] = []
+const renderJsonCode = (text: string): readonly Dom.Node[] => {
+  const children: Dom.Node[] = []
   let previousIndex = 0
   let index = 0
   while (index < text.length) {
@@ -578,7 +584,7 @@ const renderJsonCode = (text: string): readonly Dom.TreeNode[] => {
   return children
 }
 
-const renderCodeBlock = (text: string, language: string): Dom.TreeNode => {
+const renderCodeBlock = (text: string, language: string): Dom.Node => {
   const children =
     language.toLowerCase() === 'json'
       ? renderJsonCode(text)
@@ -592,8 +598,8 @@ const renderCodeBlock = (text: string, language: string): Dom.TreeNode => {
   ])
 }
 
-const renderMessageTextWithCode = (text: string): readonly Dom.TreeNode[] => {
-  const children: Dom.TreeNode[] = []
+const renderMessageTextWithCode = (text: string): readonly Dom.Node[] => {
+  const children: Dom.Node[] = []
   let previousIndex = 0
   while (previousIndex < text.length) {
     const openingFence = findNextOpeningFence(text, previousIndex)
@@ -628,8 +634,8 @@ const renderMessageTextWithCode = (text: string): readonly Dom.TreeNode[] => {
   return children
 }
 
-const renderMessageInlineText = (text: string): readonly Dom.TreeNode[] => {
-  const children: Dom.TreeNode[] = []
+const renderMessageInlineText = (text: string): readonly Dom.Node[] => {
+  const children: Dom.Node[] = []
   let previousIndex = 0
   for (const match of text.matchAll(boldPattern)) {
     const matchIndex = match.index
@@ -695,7 +701,7 @@ const getMarkdownTableAtLine = (
   }
 }
 
-const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
+const renderMessageText = (text: string): readonly Dom.Node[] => {
   const lines = text.split('\n')
   const lineStarts: number[] = []
   let offset = 0
@@ -703,7 +709,7 @@ const renderMessageText = (text: string): readonly Dom.TreeNode[] => {
     lineStarts.push(offset)
     offset += line.length + 1
   }
-  const children: Dom.TreeNode[] = []
+  const children: Dom.Node[] = []
   let previousOffset = 0
   let lineIndex = 0
   while (lineIndex < lines.length) {
@@ -760,7 +766,7 @@ const renderMessage = (
     { type: 'assistant-message' | 'user-message' }
   >,
   copiedMessageId: string,
-): Dom.TreeNode => {
+): Dom.Node => {
   const roleClass =
     message.type === 'user-message' ? 'ChatMessageUser' : 'ChatMessageAssistant'
   const copied = message.id === copiedMessageId
@@ -801,13 +807,13 @@ const renderMessage = (
   ])
 }
 
-const renderStreamingMessage = (text: string): Dom.TreeNode => {
+const renderStreamingMessage = (text: string): Dom.Node => {
   return Dom.div('ChatMessage ChatMessageAssistant ChatMessageStreaming', [
     Dom.div('ChatMessageText', renderMessageTextWithCode(text)),
   ])
 }
 
-const renderModel = (model: ChatModel): Dom.TreeNode => {
+const renderModel = (model: ChatModel): Dom.Node => {
   const unavailable = !model.available || !model.planEligible
   const suffix = unavailable ? ' · unavailable on this plan' : ''
   return Dom.button(
@@ -823,7 +829,7 @@ const renderModel = (model: ChatModel): Dom.TreeNode => {
   )
 }
 
-const renderModelPicker = (state: Readonly<ChatViewState>): Dom.TreeNode => {
+const renderModelPicker = (state: Readonly<ChatViewState>): Dom.Node => {
   const { models } = state
   return Dom.div(
     'Chat2ModelPicker',
@@ -845,7 +851,7 @@ const getSelectedModelLabel = (state: Readonly<ChatViewState>): string => {
   )
 }
 
-const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
+const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
   const {
     composerImages,
     draft,
@@ -930,7 +936,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 
 const renderFocusModeButton = (
   state: Readonly<ChatViewState>,
-): readonly Dom.TreeNode[] => {
+): readonly Dom.Node[] => {
   const { focusMode, focusModeEnabled } = state
   if (!focusModeEnabled || focusMode) {
     return []
@@ -979,7 +985,7 @@ const getAiNativeThemeClassName = (
   return theme === 'default' ? '' : ` ChatAiNativeLayoutTheme-${theme}`
 }
 
-const renderListView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
+const renderListView = (state: Readonly<ChatViewState>): Dom.Node => {
   const { errorMessage, fontFamily, fontSize, taskOpenMode, tasks } = state
   return Dom.div(
     getRootClassName(state, 'ChatListView'),
@@ -1019,7 +1025,7 @@ const getLatestActivities = (
   return [...latest.values()].slice(-8)
 }
 
-const renderActivity = (state: Readonly<ChatViewState>): Dom.TreeNode => {
+const renderActivity = (state: Readonly<ChatViewState>): Dom.Node => {
   const { activityExpanded, selectedTask: task, workingSeconds } = state
   if (!task) {
     return Dom.div('ChatActivityHidden', [])
@@ -1054,7 +1060,7 @@ const renderChangedFile = (
   file: ChatChangedFile,
   index: number,
   expanded: boolean,
-): Dom.TreeNode => {
+): Dom.Node => {
   return Dom.div(
     `ChatChangedFile ChatChangedFile-${file.status}${index > 0 ? ' ChatChangedFileFollowing' : ''}`,
     [
@@ -1074,7 +1080,7 @@ const renderChangedFile = (
   )
 }
 
-const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
+const renderChanges = (state: Readonly<ChatViewState>): Dom.Node => {
   const { changesExpanded, selectedTask: task } = state
   if (!task) {
     return Dom.div('ChatChangesHidden', [])
@@ -1141,7 +1147,7 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.TreeNode => {
   ])
 }
 
-const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
+const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
   const {
     copiedMessageId,
     errorMessage,
@@ -1233,7 +1239,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.TreeNode => {
 
 const renderAiNativeSessions = (
   state: Readonly<ChatViewState>,
-): readonly Dom.TreeNode[] => {
+): readonly Dom.Node[] => {
   const {
     fontFamily,
     fontSize,
@@ -1245,22 +1251,18 @@ const renderAiNativeSessions = (
   if (!sessionsListVisible) {
     return []
   }
+  const sessionsClassName =
+    sessionsWidth === undefined
+      ? 'ChatSessions'
+      : `ChatSessions ${getSessionsWidthClass(sessionsWidth)}`
   return [
-    Dom.div(
-      'ChatSessions',
-      [
-        Dom.div('ChatTaskListHeader', [
-          Dom.heading(1, 'ChatTitle', 'Sessions'),
-          Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
-        ]),
-        renderTaskList(tasks, fontFamily, fontSize, taskOpenMode),
-      ],
-      {
-        ...(sessionsWidth !== undefined && {
-          style: `--ChatSessionsWidth: ${sessionsWidth}px`,
-        }),
-      },
-    ),
+    Dom.div(sessionsClassName, [
+      Dom.div('ChatTaskListHeader', [
+        Dom.heading(1, 'ChatTitle', 'Sessions'),
+        Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
+      ]),
+      renderTaskList(tasks, fontFamily, fontSize, taskOpenMode),
+    ]),
     Dom.node(VirtualDomElements.Div, {
       ariaLabel: 'Resize sessions panel',
       ariaOrientation: 'vertical',
@@ -1286,33 +1288,27 @@ const renderDom = (
     sessionsVisible,
   } = state
   if (loginRequired) {
-    return Dom.flatten(
-      Dom.div(
-        `${getRootClassName(state, 'ChatLoggedOut')}${focusMode ? getAiNativeThemeClassName(aiNativeTheme) : ''}`,
-        [
-          ...renderFocusModeButton(state),
-          Dom.node(
-            VirtualDomElements.P,
-            { className: 'ChatLoginDescription' },
-            [
-              Dom.textNode(
-                'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
-              ),
-            ],
+    return Dom.div(
+      `${getRootClassName(state, 'ChatLoggedOut')}${focusMode ? getAiNativeThemeClassName(aiNativeTheme) : ''}`,
+      [
+        ...renderFocusModeButton(state),
+        Dom.node(VirtualDomElements.P, { className: 'ChatLoginDescription' }, [
+          Dom.textNode(
+            'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
           ),
-          Dom.button('login', 'Login', 'ChatLoginButton', {
-            disabled: loginPending,
-          }),
-          ...(errorMessage && !loginPending
-            ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
-            : []),
-        ],
-        {
-          onClick: 'handleModelPickerOutsideClick',
-          onDragOver: 'handleDragOver',
-          onDrop: 'handleImageDrop',
-        },
-      ),
+        ]),
+        Dom.button('login', 'Login', 'ChatLoginButton', {
+          disabled: loginPending,
+        }),
+        ...(errorMessage && !loginPending
+          ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
+          : []),
+      ],
+      {
+        onClick: 'handleModelPickerOutsideClick',
+        onDragOver: 'handleDragOver',
+        onDrop: 'handleImageDrop',
+      },
     )
   }
   if (focusMode) {
@@ -1356,26 +1352,32 @@ const renderDom = (
             onDrop: 'handleImageDrop',
           },
         )
-    return Dom.flatten(
-      Dom.div(
-        getAiNativeLayoutViewClassName(aiNativeTheme, sessionsVisible),
-        [...renderAiNativeSessions(state), conversation],
-        {
-          onClick: 'handleModelPickerOutsideClick',
-          onDragOver: 'handleDragOver',
-          onDrop: 'handleImageDrop',
-          onKeyDown: 'handleKeyDown',
-        },
-      ),
+    return Dom.div(
+      getAiNativeLayoutViewClassName(aiNativeTheme, sessionsVisible),
+      [...renderAiNativeSessions(state), conversation],
+      {
+        onClick: 'handleModelPickerOutsideClick',
+        onDragOver: 'handleDragOver',
+        onDrop: 'handleImageDrop',
+        onKeyDown: 'handleKeyDown',
+      },
     )
   }
-  return Dom.flatten(
-    selectedTask ? renderDetailView(state) : renderListView(state),
-  )
+  return selectedTask ? renderDetailView(state) : renderListView(state)
 }
 
 export const render = (
   state: Readonly<ChatViewState>,
 ): readonly VirtualDomNode[] => {
   return applyLayoutClasses(state, renderDom(state))
+}
+
+export const renderCss = (state: Readonly<ChatViewState>): string => {
+  const { fontFamily, fontSize, sessionsWidth } = state
+  const taskListClass = getTaskListStyleClass(fontFamily, fontSize)
+  const sessionsWidthCss =
+    sessionsWidth === undefined
+      ? ''
+      : `.${getSessionsWidthClass(sessionsWidth)}{--ChatSessionsWidth:${sessionsWidth}px}`
+  return `.${taskListClass}{--ChatTaskFontFamily:${fontFamily};--ChatTaskFontSize:${fontSize}}${sessionsWidthCss}`
 }
