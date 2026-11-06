@@ -1698,6 +1698,60 @@ test('uses the configured task list font family', async () => {
   )
 })
 
+test('uses the role-specific message font defaults', async () => {
+  const instance = await createTestInstance()
+
+  expect(instance.getState().assistantMessageFontFamily).toBe(
+    "Georgia, 'Times New Roman', serif",
+  )
+  expect(instance.getState().userMessageFontFamily).toBe('sans-serif')
+  expect(instance.getCss?.()).toContain(
+    ".ChatMessageAssistant .ChatMessageText{font-family:Georgia, 'Times New Roman', serif}",
+  )
+})
+
+test('reads independent role-specific message font preferences', async () => {
+  const instance = await createTestInstance(0, async (key) => {
+    if (key === 'chat2.assistantMessageFontFamily') {
+      return '"Fira Code", monospace'
+    }
+    if (key === 'chat2.userMessageFontFamily') {
+      return 'Arial, sans-serif'
+    }
+  })
+
+  expect(instance.getState().assistantMessageFontFamily).toBe(
+    '"Fira Code", monospace',
+  )
+  expect(instance.getState().userMessageFontFamily).toBe('Arial, sans-serif')
+  expect(instance.getCss?.()).toContain(
+    '.ChatMessageAssistant .ChatMessageText{font-family:"Fira Code", monospace}',
+  )
+  expect(instance.getCss?.()).toContain(
+    '.ChatMessageUser .ChatMessageText{font-family:Arial, sans-serif}',
+  )
+})
+
+test.each([
+  ['chat2.assistantMessageFontFamily', "Georgia, 'Times New Roman', serif"],
+  ['chat2.userMessageFontFamily', 'sans-serif'],
+])(
+  'uses the role default for invalid message font family %s',
+  async (preferenceKey, expected) => {
+    for (const fontFamily of ['', 'Arial; color: red', 'Arial\nmonospace']) {
+      const instance = await createTestInstance(0, async (key) => {
+        return key === preferenceKey ? fontFamily : undefined
+      })
+
+      const stateKey =
+        preferenceKey === 'chat2.assistantMessageFontFamily'
+          ? 'assistantMessageFontFamily'
+          : 'userMessageFontFamily'
+      expect(instance.getState()[stateKey]).toBe(expected)
+    }
+  },
+)
+
 test.each([undefined, 20, '', 'Arial; color: red', 'Arial\nmonospace'])(
   'falls back for invalid task list font family %p',
   async (fontFamily) => {

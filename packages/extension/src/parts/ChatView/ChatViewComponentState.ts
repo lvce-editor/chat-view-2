@@ -122,6 +122,7 @@ const booleanStateKeys = [
 ] as const
 
 const stringStateKeys = [
+  'assistantMessageFontFamily',
   'copiedMessageId',
   'draft',
   'errorMessage',
@@ -129,6 +130,7 @@ const stringStateKeys = [
   'fontSize',
   'selectedModelId',
   'selectedThinkingMode',
+  'userMessageFontFamily',
 ] as const
 
 export const isChatViewState = (value: unknown): value is ChatViewState => {
