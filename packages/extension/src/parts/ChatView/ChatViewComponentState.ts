@@ -26,7 +26,12 @@ const isChatModel = (value: unknown): value is ChatModel => {
     typeof value.available === 'boolean' &&
     typeof value.id === 'string' &&
     typeof value.label === 'string' &&
-    typeof value.planEligible === 'boolean'
+    typeof value.planEligible === 'boolean' &&
+    (value.thinkingModes === undefined ||
+      (Array.isArray(value.thinkingModes) &&
+        value.thinkingModes.every((mode) =>
+          ['low', 'medium', 'high'].includes(String(mode)),
+        )))
   )
 }
 
@@ -123,6 +128,7 @@ const stringStateKeys = [
   'fontFamily',
   'fontSize',
   'selectedModelId',
+  'selectedThinkingMode',
 ] as const
 
 export const isChatViewState = (value: unknown): value is ChatViewState => {

@@ -313,6 +313,11 @@ const setWorkbenchLayoutUrl = async (
   }
 }
 
+const thinkingModes = new Set(['low', 'medium', 'high'])
+
+const isThinkingMode = (value: string): value is 'low' | 'medium' | 'high' =>
+  thinkingModes.has(value)
+
 const activeInstances = new Set<ActiveChatViewInstance>()
 
 const getPreferredModelId = async (): Promise<string> => {
@@ -321,6 +326,17 @@ const getPreferredModelId = async (): Promise<string> => {
     return typeof value === 'string' ? value : ''
   } catch {
     return ''
+  }
+}
+
+const getPreferredThinkingMode = async (): Promise<
+  'low' | 'medium' | 'high'
+> => {
+  try {
+    const value = await getPreference('chat2.selectedThinkingMode')
+    return value === 'low' || value === 'high' ? value : 'medium'
+  } catch {
+    return 'medium'
   }
 }
 
@@ -434,6 +450,12 @@ export const createInstance = async (
   const aiNativeTheme = await readAiNativeTheme(readPreference)
   const taskOpenMode = await readTaskOpenMode(readPreference)
   const selectedModelId = getSelectedModelId(models, preferredModelId)
+  const savedThinkingMode = await getPreferredThinkingMode()
+  const selectedThinkingMode = models
+    .find((model) => model.id === selectedModelId)
+    ?.thinkingModes?.includes(savedThinkingMode)
+    ? savedThinkingMode
+    : 'medium'
   const href = await getHref(execute)
   const chatRoute = URL.canParse(href) && isChatPath(new URL(href).pathname)
   const chatHash = parseChatTaskHash(href)
@@ -473,6 +495,7 @@ export const createInstance = async (
     models,
     selectedModelId,
     selectedTask,
+    selectedThinkingMode,
     sessionsListVisible: true,
     sessionsVisible: false,
     taskOpenMode,
@@ -675,6 +698,13 @@ export const createInstance = async (
         nextModels,
         state.selectedModelId,
       )
+      if (
+        !nextModels
+          .find((model) => model.id === state.selectedModelId)
+          ?.thinkingModes?.includes(state.selectedThinkingMode)
+      ) {
+        state.selectedThinkingMode = 'medium'
+      }
       if (nextModels.length > 0) {
         state.errorMessage = ''
       }
@@ -753,6 +783,13 @@ export const createInstance = async (
       syncWorkingTimer(state.selectedTask)
       if (state.selectedTask) {
         state.selectedModelId = state.selectedTask.modelId
+        if (
+          !state.models
+            .find((model) => model.id === state.selectedModelId)
+            ?.thinkingModes?.includes(state.selectedThinkingMode)
+        ) {
+          state.selectedThinkingMode = 'medium'
+        }
         await setChatTaskHash(execute, state.selectedTask.id)
       } else {
         await setChatTaskHash(execute)
@@ -923,6 +960,11 @@ export const createInstance = async (
       }
       const options = {
         attachments,
+        ...(state.models
+          .find((model) => model.id === modelId)
+          ?.thinkingModes?.includes(state.selectedThinkingMode) && {
+          thinkingMode: state.selectedThinkingMode,
+        }),
         onUpdate: (task: ChatTask): Promise<void> => {
           runningTaskId = task.id
           if (task.status === 'idle' || isWorking(task)) {
@@ -1310,8 +1352,24 @@ export const createInstance = async (
         if (model?.available && model.planEligible) {
           state.statusPopup = undefined
           state.selectedModelId = id
+          if (!model.thinkingModes?.includes(state.selectedThinkingMode)) {
+            state.selectedThinkingMode = 'medium'
+          }
           state.modelPickerOpen = false
           await setPreference('chat2.selectedModelId', id)
+        }
+      }
+      if (event.name?.startsWith('thinking-mode:')) {
+        const mode = event.name.slice('thinking-mode:'.length)
+        const selectedModel = state.models.find(
+          (item) => item.id === state.selectedModelId,
+        )
+        if (
+          isThinkingMode(mode) &&
+          selectedModel?.thinkingModes?.includes(mode)
+        ) {
+          state.selectedThinkingMode = mode
+          await setPreference('chat2.selectedThinkingMode', mode)
         }
       }
     },

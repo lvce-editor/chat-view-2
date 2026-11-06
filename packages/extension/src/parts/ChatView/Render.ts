@@ -843,6 +843,27 @@ const renderModelPicker = (state: Readonly<ChatViewState>): Dom.Node => {
   )
 }
 
+const renderThinkingModePicker = (
+  state: Readonly<ChatViewState>,
+): Dom.Node[] => {
+  const { models, selectedModelId, selectedThinkingMode } = state
+  const model = models.find((item) => item.id === selectedModelId)
+  if (!model?.thinkingModes?.length) {
+    return []
+  }
+  return [
+    Dom.div('ChatThinkingModePicker', [
+      Dom.div('ChatThinkingModeLabel', [Dom.textNode('Thinking')]),
+      ...model.thinkingModes.map((mode) =>
+        Dom.button(`thinking-mode:${mode}`, mode, 'ChatThinkingModeOption', {
+          ariaPressed: selectedThinkingMode === mode,
+          title: `${mode[0]?.toUpperCase()}${mode.slice(1)} thinking`,
+        }),
+      ),
+    ]),
+  ]
+}
+
 const getSelectedModelLabel = (state: Readonly<ChatViewState>): string => {
   const { models, selectedModelId } = state
   return (
@@ -992,6 +1013,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
         }),
       ]),
       Dom.div('ChatComposerControls', [
+        ...renderThinkingModePicker(state),
         Dom.div('ChatComposerSpacer', []),
         Dom.button(
           'model-picker',

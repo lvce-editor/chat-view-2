@@ -16,12 +16,14 @@ const models: readonly ChatModel[] = [
     id: 'gpt-5.4',
     label: 'GPT-5.4',
     planEligible: true,
+    thinkingModes: ['low', 'medium', 'high'],
   },
   {
     available: true,
     id: 'gpt-5.4-mini',
     label: 'GPT-5.4 Mini',
     planEligible: true,
+    thinkingModes: ['low', 'medium', 'high'],
   },
   {
     available: true,

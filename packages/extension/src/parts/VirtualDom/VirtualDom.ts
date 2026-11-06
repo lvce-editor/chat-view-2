@@ -79,6 +79,7 @@ export const button = (
   options: Readonly<{
     ariaLabel?: string
     ariaExpanded?: boolean
+    ariaPressed?: boolean
     disabled?: boolean
     onClick?: string
     onMouseDown?: string
@@ -93,6 +94,9 @@ export const button = (
       ...(options.ariaLabel && { ariaLabel: options.ariaLabel }),
       ...(typeof options.ariaExpanded === 'boolean' && {
         ariaExpanded: options.ariaExpanded,
+      }),
+      ...(typeof options.ariaPressed === 'boolean' && {
+        ariaPressed: options.ariaPressed,
       }),
       ...(options.disabled && { disabled: true }),
       name,

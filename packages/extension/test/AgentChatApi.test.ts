@@ -105,6 +105,7 @@ test('runs a multi-step tool loop and records a compact event history', async ()
     onTrace(message) {
       trace.push(message)
     },
+    thinkingMode: 'high',
   })
 
   expect(task.contextUsage).toEqual({
@@ -128,6 +129,8 @@ test('runs a multi-step tool loop and records a compact event history', async ()
       type: 'function_call',
     },
   ])
+  expect(runStep.mock.calls[0]?.[0].thinkingMode).toBe('high')
+  expect(runStep.mock.calls[1]?.[0].thinkingMode).toBe('high')
   expect(runStep.mock.calls[0]?.[0].input[0]).toEqual(
     expect.objectContaining({ attachments: [attachment] }),
   )

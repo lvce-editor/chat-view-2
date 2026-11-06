@@ -32,6 +32,7 @@ export interface AgentStepOptions {
   readonly previousResponseId?: string
   readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly signal?: AbortSignal
+  readonly thinkingMode?: 'low' | 'medium' | 'high'
   readonly tools: readonly AgentToolDefinition[]
 }
 

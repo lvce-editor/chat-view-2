@@ -138,6 +138,7 @@ const createResponseRequest = (
       include: ['web_search_call.action.sources'],
     }),
   model: options.modelId,
+  ...(options.thinkingMode && { reasoning: { effort: options.thinkingMode } }),
   ...(options.previousResponseId && {
     previous_response_id: options.previousResponseId,
   }),
@@ -189,6 +190,12 @@ const parseModels = (value: unknown): readonly ChatModel[] => {
               ? model.name
               : model.id,
         planEligible: model.planEligible !== false,
+        ...(Array.isArray(model.thinkingModes) && {
+          thinkingModes: model.thinkingModes.filter(
+            (mode): mode is 'low' | 'medium' | 'high' =>
+              ['low', 'medium', 'high'].includes(mode as string),
+          ),
+        }),
       },
     ]
   })

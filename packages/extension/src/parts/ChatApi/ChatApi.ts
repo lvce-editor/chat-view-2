@@ -13,6 +13,7 @@ export interface ChatModel {
   readonly id: string
   readonly label: string
   readonly planEligible: boolean
+  readonly thinkingModes?: readonly ('low' | 'medium' | 'high')[]
 }
 
 export interface ChatChangedFile {
@@ -165,6 +166,7 @@ export interface ChatRunOptions {
   readonly onTrace?: (message: ChatTraceMessage) => void | Promise<void>
   readonly onUpdate?: (task: ChatTask) => void | Promise<void>
   readonly signal?: AbortSignal
+  readonly thinkingMode?: 'low' | 'medium' | 'high'
 }
 
 export interface ChatApi {
