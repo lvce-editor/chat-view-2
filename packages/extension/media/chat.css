@@ -465,7 +465,7 @@
   border-radius: 5px;
 }
 
-.ChatThinkingModeOption[aria-pressed='true'],
+.ChatThinkingModeOptionSelected,
 .ChatThinkingModeOption:hover {
   background: var(--ChatHoverBackground);
 }

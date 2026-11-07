@@ -937,7 +937,9 @@ const renderThinkingModePicker = (
                 Dom.button(
                   `thinking-mode:${mode}`,
                   `${mode[0]?.toUpperCase()}${mode.slice(1)}`,
-                  'ChatThinkingModeOption',
+                  selectedThinkingMode === mode
+                    ? 'ChatThinkingModeOption ChatThinkingModeOptionSelected'
+                    : 'ChatThinkingModeOption',
                   {
                     ariaPressed: selectedThinkingMode === mode,
                     title: `${mode[0]?.toUpperCase()}${mode.slice(1)} thinking`,
