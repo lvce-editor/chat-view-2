@@ -1201,6 +1201,73 @@ test('preserves web citations and identifies native weather feeds', async () => 
   )
 })
 
+test('omits unused web search results while keeping cited links and native feeds', async () => {
+  const unusedSources = Array.from({ length: 20 }, (_, index) => ({
+    title: `Unused article ${index}`,
+    url: `https://news.example.com/unused-${index}`,
+  }))
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: jest.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'resp-compact-sources',
+        output: [
+          {
+            action: {
+              sources: [
+                { name: 'oai-weather', type: 'api' },
+                { title: 'Used article', url: 'https://news.example.com/used' },
+                {
+                  title: 'Another used article',
+                  url: 'https://news.example.com/another',
+                },
+                ...unusedSources,
+                {
+                  title: 'Repeated unused article',
+                  url: 'https://news.example.com/unused-0',
+                },
+              ],
+            },
+            type: 'web_search_call',
+          },
+          {
+            content: [
+              {
+                annotations: [
+                  {
+                    end_index: 13,
+                    title: 'Used article',
+                    type: 'url_citation',
+                    url: 'https://news.example.com/used',
+                  },
+                  {
+                    end_index: 28,
+                    title: 'Another used article',
+                    type: 'url_citation',
+                    url: 'https://news.example.com/another',
+                  },
+                ],
+                text: 'First source. Second source.',
+                type: 'output_text',
+              },
+            ],
+            type: 'message',
+          },
+        ],
+      }),
+    ),
+  })
+  const result = await backend.runStep({
+    input: [],
+    modelId: 'gpt-5-test',
+    onTextDelta() {},
+    tools: [],
+  })
+  expect(result.text).toBe(
+    'First source. [Used article](https://news.example.com/used) Second source. [Another used article](https://news.example.com/another)\n\nSources: OpenAI weather feed',
+  )
+})
+
 test('cancelling a stream drains the current delta before releasing its turn', async () => {
   const socket = new MockResponsesWebSocket()
   const controller = new AbortController()

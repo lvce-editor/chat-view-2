@@ -637,25 +637,8 @@ const feedLabels = new Map([
   ['oai-sports', 'OpenAI sports feed'],
 ])
 
-const addSource = (
-  sources: Map<string, string>,
-  source: Readonly<Record<string, unknown>>,
-): void => {
-  if (typeof source.url !== 'string' || !URL.canParse(source.url)) {
-    return
-  }
-  const url = new URL(source.url)
-  if (url.protocol === 'https:' || url.protocol === 'http:') {
-    sources.set(
-      url.href,
-      typeof source.title === 'string' ? source.title : url.hostname,
-    )
-  }
-}
-
 const collectSearchSources = (
   item: Readonly<Record<string, unknown>>,
-  sources: Map<string, string>,
   feeds: Set<string>,
 ): void => {
   const action = getRecord(item.action)
@@ -672,14 +655,12 @@ const collectSearchSources = (
       if (label) {
         feeds.add(label)
       }
-      addSource(sources, source)
     }
   }
 }
 
 const getMessagePartText = (
   part: Readonly<Record<string, unknown>>,
-  sources: Map<string, string>,
 ): string => {
   const { annotations: annotationValue, text } = part
   if (typeof text !== 'string') {
@@ -694,7 +675,6 @@ const getMessagePartText = (
     if (citation?.type !== 'url_citation') {
       continue
     }
-    addSource(sources, citation)
     if (
       typeof citation.url !== 'string' ||
       !Number.isSafeInteger(citation.end_index) ||
@@ -726,7 +706,6 @@ const getMessagePartText = (
 
 const collectMessageText = (
   item: Readonly<Record<string, unknown>>,
-  sources: Map<string, string>,
 ): string => {
   if (!Array.isArray(item.content)) {
     return ''
@@ -734,7 +713,7 @@ const collectMessageText = (
   const chunks = item.content.map((value) => {
     const part = getRecord(value)
     return part?.type === 'output_text' || part?.type === 'text'
-      ? getMessagePartText(part, sources)
+      ? getMessagePartText(part)
       : ''
   })
   return chunks.join('')
@@ -746,35 +725,21 @@ const getResponseText = (
   if (!Array.isArray(response.output)) {
     return typeof response.output_text === 'string' ? response.output_text : ''
   }
-  const sources = new Map<string, string>()
   const feeds = new Set<string>()
   const chunks: string[] = []
   for (const value of response.output) {
     const item = getRecord(value)
     if (item?.type === 'web_search_call') {
-      collectSearchSources(item, sources, feeds)
+      collectSearchSources(item, feeds)
     }
     if (item?.type === 'message') {
-      chunks.push(collectMessageText(item, sources))
+      chunks.push(collectMessageText(item))
     }
   }
   const text =
     chunks.join('') ||
     (typeof response.output_text === 'string' ? response.output_text : '')
-  const citedUrls = new Set(
-    Array.from(
-      text.matchAll(/\]\((https?:\/\/[^)]+)\)/gu),
-      (match) => match[1],
-    ),
-  )
-  const remainingLinks = [...sources].filter(([url]) => !citedUrls.has(url))
-  const references = [
-    ...remainingLinks.map(
-      ([url, title]) =>
-        `[${title.replaceAll(sourceTitleBrackets, '')}](${url.replaceAll('(', '%28').replaceAll(')', '%29')})`,
-    ),
-    ...feeds,
-  ]
+  const references = [...feeds]
   return references.length > 0
     ? `${text}\n\nSources: ${references.join(', ')}`
     : text
