@@ -480,6 +480,15 @@ export const createInstance = async (
     ?.thinkingModes?.includes(savedThinkingMode)
     ? savedThinkingMode
     : 'medium'
+  let thinkingModeEnabled = true
+  try {
+    thinkingModeEnabled =
+      (await (readPreference
+        ? readPreference('chat2.thinkingModeEnabled')
+        : getPreference('chat2.thinkingModeEnabled'))) !== false
+  } catch {
+    // Keep the selector available when preferences are unavailable.
+  }
   const href = await getHref(execute)
   const chatRoute = URL.canParse(href) && isChatPath(new URL(href).pathname)
   const chatHash = parseChatTaskHash(href)
@@ -525,6 +534,8 @@ export const createInstance = async (
     sessionsVisible: false,
     taskOpenMode,
     tasks,
+    thinkingModeEnabled,
+    thinkingModePickerOpen: false,
     userMessageFontFamily,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
@@ -1362,6 +1373,12 @@ export const createInstance = async (
       if (event.name === 'model-picker') {
         state.statusPopup = undefined
         state.modelPickerOpen = !state.modelPickerOpen
+        state.thinkingModePickerOpen = false
+        return
+      }
+      if (event.name === 'thinking-mode-picker') {
+        state.modelPickerOpen = false
+        state.thinkingModePickerOpen = !state.thinkingModePickerOpen
         return
       }
       if (event.name === 'toggle-activity') {
@@ -1430,6 +1447,7 @@ export const createInstance = async (
             state.selectedThinkingMode = 'medium'
           }
           state.modelPickerOpen = false
+          state.thinkingModePickerOpen = false
           await writePreference('chat2.selectedModelId', id)
         }
       }
@@ -1443,6 +1461,7 @@ export const createInstance = async (
           selectedModel?.thinkingModes?.includes(mode)
         ) {
           state.selectedThinkingMode = mode
+          state.thinkingModePickerOpen = false
           await writePreference('chat2.selectedThinkingMode', mode)
         }
       }
@@ -1533,6 +1552,9 @@ export const createInstance = async (
       if (key === 'Escape' && state.modelPickerOpen) {
         state.modelPickerOpen = false
       }
+      if (key === 'Escape' && state.thinkingModePickerOpen) {
+        state.thinkingModePickerOpen = false
+      }
     },
     handleModelPickerOutsideClick(name: unknown, value: unknown): void {
       if (name === 'composer' && typeof value === 'string') {
@@ -1551,6 +1573,14 @@ export const createInstance = async (
         !(typeof name === 'string' && name.startsWith('model:'))
       ) {
         state.modelPickerOpen = false
+      }
+      if (
+        state.thinkingModePickerOpen &&
+        name !== 'thinking-mode-picker' &&
+        name !== 'thinking-mode-popup' &&
+        !(typeof name === 'string' && name.startsWith('thinking-mode:'))
+      ) {
+        state.thinkingModePickerOpen = false
       }
     },
     handleRenameTask,

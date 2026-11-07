@@ -61,6 +61,11 @@
       "default": "",
       "description": "The preferred model for new Chat 2 tasks."
     },
+    "chat2.thinkingModeEnabled": {
+      "type": "boolean",
+      "default": true,
+      "description": "Show the thinking mode selector when the selected model supports it."
+    },
     "chat2.titleModelId": {
       "type": "string",
       "enum": ["gpt-6-luna", "gpt-5.6-luna"],

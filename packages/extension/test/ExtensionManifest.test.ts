@@ -170,6 +170,7 @@ test('contributes every preference read by Chat 2', async () => {
       'chat2.selectedModelId',
       'chat2.supportsStreaming',
       'chat2.taskOpenMode',
+      'chat2.thinkingModeEnabled',
       'chat2.titleModelId',
       'chat2.useMockBackend',
       'chat2.userMessageFontFamily',

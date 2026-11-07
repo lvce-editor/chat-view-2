@@ -27,6 +27,8 @@ const createState = (): ChatViewState => ({
   sessionsVisible: false,
   taskOpenMode: 'mousedown',
   tasks: [],
+  thinkingModeEnabled: true,
+  thinkingModePickerOpen: false,
   userMessageFontFamily: 'sans-serif',
   workingSeconds: 0,
 })

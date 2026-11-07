@@ -906,21 +906,51 @@ const renderModelPicker = (state: Readonly<ChatViewState>): Dom.Node => {
 const renderThinkingModePicker = (
   state: Readonly<ChatViewState>,
 ): Dom.Node[] => {
-  const { models, selectedModelId, selectedThinkingMode } = state
+  const {
+    models,
+    selectedModelId,
+    selectedThinkingMode,
+    thinkingModeEnabled,
+    thinkingModePickerOpen,
+  } = state
   const model = models.find((item) => item.id === selectedModelId)
-  if (!model?.thinkingModes?.length) {
+  if (!thinkingModeEnabled || !model?.thinkingModes?.length) {
     return []
   }
+  const label = `${selectedThinkingMode[0]?.toUpperCase()}${selectedThinkingMode.slice(1)}`
   return [
-    Dom.div('ChatThinkingModePicker', [
-      Dom.div('ChatThinkingModeLabel', [Dom.textNode('Thinking')]),
-      ...model.thinkingModes.map((mode) =>
-        Dom.button(`thinking-mode:${mode}`, mode, 'ChatThinkingModeOption', {
-          ariaPressed: selectedThinkingMode === mode,
-          title: `${mode[0]?.toUpperCase()}${mode.slice(1)} thinking`,
-        }),
-      ),
-    ]),
+    Dom.button(
+      'thinking-mode-picker',
+      `Thinking · ${label}`,
+      'ChatThinkingModeButton',
+      { ariaExpanded: thinkingModePickerOpen },
+    ),
+    ...(thinkingModePickerOpen
+      ? [
+          Dom.div(
+            'ChatThinkingModePopup',
+            [
+              Dom.div('ChatThinkingModePopupTitle', [
+                Dom.textNode('Thinking mode'),
+              ]),
+              ...model.thinkingModes.map((mode) =>
+                Dom.button(
+                  `thinking-mode:${mode}`,
+                  `${mode[0]?.toUpperCase()}${mode.slice(1)}`,
+                  selectedThinkingMode === mode
+                    ? 'ChatThinkingModeOption ChatThinkingModeOptionSelected'
+                    : 'ChatThinkingModeOption',
+                  {
+                    ariaPressed: selectedThinkingMode === mode,
+                    title: `${mode[0]?.toUpperCase()}${mode.slice(1)} thinking`,
+                  },
+                ),
+              ),
+            ],
+            { name: 'thinking-mode-popup' },
+          ),
+        ]
+      : []),
   ]
 }
 

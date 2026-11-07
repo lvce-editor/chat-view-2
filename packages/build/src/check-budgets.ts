@@ -4,7 +4,7 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  ['chatMain.js', 300_000],
+  ['chatMain.js', 302_000],
   ['chatToolWorkerMain.js', 100_000],
   ['commandProcessMain.js', 200_000],
   ['typeScriptEvaluationWorkerMain.js', 6_000_000],

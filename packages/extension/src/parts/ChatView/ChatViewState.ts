@@ -50,6 +50,8 @@ export interface ChatViewState {
   readonly statusPopup?: ChatStatusPopup | undefined
   readonly taskOpenMode: TaskOpenMode
   readonly tasks: readonly ChatTask[]
+  readonly thinkingModeEnabled: boolean
+  readonly thinkingModePickerOpen: boolean
   readonly userMessageFontFamily: string
   readonly workingSeconds: number
 }
