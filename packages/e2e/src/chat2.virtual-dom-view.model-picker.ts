@@ -28,6 +28,8 @@ export const test: Test = async ({
   await expect(picker).toHaveJSProperty('offsetTop', -199)
   await expect(picker).toHaveCSS('right', '16px')
   await expect(picker).toHaveCSS('max-width', '300px')
+  await expect(picker).toHaveCSS('overflow-y', 'auto')
+  await expect(picker).toHaveCSS('scrollbar-width', 'thin')
   await expect(options).toHaveCount(5)
   await expect(options.first()).toHaveCSS('overflow', 'hidden')
   await expect(options.first()).toHaveCSS('text-overflow', 'ellipsis')
