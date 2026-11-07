@@ -26,11 +26,22 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await option.click()
 
   await expect(toggle).toContainText('GPT-5.4 Mini')
-  const thinkingPicker = Locator('.ChatThinkingModePicker')
-  await expect(thinkingPicker).toHaveCount(1)
+  const thinkingToggle = Locator('button[name="thinking-mode-picker"]')
+  const thinkingPopup = Locator('.ChatThinkingModePopup')
+  await expect(thinkingToggle).toContainText('Medium')
+  await expect(thinkingPopup).toHaveCount(0)
+  // eslint-disable-next-line e2e/no-direct-click
+  await thinkingToggle.click()
+  await expect(thinkingPopup).toHaveCount(1)
   const highThinking = Locator('button[name="thinking-mode:high"]')
+  const thinkingOptions = Locator('.ChatThinkingModeOption')
+  await expect(thinkingOptions).toHaveCount(3)
   // eslint-disable-next-line e2e/no-direct-click
   await highThinking.click()
+  await expect(thinkingToggle).toContainText('High')
+  await expect(thinkingPopup).toHaveCount(0)
+  // eslint-disable-next-line e2e/no-direct-click
+  await thinkingToggle.click()
   await expect(highThinking).toHaveAttribute('aria-pressed', 'true')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(picker).toHaveCount(0)
