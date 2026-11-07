@@ -2333,7 +2333,13 @@ test('shows supported thinking modes and marks the selected mode', async () => {
     writePreference,
   )
   const initialDom = instance.render() as readonly any[]
-  const initialOptions = getNodesByClass(initialDom, 'ChatThinkingModeOption')
+  expect(getNodesByClass(initialDom, 'ChatThinkingModeOption')).toHaveLength(0)
+  expect(getNodesByClass(initialDom, 'ChatThinkingModeButton')).toHaveLength(1)
+  await dispatch(instance, { name: 'thinking-mode-picker', type: 'click' })
+  const initialOptions = getNodesByClass(
+    instance.render() as readonly any[],
+    'ChatThinkingModeOption',
+  )
   expect(initialOptions).toHaveLength(3)
   expect(initialOptions).toContainEqual(
     expect.objectContaining({
@@ -2343,6 +2349,8 @@ test('shows supported thinking modes and marks the selected mode', async () => {
   )
 
   await dispatch(instance, { name: 'thinking-mode:high', type: 'click' })
+  expect(instance.getState().thinkingModePickerOpen).toBe(false)
+  await dispatch(instance, { name: 'thinking-mode-picker', type: 'click' })
 
   const updatedOptions = getNodesByClass(
     instance.render() as readonly any[],
@@ -2359,6 +2367,32 @@ test('shows supported thinking modes and marks the selected mode', async () => {
     'chat2.selectedThinkingMode',
     'high',
   )
+  instance.dispose?.()
+})
+
+test('hides thinking mode control when its setting is disabled', async () => {
+  const instance = await createTestInstance(0, async (key) =>
+    key === 'chat2.thinkingModeEnabled' ? false : undefined,
+  )
+  expect(
+    getNodesByClass(
+      instance.render() as readonly any[],
+      'ChatThinkingModeButton',
+    ),
+  ).toHaveLength(0)
+  expect(instance.getState().thinkingModePickerOpen).toBe(false)
+  instance.dispose?.()
+})
+
+test('closes the thinking mode popup on outside click and Escape', async () => {
+  const instance = await createTestInstance()
+  await dispatch(instance, { name: 'thinking-mode-picker', type: 'click' })
+  expect(instance.getState().thinkingModePickerOpen).toBe(true)
+  instance.handleModelPickerOutsideClick('composer', undefined)
+  expect(instance.getState().thinkingModePickerOpen).toBe(false)
+  await dispatch(instance, { name: 'thinking-mode-picker', type: 'click' })
+  instance.handleKeyDown('Escape')
+  expect(instance.getState().thinkingModePickerOpen).toBe(false)
   instance.dispose?.()
 })
 
