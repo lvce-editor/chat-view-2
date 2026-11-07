@@ -455,10 +455,11 @@ try {
           await fetch(`${replay.origin}/__replay/resume`, { method: 'POST' })
           await composer.fill('Continue with the forecast.')
           await page.locator('button[name="submit"]:not([disabled])').click()
-          await page.locator('.ChatTaskStatus-running').waitFor()
           await page
-            .locator('.ChatTaskStatus-running')
-            .waitFor({ state: 'detached', timeout: 120_000 })
+            .locator('.ChatMessageAssistant')
+            .last()
+            .filter({ hasText: /Berlin/u })
+            .waitFor({ timeout: 120_000 })
           assert.equal(
             await page
               .locator('.ChatTaskStatus-failed, .ChatError, .ChatErrorBanner')
