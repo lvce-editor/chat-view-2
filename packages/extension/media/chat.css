@@ -1,8 +1,8 @@
 .ChatView {
   --ChatBackground: var(--SideBarBackground, var(--MainBackground, #181a1b));
   --ChatForeground: var(
-    --SideBarForeground,
-    var(--WorkbenchForeground, #cccccc)
+    --MarkdownForeground,
+    var(--SideBarForeground, var(--WorkbenchForeground, #cccccc))
   );
   --ChatMutedForeground: color-mix(
     in srgb,
@@ -18,19 +18,38 @@
     color-mix(in srgb, var(--ChatForeground) 8%, transparent)
   );
   --ChatInputBackground: var(
-    --InputBackground,
-    color-mix(in srgb, var(--ChatForeground) 7%, var(--ChatBackground))
+    --InputBoxBackground,
+    var(
+      --InputBackground,
+      color-mix(in srgb, var(--ChatForeground) 7%, var(--ChatBackground))
+    )
   );
-  --ChatInputForeground: var(--InputForeground, var(--ChatForeground));
-  --ChatFocusBorder: var(--FocusBorder, #3794ff);
+  --ChatInputForeground: var(
+    --InputBoxForeground,
+    var(--InputForeground, var(--ChatForeground))
+  );
+  --ChatInputPlaceholderForeground: var(
+    --InputBoxPlaceholderForeground,
+    var(--ChatMutedForeground)
+  );
+  --ChatFocusBorder: var(--FocusOutline, var(--FocusBorder, #3794ff));
   --ChatCodeKey: #9cdcfe;
   --ChatCodeString: #ce9178;
   --ChatCodeNumber: #b5cea8;
   --ChatCodeLiteral: #569cd6;
   --ChatCodePunctuation: var(--ChatForeground);
-  --ChatButtonBackground: var(--ButtonBackground, #0e639c);
-  --ChatButtonForeground: var(--ButtonForeground, #ffffff);
-  --ChatButtonHoverBackground: var(--ButtonHoverBackground, #1177bb);
+  --ChatButtonBackground: var(
+    --SplitButtonBackground,
+    var(--ButtonBackground, #0e639c)
+  );
+  --ChatButtonForeground: var(
+    --SplitButtonForeground,
+    var(--ButtonForeground, #ffffff)
+  );
+  --ChatButtonHoverBackground: var(
+    --SplitButtonHoverBackground,
+    var(--ButtonHoverBackground, #1177bb)
+  );
   --ChatErrorForeground: var(--ErrorForeground, #f48771);
   --ChatAddedForeground: var(--GitDecorationAddedResourceForeground, #73c991);
   --ChatDeletedForeground: var(
@@ -291,6 +310,7 @@
 }
 
 .ChatComposerInput::placeholder {
+  color: var(--ChatInputPlaceholderForeground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -498,8 +518,6 @@
   padding: 0;
   font-size: 18px;
   line-height: 1;
-  color: #111111;
-  background: #ffffff;
   border-radius: 50%;
 }
 
@@ -517,7 +535,7 @@
 }
 
 .ChatSubmitButton:hover:not(:disabled) {
-  background: #e9e9e9;
+  background: var(--ChatButtonHoverBackground);
 }
 
 .ChatStopButton,
