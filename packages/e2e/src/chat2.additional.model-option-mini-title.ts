@@ -11,14 +11,13 @@ const prepareChat = async (api: TestApi): Promise<void> => {
   await api.ChatView2.show()
 }
 
-export const name = 'chat2.additional.model-picker-escape'
+export const name = 'chat2.additional.model-option-mini-title'
 
 export const test: Test = async (api) => {
   await prepareChat(api)
   const toggle = api.Locator('button[name="model-picker"]')
   await toggle.click()
-  await toggle.type('')
-  await api.KeyBoard.press('Escape')
-  await api.expect(toggle).toHaveAttribute('aria-expanded', 'false')
-  await api.expect(api.Locator('.Chat2ModelPicker')).toHaveCount(0)
+  const option = api.Locator('button[name="model:gpt-5.4-mini"]')
+  await api.expect(option).toBeVisible()
+  await api.expect(option).toHaveAttribute('title', 'GPT-5.4 Mini')
 }
