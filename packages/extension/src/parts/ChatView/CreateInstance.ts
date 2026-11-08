@@ -1507,7 +1507,6 @@ export const createInstance = async (
       if (localImagePathRegex.test(text.trim())) {
         state.errorMessage =
           'This browser only provided the image file path. Copy the image itself or drag the image into the chat.'
-        await context?.requestRerender()
         return
       }
       const start =
@@ -1522,7 +1521,8 @@ export const createInstance = async (
       preserveComposerValue = false
       await saveDraft()
       state.errorMessage = ''
-      await context?.requestRerender()
+      // The host renders after this event returns. Waiting for another render
+      // here would queue it behind this handler and deadlock the view.
     },
     handleKeyDown(
       key: unknown,

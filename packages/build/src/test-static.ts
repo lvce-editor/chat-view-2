@@ -9,7 +9,8 @@ import { extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadEnvFile } from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
-import { chromium } from 'playwright'
+import { chromium, firefox } from 'playwright'
+import { testComposerPaste } from './test-composer-paste.ts'
 import {
   startEvaluationProxy,
   type EvaluationProxy,
@@ -125,8 +126,9 @@ try {
     upstreamBaseUrl:
       process.env.EVALUATION_UPSTREAM_URL || 'http://127.0.0.1:1/api/v1',
   })
-  const browser = await chromium.launch({ headless: true })
-  try {
+  const browserType = process.argv.includes('--firefox') ? firefox : chromium
+  const browser = await browserType.launch({ headless: true })
+  const testExported = async (evaluation: EvaluationProxy): Promise<void> => {
     const startup = await browser.newContext()
     const startupPage = await startup.newPage()
     try {
@@ -335,7 +337,7 @@ try {
         const url = route.request().url()
         if (
           new URL(url).origin !== origin &&
-          new URL(url).origin !== replay?.origin
+          new URL(url).origin !== evaluation.origin
         ) {
           externalRequests.push(url)
           await route.abort()
@@ -374,7 +376,7 @@ try {
                 'chat2.useMockBackend': false,
               }),
             )
-          }, replay.origin)
+          }, evaluation.origin)
           const composer = page.locator('textarea[name="composer"]')
           await composer.fill('Preserve this draft across a real reload')
           await page.locator('button[name="submit"]:not([disabled])').waitFor()
@@ -428,7 +430,7 @@ try {
             .locator('.ChatMessageAssistant')
             .first()
             .waitFor({ state: 'detached' })
-          await fetch(`${replay.origin}/__replay/pause`, { method: 'POST' })
+          await fetch(`${evaluation.origin}/__replay/pause`, { method: 'POST' })
           const before = await responseCount()
           await composer.fill(
             'What is the weather forecast for Berlin, Germany on November 4, 2026? Use web search and cite your sources.',
@@ -452,7 +454,9 @@ try {
             pending,
             'Reload resubmitted an interrupted response',
           )
-          await fetch(`${replay.origin}/__replay/resume`, { method: 'POST' })
+          await fetch(`${evaluation.origin}/__replay/resume`, {
+            method: 'POST',
+          })
           await composer.fill('Continue with the forecast.')
           await page.locator('button[name="submit"]:not([disabled])').click()
           await page
@@ -490,6 +494,12 @@ try {
       }
     }
     assert.deepEqual(failures, [], 'Exported e2e tests failed')
+  }
+  try {
+    await testComposerPaste(browser, baseUrl)
+    if (!process.argv.includes('--paste-only')) {
+      await testExported(replay)
+    }
   } finally {
     await browser.close()
   }

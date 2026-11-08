@@ -1143,6 +1143,29 @@ test('preserves ordinary text paste when image paste prevents the browser defaul
   }
 })
 
+test('text paste finishes without waiting for a render queued behind its event', async () => {
+  const requestRerender = jest.fn(async () => {})
+  const context = { ...createViewContext(undefined), requestRerender }
+  const instance = await createInstance(context, createMockChatApi())
+  try {
+    instance.setState({ ...instance.getState(), draft: 'before after' })
+    requestRerender.mockClear()
+    await instance.handleImagePaste([], 'first line\nsecond line ', 7, 7)
+    expect(instance.getState().draft).toBe(
+      'before first line\nsecond line after',
+    )
+    expect(requestRerender).not.toHaveBeenCalled()
+    expect(instance.render()).toContainEqual(
+      expect.objectContaining({
+        name: 'composer',
+        value: 'before first line\nsecond line after',
+      }),
+    )
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('prevents the browser default while dragging files over the chat', async () => {
   const instance = await createTestInstance()
 
