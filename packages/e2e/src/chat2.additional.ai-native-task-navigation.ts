@@ -1,0 +1,27 @@
+import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+
+/* eslint-disable e2e/no-direct-click */
+
+const prepareChat = async (api: TestApi): Promise<void> => {
+  await api.Main.closeAllEditors()
+  await api.Command.execute('Preferences.update', {
+    'chat2.selectedModelId': 'gpt-5.4',
+    'chat2.useMockBackend': true,
+  })
+  await api.ChatView2.show()
+}
+
+export const name = 'chat2.additional.ai-native-task-navigation'
+
+export const test: Test = async (api) => {
+  await prepareChat(api)
+  await api.Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
+  await api.Locator('.ChatSessions .ChatTaskButton').first().click()
+  await api.expect(api.Locator('.ChatDetailView')).toBeVisible()
+  await api
+    .expect(api.Locator('.ChatDetailTitle'))
+    .toHaveText('Add worker memory usage')
+  await api
+    .expect(api.Locator('.ChatMessageUser'))
+    .toContainText('Add worker memory usage')
+}
