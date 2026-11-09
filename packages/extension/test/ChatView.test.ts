@@ -2630,6 +2630,66 @@ test('shows how many seconds an active task has been working', async () => {
   }
 })
 
+test('keeps the final working duration above the completed response', async () => {
+  jest.useFakeTimers()
+  jest.setSystemTime(Date.parse('2026-07-15T12:05:00.000Z'))
+  const task: ChatTask = {
+    createdAt: '2026-07-15T12:00:00.000Z',
+    events: [
+      {
+        id: 'event-user',
+        text: 'Explain this change',
+        timestamp: '2026-07-15T12:00:00.000Z',
+        type: 'user-message',
+      },
+      {
+        id: 'event-running',
+        status: 'running',
+        timestamp: '2026-07-15T12:00:00.000Z',
+        type: 'status',
+      },
+      {
+        id: 'event-assistant',
+        text: 'Here is the explanation.',
+        timestamp: '2026-07-15T12:00:02.000Z',
+        type: 'assistant-message',
+      },
+      {
+        id: 'event-completed',
+        status: 'completed',
+        timestamp: '2026-07-15T12:00:02.000Z',
+        type: 'status',
+      },
+    ],
+    id: 'completed-task',
+    modelId: 'gpt-5.4',
+    status: 'completed',
+    title: 'Explain this change',
+    updatedAt: '2026-07-15T12:00:02.000Z',
+  }
+
+  try {
+    const instance = await createInstance(
+      createViewContext({ selectedTaskId: task.id }),
+      {
+        ...createMockChatApi(),
+        async getTask() {
+          return task
+        },
+      },
+    )
+    const rendered = getText(instance.render() as readonly any[])
+
+    expect(rendered).toContain('Worked for 2 seconds')
+    expect(rendered.indexOf('Worked for 2 seconds')).toBeLessThan(
+      rendered.indexOf('Here is the explanation.'),
+    )
+    instance.dispose?.()
+  } finally {
+    jest.useRealTimers()
+  }
+})
+
 test('stops an active task', async () => {
   const instance = await createTestInstance(50)
   await dispatch(instance, {
@@ -2879,7 +2939,11 @@ test('renders only the login screen and replaces it after login, then hides chat
     expect(getNodesByClass(dom, 'ChatTaskList')).toHaveLength(0)
     expect(getNodesByClass(dom, 'ChatModelButton')).toHaveLength(0)
     expect(getText(dom)).toContain('Log in to Chat 2')
-    expect(getText(dom)).toContain('Login')
+    expect(getNodesByClass(dom, 'ChatLoginTitle')[0]).toEqual(
+      expect.objectContaining({ type: VirtualDomElements.H1 }),
+    )
+    expect(getText(dom)).toContain('Log in')
+    expect(getNodesByClass(dom, 'ChatLoginContent')).toHaveLength(1)
     expect(listModels).not.toHaveBeenCalled()
     await dispatch(instance, { name: 'login', type: 'click' })
     await loginFinished.promise
@@ -2938,6 +3002,9 @@ test('keeps login available after a failed or cancelled login', async () => {
     await dispatch(instance, { name: 'login', type: 'click' })
     await loginFinished.promise
     expect(getText(instance.render())).toContain('Login cancelled')
+    expect(getNodesByClass(instance.render(), 'ChatLoginError')[0]).toEqual(
+      expect.objectContaining({ role: 'alert' }),
+    )
     expect(instance.getState().loginPending).toBe(false)
     expect(instance.getState().loginRequired).toBe(true)
     expect(
@@ -2991,6 +3058,7 @@ test('starts login without awaiting a rerender queued behind the click event', a
     await dispatch(instance, { name: 'login', type: 'click' })
     expect(execute).toHaveBeenCalledWith('Layout.signIn')
     expect(instance.getState().loginPending).toBe(true)
+    expect(getText(instance.render())).toContain('Logging in…')
     expect(getNodesByClass(instance.render(), 'ChatLoginButton')[0]).toEqual(
       expect.objectContaining({ disabled: true }),
     )
