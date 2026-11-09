@@ -1650,7 +1650,7 @@ const renderDom = (
             ? [
                 Dom.node(
                   VirtualDomElements.Div,
-                  { className: 'ChatError', role: 'alert' },
+                  { className: 'ChatLoginError', role: 'alert' },
                   [Dom.textNode(errorMessage)],
                 ),
               ]

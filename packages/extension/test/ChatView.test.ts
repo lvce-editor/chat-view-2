@@ -2942,7 +2942,7 @@ test('keeps login available after a failed or cancelled login', async () => {
     await dispatch(instance, { name: 'login', type: 'click' })
     await loginFinished.promise
     expect(getText(instance.render())).toContain('Login cancelled')
-    expect(getNodesByClass(instance.render(), 'ChatError')[0]).toEqual(
+    expect(getNodesByClass(instance.render(), 'ChatLoginError')[0]).toEqual(
       expect.objectContaining({ role: 'alert' }),
     )
     expect(instance.getState().loginPending).toBe(false)

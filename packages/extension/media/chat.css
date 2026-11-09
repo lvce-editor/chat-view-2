@@ -1198,9 +1198,10 @@
   cursor: default;
 }
 
-.ChatLoginContent .ChatError {
+.ChatLoginError {
   margin: 0;
   max-width: 100%;
+  color: var(--ChatErrorForeground);
 }
 
 .ChatTheme-default {
