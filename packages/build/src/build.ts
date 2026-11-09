@@ -22,6 +22,19 @@ const chatToolWorkerEntryPoint = join(
   'src',
   'chatToolWorkerMain.ts',
 )
+const chatMathWorkerEntryPoint = join(
+  root,
+  'node_modules',
+  '@lvce-editor',
+  'chat-math-worker',
+  'dist',
+  'chatMathWorkerMain.js',
+)
+const chatMathCssWorkerEntryPoint = join(
+  extension,
+  'src',
+  'chatMathCssWorkerMain.ts',
+)
 const require = createRequire(import.meta.url)
 const commonjs = require('@rollup/plugin-commonjs') as () => Plugin
 const json = require('@rollup/plugin-json') as () => Plugin
@@ -155,6 +168,58 @@ await chatToolWorkerBundle.write({
 })
 
 await chatToolWorkerBundle.close()
+
+const chatMathWorkerBundle = await rollup({
+  input: chatMathWorkerEntryPoint,
+  external: ['electron', 'node:*'],
+  plugins: [
+    json(),
+    nodeResolve({
+      browser: true,
+    }),
+    commonjs(),
+    esbuild({
+      target: 'esnext',
+    }),
+  ],
+  treeshake: {
+    moduleSideEffects: false,
+  },
+})
+
+await chatMathWorkerBundle.write({
+  file: join(root, 'dist', 'dist', 'chatMathWorkerMain.js'),
+  format: 'esm',
+  inlineDynamicImports: true,
+})
+
+await chatMathWorkerBundle.close()
+
+const chatMathCssWorkerBundle = await rollup({
+  input: chatMathCssWorkerEntryPoint,
+  external: ['electron', 'node:*'],
+  plugins: [
+    json(),
+    nodeResolve({
+      browser: true,
+    }),
+    commonjs(),
+    esbuild({
+      target: 'esnext',
+    }),
+  ],
+  treeshake: {
+    moduleSideEffects: false,
+  },
+})
+
+await chatMathCssWorkerBundle.write({
+  file: join(root, 'dist', 'dist', 'chatMathCssWorkerMain.js'),
+  format: 'esm',
+  inlineDynamicImports: true,
+})
+
+await chatMathCssWorkerBundle.close()
 
 await esbuildBuild({
   banner: {
