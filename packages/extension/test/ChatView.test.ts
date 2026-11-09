@@ -2879,7 +2879,9 @@ test('renders only the login screen and replaces it after login, then hides chat
     expect(getNodesByClass(dom, 'ChatTaskList')).toHaveLength(0)
     expect(getNodesByClass(dom, 'ChatModelButton')).toHaveLength(0)
     expect(getText(dom)).toContain('Log in to Chat 2')
-    expect(getText(dom)).toContain('Login')
+    expect(getText(dom)).toContain('Welcome to Chat 2')
+    expect(getText(dom)).toContain('Log in')
+    expect(getNodesByClass(dom, 'ChatLoginContent')).toHaveLength(1)
     expect(listModels).not.toHaveBeenCalled()
     await dispatch(instance, { name: 'login', type: 'click' })
     await loginFinished.promise
@@ -2991,6 +2993,7 @@ test('starts login without awaiting a rerender queued behind the click event', a
     await dispatch(instance, { name: 'login', type: 'click' })
     expect(execute).toHaveBeenCalledWith('Layout.signIn')
     expect(instance.getState().loginPending).toBe(true)
+    expect(getText(instance.render())).toContain('Logging in…')
     expect(getNodesByClass(instance.render(), 'ChatLoginButton')[0]).toEqual(
       expect.objectContaining({ disabled: true }),
     )

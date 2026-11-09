@@ -1137,37 +1137,70 @@
 }
 
 .ChatLoggedOut {
-  padding: 20px;
+  padding: 24px;
   gap: 12px;
-  align-items: flex-start;
+  align-items: center;
   overflow: auto;
+}
+
+.ChatLoginContent {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  max-width: 420px;
+  margin-block: auto;
+  padding-block: 24px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.ChatLoginTitle {
+  margin: 0;
+  font-size: clamp(24px, 4vw, 32px);
+  font-weight: 600;
+  line-height: 1.2;
+  text-wrap: balance;
 }
 
 .ChatLoginDescription {
   margin: 0;
-  line-height: 1.5;
+  color: color-mix(in srgb, var(--ChatForeground) 80%, var(--ChatBackground));
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .ChatLoginButton {
+  min-width: 140px;
+  min-height: 40px;
   border: none;
-  padding: 6px 16px;
+  border-radius: 6px;
+  padding: 10px 24px;
   color: var(--ChatButtonForeground);
   background: var(--ChatButtonBackground);
+  font: inherit;
   cursor: pointer;
 }
 
-.ChatLoginButton:hover {
+.ChatLoginButton:hover:not(:disabled) {
   background: var(--ChatButtonHoverBackground);
 }
 
 .ChatLoginButton:focus-visible {
-  outline: 1px solid var(--ChatFocusBorder);
-  outline-offset: 2px;
+  outline: 2px solid var(--ChatFocusBorder);
+  outline-offset: 3px;
 }
 
 .ChatLoginButton:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.ChatLoginContent .ChatError {
+  margin: 0;
+  max-width: 100%;
 }
 
 .ChatTheme-default {
