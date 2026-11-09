@@ -9,6 +9,7 @@ const createState = (): ChatViewState => ({
   changesExpanded: false,
   composerFocused: false,
   composerImages: [],
+  copiedCodeId: '',
   copiedMessageId: '',
   draft: '',
   errorMessage: '',

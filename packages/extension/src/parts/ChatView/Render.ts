@@ -516,6 +516,35 @@ const findNextOpeningFence = (
   return undefined
 }
 
+export const getCodeBlockText = (
+  text: string,
+  requestedIndex: number,
+): string | undefined => {
+  let previousIndex = 0
+  let codeBlockIndex = 0
+  while (previousIndex < text.length) {
+    const openingFence = findNextOpeningFence(text, previousIndex)
+    if (!openingFence) {
+      return undefined
+    }
+    const closingFence = findClosingFence(
+      text,
+      openingFence.contentStart,
+      openingFence.fenceLength,
+    )
+    if (codeBlockIndex === requestedIndex) {
+      const blockEnd = closingFence ? closingFence.index + 1 : text.length
+      return text.slice(openingFence.contentStart, blockEnd)
+    }
+    if (!closingFence) {
+      return undefined
+    }
+    previousIndex = closingFence.end
+    codeBlockIndex++
+  }
+  return undefined
+}
+
 const createJsonToken = (
   text: string,
   index: number,
@@ -578,12 +607,26 @@ const renderJsonCode = (text: string): readonly Dom.Node[] => {
   return children
 }
 
-const renderCodeBlock = (text: string, language: string): Dom.Node => {
+const renderCodeBlock = (
+  text: string,
+  language: string,
+  copyName: string,
+  copied: boolean,
+): Dom.Node => {
   const children =
     language.toLowerCase() === 'json'
       ? renderJsonCode(text)
       : [Dom.textNode(text)]
   return Dom.node(VirtualDomElements.Pre, { className: 'ChatCodeBlock' }, [
+    Dom.button(
+      copyName,
+      '',
+      `ChatCodeCopyButton${copied ? ' ChatCodeCopyButtonCopied' : ''}`,
+      {
+        ariaLabel: copied ? 'Copied code' : 'Copy code',
+        title: copied ? 'Copied' : 'Copy code',
+      },
+    ),
     Dom.node(
       VirtualDomElements.Code,
       { className: 'ChatCodeContent' },
@@ -595,9 +638,12 @@ const renderCodeBlock = (text: string, language: string): Dom.Node => {
 const renderMessageTextWithCode = (
   text: string,
   renderedMath: RenderedMath,
+  messageId: string,
+  copiedCodeId: string,
 ): readonly Dom.Node[] => {
   const children: Dom.Node[] = []
   let previousIndex = 0
+  let codeBlockIndex = 0
   while (previousIndex < text.length) {
     const openingFence = findNextOpeningFence(text, previousIndex)
     if (!openingFence) {
@@ -621,8 +667,11 @@ const renderMessageTextWithCode = (
       renderCodeBlock(
         text.slice(openingFence.contentStart, blockEnd),
         openingFence.language,
+        `copy-code:${messageId}:${codeBlockIndex}`,
+        copiedCodeId === `${messageId}:${codeBlockIndex}`,
       ),
     )
+    codeBlockIndex++
     previousIndex = closingFence ? closingFence.end : text.length
     if (!closingFence) {
       break
@@ -845,6 +894,7 @@ const renderMessage = (
     { type: 'assistant-message' | 'user-message' }
   >,
   copiedMessageId: string,
+  copiedCodeId: string,
   renderedMath: RenderedMath,
 ): Dom.Node => {
   const roleClass =
@@ -853,7 +903,12 @@ const renderMessage = (
   return Dom.div(`ChatMessage ${roleClass}`, [
     Dom.div(
       'ChatMessageText',
-      renderMessageTextWithCode(message.text, renderedMath),
+      renderMessageTextWithCode(
+        message.text,
+        renderedMath,
+        message.id,
+        copiedCodeId,
+      ),
     ),
     ...renderMessageImages(message),
     Dom.div('ChatMessageMetadata', [
@@ -915,9 +970,19 @@ const renderErrorBanners = (
 const renderStreamingMessage = (
   text: string,
   renderedMath: RenderedMath,
+  taskId: string,
+  copiedCodeId: string,
 ): Dom.Node => {
   return Dom.div('ChatMessage ChatMessageAssistant ChatMessageStreaming', [
-    Dom.div('ChatMessageText', renderMessageTextWithCode(text, renderedMath)),
+    Dom.div(
+      'ChatMessageText',
+      renderMessageTextWithCode(
+        text,
+        renderedMath,
+        `streaming:${taskId}`,
+        copiedCodeId,
+      ),
+    ),
   ])
 }
 
@@ -1399,6 +1464,7 @@ const renderDetailView = (
   renderedMath: RenderedMath,
 ): Dom.Node => {
   const {
+    copiedCodeId,
     copiedMessageId,
     errorMessage,
     focusMode,
@@ -1430,7 +1496,7 @@ const renderDetailView = (
     ...(focusMode ? [] : [Dom.button('new-task', 'New', 'ChatNewTaskButton')]),
   ])
   const renderedMessages = summary.messages.map((message) =>
-    renderMessage(message, copiedMessageId, renderedMath),
+    renderMessage(message, copiedMessageId, copiedCodeId, renderedMath),
   )
   const lastUserMessageIndex = summary.messages.findLastIndex(
     (message) => message.type === 'user-message',
@@ -1442,7 +1508,14 @@ const renderDetailView = (
     renderActivity(state),
     ...renderedMessages.slice(currentTurnStart + 1),
     ...(task.streamingText
-      ? [renderStreamingMessage(task.streamingText, renderedMath)]
+      ? [
+          renderStreamingMessage(
+            task.streamingText,
+            renderedMath,
+            task.id,
+            copiedCodeId,
+          ),
+        ]
       : []),
     ...renderErrorBanners(summary.errorMessage, errorMessage),
   ]

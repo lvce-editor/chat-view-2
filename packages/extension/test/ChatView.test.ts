@@ -2215,6 +2215,59 @@ test('renders fenced JSON as safe highlighted code in messages and streaming tex
   }
 })
 
+test('copies only the selected code block, including unfinished streaming code', async () => {
+  const timestamp = '2026-09-10T12:00:00.000Z'
+  const writeClipboardText = jest.fn(async (_text: string) => undefined)
+  const assistantMessage = createEvent({
+    text: 'Before\n```json\n{"name":"Zoë","markup":"<tag>"}\n```\n```\nsecond block\n```',
+    type: 'assistant-message',
+  })
+  const task: ChatTask = {
+    createdAt: timestamp,
+    events: [assistantMessage],
+    id: 'copy-code-task',
+    modelId: 'gpt-5.4',
+    status: 'completed',
+    streamingText: '```\nunfinished Ω',
+    title: 'Copy code',
+    updatedAt: timestamp,
+  }
+  const instance = await createInstance(
+    createViewContext({ selectedTaskId: task.id }),
+    {
+      ...createMockChatApi(),
+      async getTask() {
+        return task
+      },
+    },
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    writeClipboardText,
+  )
+  try {
+    const dom = instance.render() as readonly any[]
+    const codeButtons = getNodesByClass(dom, 'ChatCodeCopyButton')
+    expect(codeButtons).toHaveLength(3)
+    expect(codeButtons[0]).toEqual(
+      expect.objectContaining({ ariaLabel: 'Copy code', title: 'Copy code' }),
+    )
+    await dispatch(instance, {
+      name: `copy-code:${assistantMessage.id}:1`,
+      type: 'click',
+    })
+    expect(writeClipboardText).toHaveBeenCalledWith('second block\n')
+    await dispatch(instance, {
+      name: `copy-code:streaming:${task.id}:0`,
+      type: 'click',
+    })
+    expect(writeClipboardText).toHaveBeenLastCalledWith('unfinished Ω')
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('expands the changed-file fixture for review', async () => {
   const instance = await createTestInstance()
   await dispatch(instance, {

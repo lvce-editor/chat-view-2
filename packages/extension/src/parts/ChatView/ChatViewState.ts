@@ -28,6 +28,7 @@ export interface ChatViewState {
   readonly changesExpanded: boolean
   readonly composerFocused: boolean
   readonly composerImages: readonly ChatComposerImage[]
+  readonly copiedCodeId: string
   readonly copiedMessageId: string
   readonly draft: string
   readonly errorMessage: string

@@ -62,7 +62,7 @@ import {
 } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
 import { getMathExpressions, type MathExpression } from './MathExpressions.ts'
-import { render, renderCss } from './Render.ts'
+import { getCodeBlockText, render, renderCss } from './Render.ts'
 import { readTaskOpenMode } from './TaskOpenMode.ts'
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
@@ -575,6 +575,7 @@ export const createInstance = async (
     changesExpanded: false,
     composerFocused: false,
     composerImages: [],
+    copiedCodeId: '',
     copiedMessageId: '',
     draft: storedDraft ?? (typeof saved.draft === 'string' ? saved.draft : ''),
     errorMessage,
@@ -737,6 +738,7 @@ export const createInstance = async (
       copyFeedbackTimeout = undefined
     }
     state.copiedMessageId = ''
+    state.copiedCodeId = ''
   }
 
   const showCopyFeedback = (messageId: string): void => {
@@ -745,6 +747,16 @@ export const createInstance = async (
     copyFeedbackTimeout = setTimeout(() => {
       copyFeedbackTimeout = undefined
       state.copiedMessageId = ''
+      void context?.requestRerender()
+    }, copyFeedbackDuration)
+  }
+
+  const showCodeCopyFeedback = (codeId: string): void => {
+    resetCopyFeedback()
+    state.copiedCodeId = codeId
+    copyFeedbackTimeout = setTimeout(() => {
+      copyFeedbackTimeout = undefined
+      state.copiedCodeId = ''
       void context?.requestRerender()
     }, copyFeedbackDuration)
   }
@@ -1482,6 +1494,45 @@ export const createInstance = async (
           }
           showCopyFeedback(message.id)
         }
+        return
+      }
+      if (event.name?.startsWith('copy-code:') && state.selectedTask) {
+        const payload = event.name.slice('copy-code:'.length)
+        const separatorIndex = payload.lastIndexOf(':')
+        const messageId = payload.slice(0, separatorIndex)
+        const blockIndexText = payload.slice(separatorIndex + 1)
+        const blockIndex = Number(blockIndexText)
+        if (!Number.isSafeInteger(blockIndex) || blockIndex < 0) {
+          return
+        }
+        const message = state.selectedTask.events.find(
+          (item) =>
+            item.id === messageId &&
+            (item.type === 'assistant-message' || item.type === 'user-message'),
+        )
+        let messageText: string | undefined
+        if (
+          message?.type === 'assistant-message' ||
+          message?.type === 'user-message'
+        ) {
+          messageText = message.text
+        } else if (messageId === `streaming:${state.selectedTask.id}`) {
+          messageText = state.selectedTask.streamingText
+        }
+        const code =
+          messageText === undefined
+            ? undefined
+            : getCodeBlockText(messageText, blockIndex)
+        if (code === undefined) {
+          return
+        }
+        try {
+          await writeClipboardText(code)
+        } catch (error) {
+          state.errorMessage = `Unable to copy code: ${error instanceof Error ? error.message : String(error)}`
+          return
+        }
+        showCodeCopyFeedback(`${messageId}:${blockIndex}`)
         return
       }
       if (event.name?.startsWith('archive-task:')) {
