@@ -174,6 +174,13 @@ const createResponseRequest = (
   ],
 })
 
+const getRecord = (
+  value: unknown,
+): Readonly<Record<string, unknown>> | undefined =>
+  value && typeof value === 'object'
+    ? (value as Readonly<Record<string, unknown>>)
+    : undefined
+
 const getResponseImages = (response: {
   readonly output?: readonly unknown[]
 }): readonly ChatImageAttachment[] => {
@@ -204,6 +211,37 @@ const getResponseImages = (response: {
       },
     ]
   })
+}
+
+const getResponseImageGenerationError = (response: {
+  readonly output?: readonly unknown[]
+}): string => {
+  if (!Array.isArray(response.output)) {
+    return ''
+  }
+  const failedImage = response.output
+    .map(getRecord)
+    .find(
+      (item) =>
+        item?.type === 'image_generation_call' && item.status === 'failed',
+    )
+  if (!failedImage) {
+    return ''
+  }
+  const error = getRecord(failedImage.error)
+  const code = typeof error?.code === 'string' ? error.code : ''
+  const message = typeof error?.message === 'string' ? error.message : ''
+  const detail = [code, message].filter(Boolean).join(': ')
+  return detail
+    ? `Image generation failed (${detail}).`
+    : 'Image generation failed.'
+}
+
+const appendImageGenerationError = (text: string, error: string): string => {
+  if (!error) {
+    return text
+  }
+  return text ? `${text}\n\n${error}` : error
 }
 
 const parseModels = (value: unknown): readonly ChatModel[] => {
@@ -577,13 +615,6 @@ const runWebSocketStep = async (
   }
 }
 
-const getRecord = (
-  value: unknown,
-): Readonly<Record<string, unknown>> | undefined =>
-  value && typeof value === 'object'
-    ? (value as Readonly<Record<string, unknown>>)
-    : undefined
-
 const isTokenCount = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 
@@ -722,8 +753,11 @@ const collectMessageText = (
 const getResponseText = (
   response: Readonly<Record<string, unknown>>,
 ): string => {
+  const imageGenerationError = getResponseImageGenerationError(response)
   if (!Array.isArray(response.output)) {
-    return typeof response.output_text === 'string' ? response.output_text : ''
+    const text =
+      typeof response.output_text === 'string' ? response.output_text : ''
+    return appendImageGenerationError(text, imageGenerationError)
   }
   const feeds = new Set<string>()
   const chunks: string[] = []
@@ -740,9 +774,11 @@ const getResponseText = (
     chunks.join('') ||
     (typeof response.output_text === 'string' ? response.output_text : '')
   const references = [...feeds]
-  return references.length > 0
-    ? `${text}\n\nSources: ${references.join(', ')}`
-    : text
+  const responseText =
+    references.length > 0
+      ? `${text}\n\nSources: ${references.join(', ')}`
+      : text
+  return appendImageGenerationError(responseText, imageGenerationError)
 }
 
 const getResponseToolCalls = (
