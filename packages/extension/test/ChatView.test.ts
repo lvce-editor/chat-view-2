@@ -2879,7 +2879,9 @@ test('renders only the login screen and replaces it after login, then hides chat
     expect(getNodesByClass(dom, 'ChatTaskList')).toHaveLength(0)
     expect(getNodesByClass(dom, 'ChatModelButton')).toHaveLength(0)
     expect(getText(dom)).toContain('Log in to Chat 2')
-    expect(getText(dom)).toContain('Log in to Chat 2')
+    expect(getNodesByClass(dom, 'ChatLoginTitle')[0]).toEqual(
+      expect.objectContaining({ type: VirtualDomElements.H1 }),
+    )
     expect(getText(dom)).toContain('Log in')
     expect(getNodesByClass(dom, 'ChatLoginContent')).toHaveLength(1)
     expect(listModels).not.toHaveBeenCalled()
@@ -2940,6 +2942,9 @@ test('keeps login available after a failed or cancelled login', async () => {
     await dispatch(instance, { name: 'login', type: 'click' })
     await loginFinished.promise
     expect(getText(instance.render())).toContain('Login cancelled')
+    expect(getNodesByClass(instance.render(), 'ChatError')[0]).toEqual(
+      expect.objectContaining({ role: 'alert' }),
+    )
     expect(instance.getState().loginPending).toBe(false)
     expect(instance.getState().loginRequired).toBe(true)
     expect(

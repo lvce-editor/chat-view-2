@@ -1636,7 +1636,7 @@ const renderDom = (
             { className: 'ChatLoginDescription' },
             [
               Dom.textNode(
-                'Get help with code, make changes in your workspace, and verify the results.',
+                'Get help with code, edit your workspace, and verify changes.',
               ),
             ],
           ),
