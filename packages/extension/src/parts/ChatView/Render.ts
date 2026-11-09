@@ -1619,17 +1619,33 @@ const renderDom = (
       `${getRootClassName(state, 'ChatLoggedOut')}${focusMode ? getAiNativeThemeClassName(aiNativeTheme) : ''}`,
       [
         ...renderFocusModeButton(state),
-        Dom.node(VirtualDomElements.P, { className: 'ChatLoginDescription' }, [
-          Dom.textNode(
-            'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
+        Dom.div('ChatLoginContent', [
+          Dom.heading(1, 'ChatLoginTitle', 'Log in to Chat 2'),
+          Dom.node(
+            VirtualDomElements.P,
+            { className: 'ChatLoginDescription' },
+            [
+              Dom.textNode(
+                'Get help with code, edit your workspace, and verify changes.',
+              ),
+            ],
           ),
+          Dom.button(
+            'login',
+            loginPending ? 'Logging in…' : 'Log in',
+            'ChatLoginButton',
+            { disabled: loginPending },
+          ),
+          ...(errorMessage && !loginPending
+            ? [
+                Dom.node(
+                  VirtualDomElements.Div,
+                  { className: 'ChatLoginError', role: 'alert' },
+                  [Dom.textNode(errorMessage)],
+                ),
+              ]
+            : []),
         ]),
-        Dom.button('login', 'Login', 'ChatLoginButton', {
-          disabled: loginPending,
-        }),
-        ...(errorMessage && !loginPending
-          ? [Dom.div('ChatError', [Dom.textNode(errorMessage)])]
-          : []),
       ],
       {
         onClick: 'handleModelPickerOutsideClick',
