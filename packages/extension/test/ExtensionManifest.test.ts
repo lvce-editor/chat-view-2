@@ -77,6 +77,17 @@ test('maps Ctrl+N in the composer to a new chat', async () => {
   expect(manifest.activation).toContain('onCommand:chat2.newChat')
 })
 
+test('maps Ctrl+Alt+N in the composer to a new chat', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.keybindings).toContainEqual({
+    command: 'chat2.newChat',
+    key: 'Ctrl+Alt+N',
+    when: 'chat2.composerFocus',
+  })
+})
+
 test('contributes the headless chat commands for browser evaluations', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
