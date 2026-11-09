@@ -1422,6 +1422,48 @@ test('returns generated images from HTTP Responses and requests image generation
   })
 })
 
+test('reports failed image generation details from HTTP Responses', async () => {
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: jest.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'response-image-error',
+        output: [
+          {
+            error: {
+              code: 'organization_verification_required',
+              message: 'Verify your organization to use image generation.',
+            },
+            status: 'failed',
+            type: 'image_generation_call',
+          },
+          {
+            content: [
+              {
+                text: 'The image tool encountered an error.',
+                type: 'output_text',
+              },
+            ],
+            role: 'assistant',
+            type: 'message',
+          },
+        ],
+      }),
+    ),
+  })
+
+  await expect(
+    backend.runStep({
+      input: [{ content: 'Draw a cat', role: 'user' }],
+      modelId: 'gpt-6.1-sol',
+      onTextDelta() {},
+      tools: [],
+    }),
+  ).resolves.toMatchObject({
+    text: 'The image tool encountered an error.\n\nImage generation failed (organization_verification_required: Verify your organization to use image generation.).',
+  })
+})
+
 test('retains provider context usage from WebSocket responses', async () => {
   const socket = new MockResponsesWebSocket()
   const backend = createResponsesBackend({
