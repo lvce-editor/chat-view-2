@@ -235,10 +235,8 @@ const getWorkingStartedAt = (task: ChatTask): number => {
 }
 
 const getWorkingSeconds = (task: ChatTask): number => {
-  return Math.max(
-    0,
-    Math.floor((Date.now() - getWorkingStartedAt(task)) / 1000),
-  )
+  const endedAt = isWorking(task) ? Date.now() : Date.parse(task.updatedAt)
+  return Math.max(0, Math.floor((endedAt - getWorkingStartedAt(task)) / 1000))
 }
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
@@ -710,12 +708,16 @@ export const createInstance = async (
   }
 
   const syncWorkingTimer = (task: ChatTask | undefined): void => {
-    if (!task || !isWorking(task)) {
+    if (!task) {
       stopWorkingTimer()
       state.workingSeconds = 0
       return
     }
     state.workingSeconds = getWorkingSeconds(task)
+    if (!isWorking(task)) {
+      stopWorkingTimer()
+      return
+    }
     if (workingTimer !== undefined) {
       return
     }

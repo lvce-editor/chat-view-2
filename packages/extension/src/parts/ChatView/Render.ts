@@ -1339,12 +1339,16 @@ const renderActivity = (state: Readonly<ChatViewState>): Dom.Node => {
     return Dom.div('ChatActivityHidden', [])
   }
   const activities = getLatestActivities(summarizeTask(task).activities)
-  if (activities.length === 0 && !isRunning(task)) {
+  const hasWorked = task.status !== 'idle'
+  if (activities.length === 0 && !isRunning(task) && !hasWorked) {
     return Dom.div('ChatActivityHidden', [])
   }
+  const unit = workingSeconds === 1 ? 'second' : 'seconds'
   const label = isRunning(task)
-    ? `Working for ${workingSeconds} ${workingSeconds === 1 ? 'second' : 'seconds'}`
-    : `${activities.length} ${activities.length === 1 ? 'step' : 'steps'} completed`
+    ? `Working for ${workingSeconds} ${unit}`
+    : hasWorked
+      ? `Worked for ${workingSeconds} ${unit}`
+      : `${activities.length} ${activities.length === 1 ? 'step' : 'steps'} completed`
   return Dom.div('ChatActivity', [
     Dom.button('toggle-activity', label, 'ChatActivityToggle', {
       ariaExpanded: activityExpanded,
@@ -1497,8 +1501,12 @@ const renderDetailView = (
   const lastUserMessageIndex = summary.messages.findLastIndex(
     (message) => message.type === 'user-message',
   )
+  const currentTurnStart = Math.max(0, lastUserMessageIndex)
+  const previousMessages = renderedMessages.slice(0, currentTurnStart)
   const latestTurnContent = [
-    ...renderedMessages.slice(lastUserMessageIndex),
+    ...renderedMessages.slice(currentTurnStart, currentTurnStart + 1),
+    renderActivity(state),
+    ...renderedMessages.slice(currentTurnStart + 1),
     ...(task.streamingText
       ? [
           renderStreamingMessage(
@@ -1509,30 +1517,12 @@ const renderDetailView = (
           ),
         ]
       : []),
-    renderActivity(state),
     ...renderErrorBanners(summary.errorMessage, errorMessage),
   ]
   const messageContent =
     focusMode && lastUserMessageIndex !== -1
-      ? [
-          ...renderedMessages.slice(0, lastUserMessageIndex),
-          Dom.div('ChatTurnLatest', latestTurnContent),
-        ]
-      : [
-          ...renderedMessages,
-          ...(task.streamingText
-            ? [
-                renderStreamingMessage(
-                  task.streamingText,
-                  renderedMath,
-                  task.id,
-                  copiedCodeId,
-                ),
-              ]
-            : []),
-          renderActivity(state),
-          ...renderErrorBanners(summary.errorMessage, errorMessage),
-        ]
+      ? [...previousMessages, Dom.div('ChatTurnLatest', latestTurnContent)]
+      : [...previousMessages, ...latestTurnContent]
   const changes = renderChanges(state)
   const composer = renderComposer(state)
   const messages = Dom.div('ChatMessages', [
