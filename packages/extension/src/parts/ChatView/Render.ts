@@ -1453,6 +1453,7 @@ const renderAiNativeSessions = (
       ariaOrientation: 'vertical',
       className: 'ChatSessionsSash',
       name: 'sessions-sash',
+      onDblClick: 'handleSessionsSashDoubleClick',
       onPointerDown: 'handleSessionsSashPointerDown',
       role: 'separator',
       tabIndex: -1,

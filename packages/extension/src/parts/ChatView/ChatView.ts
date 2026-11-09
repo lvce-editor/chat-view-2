@@ -33,6 +33,10 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
       ],
     },
     {
+      name: 'handleSessionsSashDoubleClick',
+      params: ['handleSessionsSashDoubleClick'],
+    },
+    {
       name: 'handleSessionsSashPointerDown',
       params: [
         'handleSessionsSashPointerDown',
