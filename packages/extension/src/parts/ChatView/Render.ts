@@ -1630,13 +1630,13 @@ const renderDom = (
       [
         ...renderFocusModeButton(state),
         Dom.div('ChatLoginContent', [
-          Dom.heading(1, 'ChatLoginTitle', 'Welcome to Chat 2'),
+          Dom.heading(1, 'ChatLoginTitle', 'Log in to Chat 2'),
           Dom.node(
             VirtualDomElements.P,
             { className: 'ChatLoginDescription' },
             [
               Dom.textNode(
-                'Log in to Chat 2 to get help with programming tasks, make changes in your workspace, and verify the results.',
+                'Get help with code, make changes in your workspace, and verify the results.',
               ),
             ],
           ),

@@ -11,7 +11,7 @@ export const test: Test = async (api) => {
   await api.ChatView2.show()
   await api
     .expect(api.Locator('.ChatLoginTitle'))
-    .toHaveText('Welcome to Chat 2')
+    .toHaveText('Log in to Chat 2')
   await api.expect(api.Locator('.ChatLoginContent')).toBeVisible()
   await api.expect(api.Locator('button[name="login"]')).toHaveText('Log in')
   await api.expect(api.Locator('textarea[name="composer"]')).toHaveCount(0)

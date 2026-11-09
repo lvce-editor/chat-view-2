@@ -2879,7 +2879,7 @@ test('renders only the login screen and replaces it after login, then hides chat
     expect(getNodesByClass(dom, 'ChatTaskList')).toHaveLength(0)
     expect(getNodesByClass(dom, 'ChatModelButton')).toHaveLength(0)
     expect(getText(dom)).toContain('Log in to Chat 2')
-    expect(getText(dom)).toContain('Welcome to Chat 2')
+    expect(getText(dom)).toContain('Log in to Chat 2')
     expect(getText(dom)).toContain('Log in')
     expect(getNodesByClass(dom, 'ChatLoginContent')).toHaveLength(1)
     expect(listModels).not.toHaveBeenCalled()
