@@ -1479,7 +1479,7 @@ const renderDetailView = (
         name: 'chat-title',
         onContextMenu: 'handleContextMenu',
       }),
-      Dom.button('title-menu', '⌄', 'ChatTitleMenuButton', {
+      Dom.button('title-menu', '', 'ChatTitleMenuButton', {
         ariaLabel: 'Open chat menu',
         onClick: 'handleTitleMenuClick',
         title: 'Chat menu',
