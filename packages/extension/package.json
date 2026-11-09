@@ -29,6 +29,7 @@
   },
   "dependencies": {
     "@babel/standalone": "7.29.12",
+    "@lvce-editor/chat-math-worker": "^1.1.0",
     "@lvce-editor/chat-tool-worker": "0.0.0-dev",
     "@lvce-editor/rpc": "6.23.0",
     "@lvce-editor/rpc-registry": "9.67.1"

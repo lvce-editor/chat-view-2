@@ -17,6 +17,19 @@ const chatToolWorkerEntryPoint = path.join(
   'src',
   'chatToolWorkerMain.ts',
 )
+const chatMathWorkerEntryPoint = path.join(
+  root,
+  'node_modules',
+  '@lvce-editor',
+  'chat-math-worker',
+  'dist',
+  'chatMathWorkerMain.js',
+)
+const chatMathCssWorkerEntryPoint = path.join(
+  extension,
+  'src',
+  'chatMathCssWorkerMain.ts',
+)
 const outdir = path.join(extension, 'dist')
 
 fs.rmSync(outdir, { recursive: true, force: true })
@@ -30,6 +43,26 @@ await esbuild.build({
   outfile: path.join(outdir, 'chatMain.js'),
   platform: 'browser',
   sourcemap: true,
+  target: 'esnext',
+})
+
+await esbuild.build({
+  bundle: true,
+  entryPoints: [chatMathCssWorkerEntryPoint],
+  external: ['electron', 'node:*'],
+  format: 'esm',
+  outfile: path.join(outdir, 'chatMathCssWorkerMain.js'),
+  platform: 'browser',
+  target: 'esnext',
+})
+
+await esbuild.build({
+  bundle: true,
+  entryPoints: [chatMathWorkerEntryPoint],
+  external: ['electron', 'node:*'],
+  format: 'esm',
+  outfile: path.join(outdir, 'chatMathWorkerMain.js'),
+  platform: 'browser',
   target: 'esnext',
 })
 

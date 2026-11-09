@@ -61,6 +61,7 @@ import {
   userMessageFontFamilyPreference,
 } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
+import { getMathExpressions, type MathExpression } from './MathExpressions.ts'
 import { render, renderCss } from './Render.ts'
 import { readTaskOpenMode } from './TaskOpenMode.ts'
 
@@ -411,6 +412,60 @@ export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
 const activeRuns = new Map<string, AbortController>()
 const runCompletions = new Map<string, Promise<void>>()
 
+interface MathRenderCache {
+  readonly pending: Map<string, Promise<void>>
+  readonly rendered: Map<string, readonly VirtualDomNode[]>
+}
+
+interface RenderMathExpressionsOptions {
+  readonly assetDirPromise: Promise<unknown>
+  readonly cache: Readonly<MathRenderCache>
+  readonly expressions: readonly Readonly<MathExpression>[]
+  readonly onRendered: () => Promise<void>
+  readonly onStylesheetLoaded: (stylesheet: string) => void
+}
+
+const renderMathExpressions = async (
+  // The options object has readonly fields; the lint rule cannot infer that through the callback fields.
+  // eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
+  options: RenderMathExpressionsOptions,
+): Promise<void> => {
+  const {
+    assetDirPromise,
+    cache,
+    expressions,
+    onRendered,
+    onStylesheetLoaded,
+  } = options
+  const chatMath = await import('./ChatMath.ts')
+  const assetDir = await assetDirPromise
+  if (typeof assetDir === 'string' && assetDir) {
+    onStylesheetLoaded(await chatMath.getMathStylesheet(assetDir))
+  }
+  const newMathRequests: Promise<void>[] = []
+  for (const { displayMode, source } of expressions) {
+    const key = chatMath.getMathKey(source, displayMode)
+    if (cache.rendered.has(key) || cache.pending.has(key)) {
+      continue
+    }
+    const promise = chatMath
+      .renderMath(source, displayMode)
+      .then((nodes) => {
+        cache.rendered.set(key, nodes)
+      })
+      .finally(() => {
+        cache.pending.delete(key)
+      })
+    cache.pending.set(key, promise)
+    newMathRequests.push(promise)
+  }
+  if (newMathRequests.length === 0) {
+    return
+  }
+  await Promise.all(newMathRequests)
+  await onRendered()
+}
+
 export const createInstance = async (
   context?: ViewContext,
   providedApi?: ChatApi,
@@ -424,6 +479,12 @@ export const createInstance = async (
   let pendingWorkbenchLayout: 'ide' | 'ai-native' | undefined
   let authenticationRejected = false
   let currentState: MutableChatViewState | undefined
+  const mathRenderCache: MathRenderCache = {
+    pending: new Map(),
+    rendered: new Map(),
+  }
+  let mathStylesheet = ''
+  let mathAssetDirPromise: Promise<unknown> | undefined
   const onLoginRequired = (): void => {
     authenticationRejected = true
     if (currentState) {
@@ -1659,7 +1720,51 @@ export const createInstance = async (
     handleTitleMenuClick,
     newChat,
     render(): readonly VirtualDomNode[] {
-      return render({ ...state, preserveComposerValue })
+      const { selectedTask } = state
+      if (selectedTask) {
+        const messages = selectedTask.events.flatMap((event) =>
+          event.type === 'assistant-message' || event.type === 'user-message'
+            ? [event.text]
+            : [],
+        )
+        if (selectedTask.streamingText) {
+          messages.push(selectedTask.streamingText)
+        }
+        const expressions = messages.flatMap(getMathExpressions)
+        if (expressions.length > 0) {
+          mathAssetDirPromise ??= (async (): Promise<string | undefined> => {
+            const assetDir = await execute('Layout.getAssetDir')
+            const href = await execute('Layout.getHref')
+            if (typeof assetDir !== 'string' || typeof href !== 'string') {
+              return undefined
+            }
+            const url = new URL(assetDir, href)
+            while (url.pathname.endsWith('/')) {
+              url.pathname = url.pathname.slice(0, -1)
+            }
+            url.pathname += '/'
+            return url.href
+          })()
+          void renderMathExpressions({
+            assetDirPromise: mathAssetDirPromise,
+            cache: mathRenderCache,
+            expressions,
+            onRendered: async () => {
+              if (!disposed && state.selectedTask?.id === selectedTask.id) {
+                await context?.requestRerender()
+              }
+            },
+            onStylesheetLoaded(stylesheet) {
+              mathStylesheet = stylesheet
+            },
+          }).catch(() => {})
+        }
+      }
+      return render(
+        { ...state, preserveComposerValue },
+        mathRenderCache.rendered,
+        mathStylesheet,
+      )
     },
     renderFocus(
       oldContext: Readonly<Record<string, boolean>>,

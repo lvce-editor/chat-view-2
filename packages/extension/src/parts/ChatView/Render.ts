@@ -15,6 +15,7 @@ import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 import { applyLayoutClasses } from './ApplyLayoutClasses.ts'
 import { formatMessageDate } from './FormatMessageDate.ts'
+import { getMathTokens } from './MathExpressions.ts'
 
 const fileUriPattern = /^(?:file|memfs|remote-ssh|html|opfs):\/\//u
 const fileCitationPattern =
@@ -31,6 +32,10 @@ const getTaskListStyleClass = (fontFamily: string, fontSize: string): string =>
 
 const getSessionsWidthClass = (width: number): string =>
   `ChatSessionsWidth-${width}`
+
+type RenderedMath = Readonly<
+  ReadonlyMap<string, readonly Readonly<VirtualDomNode>[]>
+>
 
 const isRunning = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'
@@ -328,6 +333,7 @@ const renderMarkdownHeadingLine = (
   line: string,
   lineStart: number,
   previousOffset: number,
+  renderedMath: RenderedMath,
 ): {
   readonly children: readonly Dom.Node[]
   readonly previousOffset: number
@@ -335,14 +341,17 @@ const renderMarkdownHeadingLine = (
   const children: Dom.Node[] = []
   if (lineStart > previousOffset) {
     children.push(
-      ...renderMessageInlineText(text.slice(previousOffset, lineStart)),
+      ...renderMessageInlineText(
+        text.slice(previousOffset, lineStart),
+        renderedMath,
+      ),
     )
   }
   children.push(
     Dom.heading(
       heading.level,
       `ChatMessageHeading ChatMessageHeading-${heading.level}`,
-      renderMessageInlineText(heading.text),
+      renderMessageInlineText(heading.text, renderedMath),
     ),
   )
   const lineEnd = lineStart + line.length
@@ -359,6 +368,7 @@ const renderTableCell = (
   cell: string,
   type: number,
   alignment: string,
+  renderedMath: RenderedMath,
 ): Dom.Node => {
   return Dom.node(
     type,
@@ -370,7 +380,7 @@ const renderTableCell = (
       ),
       ...(type === VirtualDomElements.Th && { scope: 'col' }),
     },
-    renderMessageInlineText(cell),
+    renderMessageInlineText(cell, renderedMath),
   )
 }
 
@@ -378,13 +388,14 @@ const renderMarkdownTable = (
   header: MarkdownTableRow,
   rows: readonly MarkdownTableRow[],
   alignments: readonly string[],
+  renderedMath: RenderedMath,
 ): Dom.Node => {
   const renderRow = (row: MarkdownTableRow, type: number): Dom.Node =>
     Dom.node(
       VirtualDomElements.Tr,
       {},
       row.cells.map((cell, index) =>
-        renderTableCell(cell, type, alignments[index]),
+        renderTableCell(cell, type, alignments[index], renderedMath),
       ),
     )
   return Dom.div('ChatMessageTableContainer', [
@@ -581,7 +592,10 @@ const renderCodeBlock = (text: string, language: string): Dom.Node => {
   ])
 }
 
-const renderMessageTextWithCode = (text: string): readonly Dom.Node[] => {
+const renderMessageTextWithCode = (
+  text: string,
+  renderedMath: RenderedMath,
+): readonly Dom.Node[] => {
   const children: Dom.Node[] = []
   let previousIndex = 0
   while (previousIndex < text.length) {
@@ -596,7 +610,10 @@ const renderMessageTextWithCode = (text: string): readonly Dom.Node[] => {
     )
     if (openingFence.index > previousIndex) {
       children.push(
-        ...renderMessageText(text.slice(previousIndex, openingFence.index)),
+        ...renderMessageText(
+          text.slice(previousIndex, openingFence.index),
+          renderedMath,
+        ),
       )
     }
     const blockEnd = closingFence ? closingFence.index + 1 : text.length
@@ -612,12 +629,12 @@ const renderMessageTextWithCode = (text: string): readonly Dom.Node[] => {
     }
   }
   if (previousIndex < text.length) {
-    children.push(...renderMessageText(text.slice(previousIndex)))
+    children.push(...renderMessageText(text.slice(previousIndex), renderedMath))
   }
   return children
 }
 
-const renderMessageInlineText = (text: string): readonly Dom.Node[] => {
+const renderMessageInlineWithoutMath = (text: string): readonly Dom.Node[] => {
   const children: Dom.Node[] = []
   let previousIndex = 0
   for (const match of text.matchAll(boldPattern)) {
@@ -638,6 +655,35 @@ const renderMessageInlineText = (text: string): readonly Dom.Node[] => {
   }
   if (previousIndex < text.length) {
     children.push(...renderMessageTextWithoutBold(text.slice(previousIndex)))
+  }
+  return children
+}
+
+const renderMessageInlineText = (
+  text: string,
+  renderedMath: RenderedMath,
+): readonly Dom.Node[] => {
+  const children: Dom.Node[] = []
+  let previousIndex = 0
+  for (const match of getMathTokens(text)) {
+    if (match.start > previousIndex) {
+      children.push(
+        ...renderMessageInlineWithoutMath(
+          text.slice(previousIndex, match.start),
+        ),
+      )
+    }
+    const key = `${match.displayMode ? 'display' : 'inline'}:${match.source}`
+    const rendered = renderedMath.get(key)
+    if (rendered) {
+      children.push(rendered)
+    } else {
+      children.push(...renderMessageInlineWithoutMath(match.text))
+    }
+    previousIndex = match.end
+  }
+  if (previousIndex < text.length) {
+    children.push(...renderMessageInlineWithoutMath(text.slice(previousIndex)))
   }
   return children
 }
@@ -684,7 +730,10 @@ const getMarkdownTableAtLine = (
   }
 }
 
-const renderMessageText = (text: string): readonly Dom.Node[] => {
+const renderMessageText = (
+  text: string,
+  renderedMath: RenderedMath,
+): readonly Dom.Node[] => {
   const lines = text.split('\n')
   const lineStarts: number[] = []
   let offset = 0
@@ -705,6 +754,7 @@ const renderMessageText = (text: string): readonly Dom.Node[] => {
           lines[lineIndex],
           lineStarts[lineIndex],
           previousOffset,
+          renderedMath,
         )
       children.push(...headingChildren)
       previousOffset = nextOffset
@@ -723,11 +773,17 @@ const renderMessageText = (text: string): readonly Dom.Node[] => {
       children.push(
         ...renderMessageInlineText(
           text.slice(previousOffset, lineStarts[lineIndex]),
+          renderedMath,
         ),
       )
     }
     children.push(
-      renderMarkdownTable(table.header, table.rows, table.alignments),
+      renderMarkdownTable(
+        table.header,
+        table.rows,
+        table.alignments,
+        renderedMath,
+      ),
     )
     const afterTableLine = lines[table.endIndex - 1]
     previousOffset = lineStarts[table.endIndex - 1] + afterTableLine.length
@@ -738,7 +794,9 @@ const renderMessageText = (text: string): readonly Dom.Node[] => {
     lineIndex = table.endIndex
   }
   if (previousOffset < text.length) {
-    children.push(...renderMessageInlineText(text.slice(previousOffset)))
+    children.push(
+      ...renderMessageInlineText(text.slice(previousOffset), renderedMath),
+    )
   }
   return children
 }
@@ -787,12 +845,16 @@ const renderMessage = (
     { type: 'assistant-message' | 'user-message' }
   >,
   copiedMessageId: string,
+  renderedMath: RenderedMath,
 ): Dom.Node => {
   const roleClass =
     message.type === 'user-message' ? 'ChatMessageUser' : 'ChatMessageAssistant'
   const copied = message.id === copiedMessageId
   return Dom.div(`ChatMessage ${roleClass}`, [
-    Dom.div('ChatMessageText', renderMessageTextWithCode(message.text)),
+    Dom.div(
+      'ChatMessageText',
+      renderMessageTextWithCode(message.text, renderedMath),
+    ),
     ...renderMessageImages(message),
     Dom.div('ChatMessageMetadata', [
       Dom.div('ChatMessageTimestamp', [
@@ -850,9 +912,12 @@ const renderErrorBanners = (
     : []),
 ]
 
-const renderStreamingMessage = (text: string): Dom.Node => {
+const renderStreamingMessage = (
+  text: string,
+  renderedMath: RenderedMath,
+): Dom.Node => {
   return Dom.div('ChatMessage ChatMessageAssistant ChatMessageStreaming', [
-    Dom.div('ChatMessageText', renderMessageTextWithCode(text)),
+    Dom.div('ChatMessageText', renderMessageTextWithCode(text, renderedMath)),
   ])
 }
 
@@ -1325,7 +1390,10 @@ const renderChanges = (state: Readonly<ChatViewState>): Dom.Node => {
   ])
 }
 
-const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
+const renderDetailView = (
+  state: Readonly<ChatViewState>,
+  renderedMath: RenderedMath,
+): Dom.Node => {
   const {
     copiedMessageId,
     errorMessage,
@@ -1358,14 +1426,16 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
     ...(focusMode ? [] : [Dom.button('new-task', 'New', 'ChatNewTaskButton')]),
   ])
   const renderedMessages = summary.messages.map((message) =>
-    renderMessage(message, copiedMessageId),
+    renderMessage(message, copiedMessageId, renderedMath),
   )
   const lastUserMessageIndex = summary.messages.findLastIndex(
     (message) => message.type === 'user-message',
   )
   const latestTurnContent = [
     ...renderedMessages.slice(lastUserMessageIndex),
-    ...(task.streamingText ? [renderStreamingMessage(task.streamingText)] : []),
+    ...(task.streamingText
+      ? [renderStreamingMessage(task.streamingText, renderedMath)]
+      : []),
     renderActivity(state),
     ...renderErrorBanners(summary.errorMessage, errorMessage),
   ]
@@ -1378,7 +1448,7 @@ const renderDetailView = (state: Readonly<ChatViewState>): Dom.Node => {
       : [
           ...renderedMessages,
           ...(task.streamingText
-            ? [renderStreamingMessage(task.streamingText)]
+            ? [renderStreamingMessage(task.streamingText, renderedMath)]
             : []),
           renderActivity(state),
           ...renderErrorBanners(summary.errorMessage, errorMessage),
@@ -1462,6 +1532,7 @@ const renderAiNativeSessions = (
 
 const renderDom = (
   state: Readonly<ChatViewState>,
+  renderedMath: RenderedMath,
 ): readonly VirtualDomNode[] => {
   const {
     aiNativeTheme,
@@ -1498,7 +1569,7 @@ const renderDom = (
   }
   if (focusMode) {
     const conversation = selectedTask
-      ? renderDetailView(state)
+      ? renderDetailView(state, renderedMath)
       : Dom.div(
           'ChatView ChatDetailView',
           [
@@ -1548,13 +1619,26 @@ const renderDom = (
       },
     )
   }
-  return selectedTask ? renderDetailView(state) : renderListView(state)
+  return selectedTask
+    ? renderDetailView(state, renderedMath)
+    : renderListView(state)
 }
 
 export const render = (
   state: Readonly<ChatViewState>,
+  renderedMath: RenderedMath = new Map(),
+  mathStylesheet = '',
 ): readonly VirtualDomNode[] => {
-  return applyLayoutClasses(state, renderDom(state))
+  const nodes = applyLayoutClasses(state, renderDom(state, renderedMath))
+  if (!mathStylesheet) {
+    return nodes
+  }
+  const root = nodes[0]
+  return [
+    { ...root, childCount: root.childCount + 1 },
+    ...Dom.node(VirtualDomElements.Style, {}, [Dom.textNode(mathStylesheet)]),
+    ...nodes.slice(1),
+  ]
 }
 
 export const renderCss = (state: Readonly<ChatViewState>): string => {

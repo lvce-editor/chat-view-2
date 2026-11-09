@@ -131,6 +131,20 @@
       "url": "dist/typeScriptEvaluationWorkerMain.js"
     },
     {
+      "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"],
+      "id": "builtin.chat-view-2.chat-math-worker",
+      "name": "Chat 2 Math Worker",
+      "type": "web-worker",
+      "url": "dist/chatMathWorkerMain.js"
+    },
+    {
+      "contentSecurityPolicy": ["default-src 'none'", "script-src 'self'"],
+      "id": "builtin.chat-view-2.chat-math-css-worker",
+      "name": "Chat 2 Math CSS Worker",
+      "type": "web-worker",
+      "url": "dist/chatMathCssWorkerMain.js"
+    },
+    {
       "id": "builtin.chat-view-2.commands",
       "type": "node-process",
       "name": "Chat 2 Commands",
