@@ -1437,7 +1437,7 @@ const renderDetailView = (
     (message) => message.type === 'user-message',
   )
   const latestTurnContent = [
-    ...renderedMessages.slice(0, lastUserMessageIndex + 1),
+    ...renderedMessages.slice(lastUserMessageIndex, lastUserMessageIndex + 1),
     renderActivity(state),
     ...renderedMessages.slice(lastUserMessageIndex + 1),
     ...(task.streamingText
