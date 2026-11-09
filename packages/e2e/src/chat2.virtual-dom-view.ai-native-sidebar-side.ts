@@ -24,6 +24,7 @@ export const test: Test = async ({
   await Command.execute('PointerCapture.mock')
   try {
     for (const side of ['Right', 'Left']) {
+      const sideSign = side === 'Right' ? -1 : 1
       await Command.execute(`Layout.moveSideBar${side}`)
       await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
       await expect(chat).toBeVisible()
@@ -50,7 +51,22 @@ export const test: Test = async ({
         clientX: 450,
         pointerId: 1,
       } as unknown as string)
-      expectedSessionsWidth += side === 'Right' ? -50 : 50
+      expectedSessionsWidth += sideSign * 50
+      await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
+      await sash.dispatchEvent('dblclick', {
+        bubbles: true,
+      } as unknown as string)
+      expectedSessionsWidth -= sideSign * 50
+      await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
+      await sash.dispatchEvent('dblclick', {
+        bubbles: true,
+      } as unknown as string)
+      await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
+      await sash.dispatchEvent('pointermove', {
+        bubbles: true,
+        clientX: 500,
+        pointerId: 1,
+      } as unknown as string)
       await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
       await sash.dispatchEvent('pointerup', {
         bubbles: true,
@@ -102,7 +118,7 @@ export const test: Test = async ({
           clientX: 400 + delta,
           pointerId: 1,
         } as unknown as string)
-        expectedSessionsWidth = startWidth + (side === 'Right' ? -delta : delta)
+        expectedSessionsWidth = startWidth + sideSign * delta
         await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
         await expect(composer).toBeVisible()
         await expect(messageContent).toContainText(message.trim())
@@ -118,6 +134,35 @@ export const test: Test = async ({
         clientX: 500,
         pointerId: 1,
       } as unknown as string)
+      await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
+      await sash.dispatchEvent('dblclick', {
+        bubbles: true,
+      } as unknown as string)
+      expectedSessionsWidth = 280
+      await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
+      await sash.dispatchEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        clientX: 400,
+        pointerId: 1,
+      } as unknown as string)
+      await sash.dispatchEvent('pointermove', {
+        bubbles: true,
+        clientX: 420,
+        pointerId: 1,
+      } as unknown as string)
+      expectedSessionsWidth = 280 + sideSign * 20
+      await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
+      await sash.dispatchEvent('pointerup', {
+        bubbles: true,
+        button: 0,
+        clientX: 420,
+        pointerId: 1,
+      } as unknown as string)
+      await sash.dispatchEvent('dblclick', {
+        bubbles: true,
+      } as unknown as string)
+      expectedSessionsWidth = 280
       await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
       const messages = Locator('.ChatMessages')
       const detailHeader = Locator('.ChatDetailHeaderAiNative')

@@ -89,6 +89,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
     value: unknown,
   ) => void
   readonly handleRenameTask: () => void
+  readonly handleSessionsSashDoubleClick: () => void
   readonly handleSessionsSashPointerDown: (
     clientX: number,
     containerWidth: number,
@@ -1584,6 +1585,10 @@ export const createInstance = async (
       }
     },
     handleRenameTask,
+    handleSessionsSashDoubleClick(): void {
+      sessionsSashDrag = undefined
+      delete state.sessionsWidth
+    },
     handleSessionsSashPointerDown(
       clientX: number,
       containerWidth: number,

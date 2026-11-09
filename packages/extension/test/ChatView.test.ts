@@ -854,12 +854,17 @@ test('renders a Sessions sash and resizes the panel with bounded pointer movemen
     expect.objectContaining({
       ariaLabel: 'Resize sessions panel',
       ariaOrientation: 'vertical',
+      onDblClick: 'handleSessionsSashDoubleClick',
       onPointerDown: 'handleSessionsSashPointerDown',
       role: 'separator',
     }),
   )
   expect(view.eventListeners).toEqual(
     expect.arrayContaining([
+      expect.objectContaining({
+        name: 'handleSessionsSashDoubleClick',
+        params: ['handleSessionsSashDoubleClick'],
+      }),
       expect.objectContaining({
         name: 'handleSessionsSashPointerDown',
         trackPointerEvents: [
@@ -890,6 +895,24 @@ test('renders a Sessions sash and resizes the panel with bounded pointer movemen
   instance.handleSessionsSashPointerDown(400, 1000, 100, 820, 280)
   instance.handleSessionsSashPointerMove(450)
   expect(instance.getState().sessionsWidth).toBe(230)
+
+  instance.handleSessionsSashDoubleClick()
+  expect(instance.getState().sessionsWidth).toBeUndefined()
+  expect(
+    instance.render().find((node) => node.className === 'ChatSessions')
+      ?.className,
+  ).toBe('ChatSessions')
+  expect(instance.getCss?.()).not.toContain('ChatSessionsWidth-')
+  instance.handleSessionsSashPointerMove(500)
+  expect(instance.getState().sessionsWidth).toBeUndefined()
+  instance.handleSessionsSashDoubleClick()
+  expect(instance.getState().sessionsWidth).toBeUndefined()
+
+  instance.handleSessionsSashPointerDown(400, 1000, 100, 100, 280)
+  instance.handleSessionsSashPointerMove(450)
+  expect(instance.getState().sessionsWidth).toBe(330)
+  instance.handleSessionsSashPointerUp()
+  instance.dispose?.()
 })
 
 test('shows a session selector toggle in focus mode', async () => {
