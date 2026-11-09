@@ -752,6 +752,7 @@
 }
 
 .ChatCodeBlock {
+  position: relative;
   box-sizing: border-box;
   max-width: 100%;
   margin: 8px 0;
@@ -762,6 +763,60 @@
   overflow-wrap: anywhere;
   background: color-mix(in srgb, var(--ChatForeground) 5%, transparent);
   border-radius: 6px;
+}
+
+.ChatCodeCopyButton {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--ChatMutedForeground);
+  cursor: pointer;
+  background: var(--ChatBackground);
+  border: 0;
+  border-radius: 4px;
+}
+
+.ChatCodeCopyButton::before,
+.ChatCodeCopyButton::after {
+  position: absolute;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  content: '';
+  border: 1px solid currentColor;
+  border-radius: 2px;
+}
+
+.ChatCodeCopyButton::before {
+  top: 5px;
+  left: 5px;
+}
+
+.ChatCodeCopyButton::after {
+  top: 8px;
+  left: 8px;
+}
+
+.ChatCodeCopyButtonCopied::before {
+  top: 4px;
+  left: 7px;
+  width: 6px;
+  height: 10px;
+  border-width: 0 2px 2px 0;
+  border-radius: 0;
+  transform: rotate(45deg);
+}
+
+.ChatCodeCopyButtonCopied::after {
+  display: none;
+}
+
+.ChatCodeCopyButton:hover {
+  color: var(--ChatForeground);
+  background: var(--ChatHoverBackground);
 }
 
 .ChatCodeContent {
