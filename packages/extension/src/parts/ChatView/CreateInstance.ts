@@ -235,23 +235,8 @@ const getWorkingStartedAt = (task: ChatTask): number => {
 }
 
 const getWorkingSeconds = (task: ChatTask): number => {
-  const runningIndex = task.events.findLastIndex(
-    (event) => event.type === 'status' && event.status === 'running',
-  )
-  const runningEvent = task.events[runningIndex]
-  const endEvent =
-    task.status === 'running' || task.status === 'stopping'
-      ? undefined
-      : task.events
-          .slice(runningIndex + 1)
-          .find((event) => event.type === 'status')
-  const startedAt = runningEvent?.timestamp
-    ? Date.parse(runningEvent.timestamp)
-    : getWorkingStartedAt(task)
-  const endedAt = endEvent?.timestamp
-    ? Date.parse(endEvent.timestamp)
-    : Date.now()
-  return Math.max(0, Math.floor((endedAt - startedAt) / 1000))
+  const endedAt = isWorking(task) ? Date.now() : Date.parse(task.updatedAt)
+  return Math.max(0, Math.floor((endedAt - getWorkingStartedAt(task)) / 1000))
 }
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
