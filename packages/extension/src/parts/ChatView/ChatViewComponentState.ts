@@ -135,6 +135,7 @@ const booleanStateKeys = [
 
 const stringStateKeys = [
   'assistantMessageFontFamily',
+  'copiedCodeId',
   'copiedMessageId',
   'draft',
   'errorMessage',
