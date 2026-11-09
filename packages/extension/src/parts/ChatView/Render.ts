@@ -1274,12 +1274,17 @@ const renderActivity = (state: Readonly<ChatViewState>): Dom.Node => {
     return Dom.div('ChatActivityHidden', [])
   }
   const activities = getLatestActivities(summarizeTask(task).activities)
-  if (activities.length === 0 && !isRunning(task)) {
+  const hasWorked = task.events.some(
+    (event) => event.type === 'status' && event.status === 'running',
+  )
+  if (activities.length === 0 && !isRunning(task) && !hasWorked) {
     return Dom.div('ChatActivityHidden', [])
   }
   const label = isRunning(task)
     ? `Working for ${workingSeconds} ${workingSeconds === 1 ? 'second' : 'seconds'}`
-    : `${activities.length} ${activities.length === 1 ? 'step' : 'steps'} completed`
+    : hasWorked
+      ? `Worked for ${workingSeconds} ${workingSeconds === 1 ? 'second' : 'seconds'}`
+      : `${activities.length} ${activities.length === 1 ? 'step' : 'steps'} completed`
   return Dom.div('ChatActivity', [
     Dom.button('toggle-activity', label, 'ChatActivityToggle', {
       ariaExpanded: activityExpanded,
@@ -1432,11 +1437,12 @@ const renderDetailView = (
     (message) => message.type === 'user-message',
   )
   const latestTurnContent = [
-    ...renderedMessages.slice(lastUserMessageIndex),
+    ...renderedMessages.slice(0, lastUserMessageIndex + 1),
+    renderActivity(state),
+    ...renderedMessages.slice(lastUserMessageIndex + 1),
     ...(task.streamingText
       ? [renderStreamingMessage(task.streamingText, renderedMath)]
       : []),
-    renderActivity(state),
     ...renderErrorBanners(summary.errorMessage, errorMessage),
   ]
   const messageContent =
@@ -1446,11 +1452,12 @@ const renderDetailView = (
           Dom.div('ChatTurnLatest', latestTurnContent),
         ]
       : [
-          ...renderedMessages,
+          ...renderedMessages.slice(0, lastUserMessageIndex + 1),
+          renderActivity(state),
+          ...renderedMessages.slice(lastUserMessageIndex + 1),
           ...(task.streamingText
             ? [renderStreamingMessage(task.streamingText, renderedMath)]
             : []),
-          renderActivity(state),
           ...renderErrorBanners(summary.errorMessage, errorMessage),
         ]
   const changes = renderChanges(state)

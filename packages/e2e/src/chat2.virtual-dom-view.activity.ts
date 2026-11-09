@@ -19,7 +19,7 @@ export const test: Test = async ({
   await Locator('button[name="submit"]').click()
 
   const toggle = ChatView2.activityToggleButton()
-  await expect(toggle).toContainText('1 step completed')
+  await expect(toggle).toContainText('Worked for')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await ChatView2.expandActivity()
 
