@@ -879,7 +879,7 @@ const renderMessageImages = (
             Dom.node(VirtualDomElements.Img, {
               alt: image.name,
               className: 'ChatMessageImage',
-              src: image.dataUrl,
+              src: image.objectUrl || '',
             }),
           ],
         ),
@@ -950,7 +950,7 @@ const renderImagePreview = (
       Dom.node(VirtualDomElements.Img, {
         alt: image.name,
         className: 'ChatImagePreview',
-        src: image.dataUrl,
+        src: image.objectUrl || '',
       }),
     ],
   )
@@ -1183,7 +1183,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
                         Dom.node(VirtualDomElements.Img, {
                           alt: image.name,
                           className: 'ChatComposerImagePreview',
-                          src: image.attachment.dataUrl,
+                          src: image.attachment.objectUrl || '',
                         }),
                       ]
                     : [

@@ -13,7 +13,11 @@ import {
 /* eslint-disable sonarjs/cognitive-complexity, unicorn/prefer-await */
 import { getWorkspaceRelativePath } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { DragAndDropWorker } from '@lvce-editor/rpc-registry'
-import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
+import type {
+  ChatApi,
+  ChatImageAttachment,
+  ChatTask,
+} from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
 import type { ChatComposerImage } from './ChatViewState.ts'
 import type { ReadPreference } from './FontSize.ts'
@@ -30,6 +34,7 @@ import {
   isImageFile,
   loadImageAttachment,
 } from '../ChatImageAttachments/ChatImageAttachments.ts'
+import { createChatImageCache } from '../ChatImageCache/ChatImageCache.ts'
 import {
   getUrl,
   getChatTaskHash,
@@ -67,6 +72,55 @@ import { readFontSize } from './FontSize.ts'
 import { getMathExpressions, type MathExpression } from './MathExpressions.ts'
 import { getCodeBlockText, render, renderCss } from './Render.ts'
 import { readTaskOpenMode } from './TaskOpenMode.ts'
+
+const hasUnresolvedTaskImages = (task: ChatTask): boolean =>
+  task.events.some(
+    (event) =>
+      (event.type === 'assistant-message' &&
+        event.images?.some((image) => !image.objectUrl)) ||
+      (event.type === 'user-message' &&
+        event.attachments?.some((image) => !image.objectUrl)),
+  )
+
+const hasUnresolvedComposerImages = (
+  images: readonly ChatComposerImage[],
+): boolean =>
+  images.some((image) => image.attachment && !image.attachment.objectUrl)
+
+const getTaskImages = (task: ChatTask): readonly ChatImageAttachment[] =>
+  task.events.flatMap((event): readonly ChatImageAttachment[] => {
+    if (event.type === 'assistant-message') {
+      return event.images || []
+    }
+    if (event.type === 'user-message') {
+      return event.attachments || []
+    }
+    return []
+  })
+
+const removeObjectUrl = (image: ChatImageAttachment): ChatImageAttachment => {
+  const { objectUrl: _objectUrl, ...persistedImage } = image
+  return persistedImage
+}
+
+const removeObjectUrls = (task: ChatTask): ChatTask => ({
+  ...task,
+  events: task.events.map((event) => {
+    if (event.type === 'assistant-message' && event.images) {
+      return {
+        ...event,
+        images: event.images.map(removeObjectUrl),
+      }
+    }
+    if (event.type === 'user-message' && event.attachments) {
+      return {
+        ...event,
+        attachments: event.attachments.map(removeObjectUrl),
+      }
+    }
+    return event
+  }),
+})
 
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
@@ -478,6 +532,7 @@ export const createInstance = async (
   writeClipboardText: (text: string) => Promise<void> = writeClipboardTextApi,
   writePreference: typeof setPreference = setPreference,
 ): Promise<ActiveChatViewInstance> => {
+  const imageCache = createChatImageCache()
   let pendingWorkbenchLayout: 'ide' | 'ai-native' | undefined
   let authenticationRejected = false
   let currentState: MutableChatViewState | undefined
@@ -559,11 +614,38 @@ export const createInstance = async (
     chatHash.type === 'task'
       ? await api.getTask(chatHash.id).catch(() => undefined)
       : undefined
-  const selectedTask =
+  let selectedTask =
     urlTask ||
     (saved.selectedTaskId
       ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
       : undefined)
+  const resolveTaskImages = async (task: ChatTask): Promise<ChatTask> => ({
+    ...task,
+    events: await Promise.all(
+      task.events.map(async (event) => {
+        if (event.type === 'assistant-message' && event.images?.length) {
+          return {
+            ...event,
+            images: await Promise.all(event.images.map(imageCache.resolve)),
+          }
+        }
+        if (event.type === 'user-message' && event.attachments?.length) {
+          return {
+            ...event,
+            attachments: await Promise.all(
+              event.attachments.map(imageCache.resolve),
+            ),
+          }
+        }
+        return event
+      }),
+    ),
+  })
+  const [resolvedTasks, resolvedSelectedTask] = await Promise.all([
+    Promise.all(tasks.map(resolveTaskImages)),
+    selectedTask ? resolveTaskImages(selectedTask) : Promise.resolve(undefined),
+  ])
+  selectedTask = resolvedSelectedTask
   if (chatHash.type === 'invalid') {
     await setChatTaskHash(execute)
   }
@@ -597,7 +679,7 @@ export const createInstance = async (
     sessionsListVisible: true,
     sessionsVisible: false,
     taskOpenMode,
-    tasks,
+    tasks: resolvedTasks,
     thinkingModeEnabled,
     thinkingModePickerOpen: false,
     userMessageFontFamily,
@@ -652,6 +734,7 @@ export const createInstance = async (
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
   let disposed = false
   let taskRefreshRequest = 0
+  let stateResolutionRequest = 0
   let taskRefreshTimeout: ReturnType<typeof setTimeout> | undefined
   const taskChangeChannel =
     typeof BroadcastChannel === 'undefined'
@@ -684,7 +767,9 @@ export const createInstance = async (
           return
         }
         try {
-          const attachment = await loadImageAttachment(file)
+          const attachment = await imageCache.resolve(
+            await loadImageAttachment(file),
+          )
           state.composerImages = state.composerImages.map((image) =>
             image.id === loadingImage.id
               ? { ...image, attachment, status: 'ready' }
@@ -865,16 +950,20 @@ export const createInstance = async (
     if (archivedTaskIds.has(task.id)) {
       return
     }
-    taskRefreshRequest++
-    const taskChanged = state.selectedTask?.id !== task.id
-    state.selectedTask = task
-    if (taskChanged) {
-      await setChatTaskHash(execute, task.id)
+    const resolvedTask = await resolveTaskImages(task)
+    if (disposed) {
+      return
     }
-    syncWorkingTimer(task)
+    taskRefreshRequest++
+    const taskChanged = state.selectedTask?.id !== resolvedTask.id
+    state.selectedTask = resolvedTask
+    if (taskChanged) {
+      await setChatTaskHash(execute, resolvedTask.id)
+    }
+    syncWorkingTimer(resolvedTask)
     state.tasks = [
-      task,
-      ...state.tasks.filter((item) => item.id !== task.id),
+      resolvedTask,
+      ...state.tasks.filter((item) => item.id !== resolvedTask.id),
     ].slice(0, 20)
     void syncWindowTitle().catch(() => {})
   }
@@ -932,9 +1021,13 @@ export const createInstance = async (
     }
     if (request !== selectedTaskRequest && state.selectedTask?.id !== task.id) {
       taskRefreshRequest++
+      const resolvedTask = await resolveTaskImages(task)
+      if (disposed) {
+        return
+      }
       state.tasks = [
-        task,
-        ...state.tasks.filter((item) => item.id !== task.id),
+        resolvedTask,
+        ...state.tasks.filter((item) => item.id !== resolvedTask.id),
       ].slice(0, 20)
       await context?.requestRerender()
       return
@@ -954,7 +1047,7 @@ export const createInstance = async (
     if (disposed || request !== taskRefreshRequest) {
       return
     }
-    state.tasks = tasks
+    state.tasks = await Promise.all(tasks.map(resolveTaskImages))
     if (
       selectedTaskId &&
       selectedTaskRequestAtStart === selectedTaskRequest &&
@@ -968,8 +1061,8 @@ export const createInstance = async (
         syncWorkingTimer(undefined)
         await setChatTaskHash(execute)
       } else {
-        state.selectedTask = selectedTask
-        syncWorkingTimer(selectedTask)
+        state.selectedTask = await resolveTaskImages(selectedTask)
+        syncWorkingTimer(state.selectedTask)
       }
       void syncWindowTitle().catch(() => {})
     }
@@ -1008,7 +1101,9 @@ export const createInstance = async (
     }
     state.statusPopup = undefined
     const attachments = state.composerImages.flatMap((image) =>
-      image.status === 'ready' && image.attachment ? [image.attachment] : [],
+      image.status === 'ready' && image.attachment
+        ? [removeObjectUrl(image.attachment)]
+        : [],
     )
     if (
       state.loginRequired ||
@@ -1095,7 +1190,11 @@ export const createInstance = async (
         signal: controller.signal,
       }
       const task = selectedTask
-        ? await submissionApi.sendMessage(selectedTask, message, options)
+        ? await submissionApi.sendMessage(
+            removeObjectUrls(selectedTask),
+            message,
+            options,
+          )
         : await submissionApi.createTask(message, modelId, options)
       await updateTask(task, request)
       if (requestRerender) {
@@ -1235,6 +1334,7 @@ export const createInstance = async (
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       disposed = true
+      imageCache.dispose()
       taskChangeChannel?.close()
       if (taskRefreshTimeout !== undefined) {
         clearTimeout(taskRefreshTimeout)
@@ -1470,7 +1570,9 @@ export const createInstance = async (
       }
       if (event.name === 'revert' && state.selectedTask) {
         try {
-          await setTask(await api.revertTask(state.selectedTask))
+          await setTask(
+            await api.revertTask(removeObjectUrls(state.selectedTask)),
+          )
           state.errorMessage = ''
         } catch (error) {
           state.errorMessage =
@@ -1821,6 +1923,14 @@ export const createInstance = async (
           }).catch(() => {})
         }
       }
+      imageCache.retain([
+        ...state.tasks.flatMap(getTaskImages),
+        ...(state.selectedTask ? getTaskImages(state.selectedTask) : []),
+        ...state.composerImages.flatMap((image) =>
+          image.attachment ? [image.attachment] : [],
+        ),
+        ...(state.imagePreview ? [state.imagePreview] : []),
+      ])
       return render(
         { ...state, preserveComposerValue },
         mathRenderCache.rendered,
@@ -1869,11 +1979,53 @@ export const createInstance = async (
         throw new TypeError('Chat 2 state must be a valid state object')
       }
       preserveComposerValue = false
+      const resolutionRequest = ++stateResolutionRequest
       Object.assign(state, {
         ...newState,
         composerImages: newState.composerImages || [],
         selectedTask: newState.selectedTask,
       })
+      const task = state.selectedTask
+      const needsImageResolution =
+        [...state.tasks, ...(task ? [task] : [])].some(
+          hasUnresolvedTaskImages,
+        ) || hasUnresolvedComposerImages(state.composerImages)
+      if (!needsImageResolution) {
+        syncWorkingTimer(state.selectedTask)
+        return
+      }
+      void Promise.all([
+        Promise.all(state.tasks.map(resolveTaskImages)),
+        task ? resolveTaskImages(task) : Promise.resolve(undefined),
+        Promise.all(
+          state.composerImages.map(async (image) =>
+            image.attachment
+              ? {
+                  ...image,
+                  attachment: await imageCache.resolve(image.attachment),
+                }
+              : image,
+          ),
+        ),
+      ]).then(
+        async ([resolvedTasks, resolvedTask, resolvedComposerImages]: readonly [
+          readonly ChatTask[],
+          ChatTask | undefined,
+          readonly ChatComposerImage[],
+        ]) => {
+          if (
+            disposed ||
+            resolutionRequest !== stateResolutionRequest ||
+            state.selectedTask?.id !== task?.id
+          ) {
+            return
+          }
+          state.tasks = resolvedTasks
+          state.selectedTask = resolvedTask
+          state.composerImages = resolvedComposerImages
+          await context?.requestRerender()
+        },
+      )
       syncWorkingTimer(state.selectedTask)
     },
     submit,
