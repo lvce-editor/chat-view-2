@@ -223,10 +223,16 @@ const getResponseImageGenerationError = (response: {
     .map(getRecord)
     .find(
       (item) =>
-        item?.type === 'image_generation_call' && item.status === 'failed',
+        item?.type === 'image_generation_call' &&
+        typeof item.status === 'string' &&
+        item.status !== 'completed' &&
+        (item.status === 'failed' || typeof item.result !== 'string'),
     )
   if (!failedImage) {
     return ''
+  }
+  if (failedImage.status !== 'failed') {
+    return `Image generation did not complete (status: ${failedImage.status}). The provider ended the response before returning an image.`
   }
   const error = getRecord(failedImage.error)
   const code = typeof error?.code === 'string' ? error.code : ''
