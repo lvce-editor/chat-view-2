@@ -12,7 +12,7 @@ import {
 } from '@lvce-editor/api'
 /* eslint-disable sonarjs/cognitive-complexity, unicorn/prefer-await */
 import { getWorkspaceRelativePath } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
-import { DragAndDropWorker, RendererWorker } from '@lvce-editor/rpc-registry'
+import { DragAndDropWorker } from '@lvce-editor/rpc-registry'
 import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
 import type { ChatComposerImage } from './ChatViewState.ts'
@@ -43,7 +43,10 @@ import {
   createDefaultChatApi,
   type DefaultChatApiOptions,
 } from '../DefaultChatApi/DefaultChatApi.ts'
-import { initializeImageTransfer } from '../InitializeImageTransfer/InitializeImageTransfer.ts'
+import {
+  getFileHandles,
+  initializeImageTransfer,
+} from '../InitializeImageTransfer/InitializeImageTransfer.ts'
 import {
   readDraft,
   writeDraft,
@@ -169,7 +172,7 @@ const defaultImageTransferHost: ImageTransferHost = {
   },
   async getClipboardFiles(fileIds) {
     await initializeImageTransfer()
-    const items = await RendererWorker.getFileHandles(fileIds)
+    const items = await getFileHandles(fileIds)
     const files = await Promise.all(
       items.map((item) => toImageFile(item.value)),
     )
