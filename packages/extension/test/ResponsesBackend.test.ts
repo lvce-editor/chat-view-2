@@ -1464,6 +1464,35 @@ test('reports failed image generation details from HTTP Responses', async () => 
   })
 })
 
+test('reports image generation calls that are still running when HTTP Responses complete', async () => {
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: jest.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        id: 'response-image-incomplete',
+        output: [
+          {
+            status: 'generating',
+            type: 'image_generation_call',
+          },
+        ],
+        status: 'completed',
+      }),
+    ),
+  })
+
+  await expect(
+    backend.runStep({
+      input: [{ content: 'Draw a cat', role: 'user' }],
+      modelId: 'gpt-6.1-sol',
+      onTextDelta() {},
+      tools: [],
+    }),
+  ).resolves.toMatchObject({
+    text: 'Image generation did not complete (status: generating). The provider ended the response before returning an image.',
+  })
+})
+
 test('retains provider context usage from WebSocket responses', async () => {
   const socket = new MockResponsesWebSocket()
   const backend = createResponsesBackend({
@@ -1526,5 +1555,38 @@ test('returns generated images from completed WebSocket Responses', async () => 
         mimeType: 'image/webp',
       },
     ],
+  })
+})
+
+test('reports image generation calls that are still running when WebSocket Responses complete', async () => {
+  const socket = new MockResponsesWebSocket()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    supportsStreaming: true,
+  })
+  const pending = backend.runStep({
+    input: [{ content: 'Draw a cat', role: 'user' }],
+    modelId: 'gpt-6.1-sol',
+    onTextDelta() {},
+    tools: [],
+  })
+  socket.open()
+  socket.receive({
+    response: {
+      id: 'response-image-incomplete',
+      output: [
+        {
+          status: 'generating',
+          type: 'image_generation_call',
+        },
+      ],
+      status: 'completed',
+    },
+    type: 'response.completed',
+  })
+
+  await expect(pending).resolves.toMatchObject({
+    text: 'Image generation did not complete (status: generating). The provider ended the response before returning an image.',
   })
 })
