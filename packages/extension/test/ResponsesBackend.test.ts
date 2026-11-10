@@ -1400,6 +1400,7 @@ test('returns generated images from HTTP Responses and requests image generation
       input: [{ content: 'Draw a cat', role: 'user' }],
       modelId: 'gpt-5-test',
       onTextDelta() {},
+      thinkingMode: 'medium',
       tools: [],
     }),
   ).resolves.toMatchObject({
@@ -1420,6 +1421,7 @@ test('returns generated images from HTTP Responses and requests image generation
     model: 'gpt-image-2.5-sunburst',
     type: 'image_generation',
   })
+  expect(request).not.toHaveProperty('reasoning')
 })
 
 test('reports failed image generation details from HTTP Responses', async () => {
@@ -1531,6 +1533,7 @@ test('returns generated images from completed WebSocket Responses', async () => 
     input: [{ content: 'Draw a cat', role: 'user' }],
     modelId: 'gpt-5-test',
     onTextDelta() {},
+    thinkingMode: 'medium',
     tools: [],
   })
   socket.open()
@@ -1556,6 +1559,7 @@ test('returns generated images from completed WebSocket Responses', async () => 
       },
     ],
   })
+  expect(JSON.parse(socket.sent[0])).not.toHaveProperty('reasoning')
 })
 
 test('reports image generation calls that are still running when WebSocket Responses complete', async () => {

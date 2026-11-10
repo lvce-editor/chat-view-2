@@ -1,0 +1,7 @@
+{
+  "body": "{\"id\":\"response-image-title\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Blue Circle\"}]}]}",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "status": 200
+}
