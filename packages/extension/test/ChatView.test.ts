@@ -1026,9 +1026,15 @@ test('submits image attachments and keeps a small preview in the message history
 
   await instance.submit()
 
+  const attachmentEvent = instance
+    .getState()
+    .selectedTask?.events.find((event) => event.type === 'user-message')
+  if (attachmentEvent?.type !== 'user-message') {
+    throw new Error('Expected the submitted user image attachment')
+  }
+  expect(attachmentEvent.attachments?.[0]?.objectUrl).toContain('blob:')
   expect(instance.getState().selectedTask?.events).toContainEqual(
     expect.objectContaining({
-      attachments: [attachment],
       text: 'Describe this',
       type: 'user-message',
     }),
@@ -1037,7 +1043,7 @@ test('submits image attachments and keeps a small preview in the message history
     expect.objectContaining({
       alt: 'sample.png',
       className: 'ChatMessageImage',
-      src: attachment.dataUrl,
+      src: expect.any(String),
     }),
   )
 })
@@ -1064,12 +1070,13 @@ test('renders generated assistant images and opens a dismissible image preview',
     updatedAt: '2026-01-01T00:00:00.000Z',
   }
   instance.setState({ ...instance.getState(), selectedTask: task })
+  await new Promise((resolve) => setTimeout(resolve, 0))
 
   expect(instance.render()).toContainEqual(
     expect.objectContaining({
       alt: image.name,
       className: 'ChatMessageImage',
-      src: image.dataUrl,
+      src: expect.any(String),
     }),
   )
   await dispatch(instance, {
@@ -1082,7 +1089,7 @@ test('renders generated assistant images and opens a dismissible image preview',
   expect(instance.render()).toContainEqual(
     expect.objectContaining({
       className: 'ChatImagePreview',
-      src: image.dataUrl,
+      src: expect.any(String),
     }),
   )
   await dispatch(instance, { name: 'close-image-preview', type: 'click' })
@@ -1129,18 +1136,21 @@ test('loads pasted image files once and submits the decoded image bytes', async 
   expect(instance.getState().composerImages[0]?.status).toBe('ready')
   await instance.submit()
 
-  expect(
-    instance
-      .getState()
-      .selectedTask?.events.find((event) => event.type === 'user-message'),
-  ).toEqual(
+  const submittedMessage = instance
+    .getState()
+    .selectedTask?.events.find((event) => event.type === 'user-message')
+  if (submittedMessage?.type !== 'user-message') {
+    throw new Error('Expected a user message with the pasted image')
+  }
+  expect(submittedMessage.attachments?.[0]?.objectUrl).toContain('blob:')
+  expect(submittedMessage).toEqual(
     expect.objectContaining({
       attachments: [
-        {
+        expect.objectContaining({
           dataUrl: 'data:image/png;base64,aGVsbG8=',
           mimeType: 'image/png',
           name: 'pasted.png',
-        },
+        }),
       ],
     }),
   )

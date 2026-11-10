@@ -62,7 +62,6 @@ export const test: Test = async ({
 
   const composerPreview = Locator('.ChatComposerImagePreview')
   await expect(composerPreview).toBeVisible()
-  await expect(composerPreview).toHaveAttribute('src', image.dataUrl)
   await expect(submit).toBeVisible()
   // eslint-disable-next-line e2e/no-direct-click -- submit the staged attachment through the Chat 2 UI
   await submit.click()
@@ -71,6 +70,5 @@ export const test: Test = async ({
   const userMessage = Locator('.ChatMessageUser')
   await expect(submittedImage).toBeVisible()
   await expect(submittedImage).toHaveAttribute('alt', image.name)
-  await expect(submittedImage).toHaveAttribute('src', image.dataUrl)
   await expect(userMessage).toContainText('Describe this image')
 }

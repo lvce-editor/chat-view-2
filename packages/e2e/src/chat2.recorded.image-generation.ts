@@ -55,12 +55,51 @@ export const test: Test = async (api) => {
 
   const image = api.Locator('.ChatMessageAssistant .ChatMessageImage')
   await api.expect(image).toBeVisible()
+  const imageState = await api.ComponentState.getState<{
+    readonly errorMessage?: string
+    readonly selectedTask?: {
+      readonly events: readonly {
+        readonly images?: readonly { readonly objectUrl?: string }[]
+      }[]
+    }
+    readonly tasks?: readonly Readonly<Record<string, unknown>>[]
+  }>(view.uid)
+  const imageSource = imageState.selectedTask?.events
+    .flatMap((event) => event.images || [])
+    .at(0)?.objectUrl
+  if (!imageSource?.startsWith('blob:')) {
+    throw new Error(
+      `Expected a blob image URL; selected task: ${JSON.stringify(imageState.selectedTask)}; tasks: ${JSON.stringify(imageState.tasks)}; error: ${JSON.stringify(imageState.errorMessage)}`,
+    )
+  }
   await api.expect(image).toHaveAttribute('alt', 'Generated image 1.png')
+  await api.expect(image).toHaveAttribute('src', imageSource)
   await api.expect(image).toHaveJSProperty('naturalWidth', 1)
   await api.expect(api.Locator('.ChatError, .ChatErrorBanner')).toHaveCount(0)
 
   await api.Main.closeAllEditors()
   await api.ChatView2.show()
   await api.expect(image).toBeVisible()
+  const restoredComponents = await api.ComponentState.getComponents()
+  const restoredView = restoredComponents.find(
+    (component) => component.moduleId === 'ExtensionView',
+  )
+  if (!restoredView) throw new Error('Chat 2 view was not restored')
+  const restoredState = await api.ComponentState.getState<{
+    readonly selectedTask?: {
+      readonly events: readonly {
+        readonly images?: readonly { readonly objectUrl?: string }[]
+      }[]
+    }
+  }>(restoredView.uid)
+  const restoredImageSource = restoredState.selectedTask?.events
+    .flatMap((event) => event.images || [])
+    .at(0)?.objectUrl
+  if (!restoredImageSource?.startsWith('blob:')) {
+    throw new Error(
+      `Expected a restored blob image URL, got ${restoredImageSource}`,
+    )
+  }
+  await api.expect(image).toHaveAttribute('src', restoredImageSource)
   await api.expect(image).toHaveJSProperty('naturalWidth', 1)
 }

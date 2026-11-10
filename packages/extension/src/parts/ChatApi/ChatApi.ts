@@ -28,6 +28,7 @@ export interface ChatImageAttachment {
   readonly dataUrl: string
   readonly mimeType: string
   readonly name: string
+  readonly objectUrl?: string
 }
 
 interface ChatTaskEventBase {
