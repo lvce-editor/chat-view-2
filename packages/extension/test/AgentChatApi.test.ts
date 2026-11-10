@@ -212,7 +212,7 @@ test('generates the title asynchronously and preserves it through later task sav
   const titleUpdated = Promise.withResolvers<void>()
   const generateTitle = jest
     .fn<NonNullable<AgentBackend['generateTitle']>>()
-    .mockResolvedValue('fix the chat title')
+    .mockResolvedValue('cat image')
   const runStep = jest.fn<AgentBackend['runStep']>(() => stepPromise)
   const backend: AgentBackend = {
     generateTitle,
@@ -247,47 +247,40 @@ test('generates the title asynchronously and preserves it through later task sav
     titleModelId: 'gpt-5.6-luna',
     toolHost,
   })
-  const taskPromise = api.createTask(
-    'über please fix the titlte of this chat',
-    'gpt-test',
-    {
-      onUpdate(task) {
-        updates.push(task.title)
-        if (task.title === 'Fix the chat title') {
-          titleUpdated.resolve()
-        }
-      },
+  const taskPromise = api.createTask('image of a cat', 'gpt-test', {
+    onUpdate(task) {
+      updates.push(task.title)
+      if (task.title === 'Cat image') {
+        titleUpdated.resolve()
+      }
     },
-  )
+  })
 
   await titleUpdated.promise
-  expect(generateTitle).toHaveBeenCalledWith(
-    'über please fix the titlte of this chat',
-    'gpt-5.6-luna',
-  )
-  expect(updates[0]).toBe('Über please fix the titlte of this chat')
+  expect(generateTitle).toHaveBeenCalledWith('image of a cat', 'gpt-5.6-luna')
+  expect(updates[0]).toBe('Image of a cat')
   step.resolve({ responseId: 'response-1', text: 'Done.', toolCalls: [] })
 
   const task = await taskPromise
   expect(task).toMatchObject({
     status: 'completed',
-    title: 'Fix the chat title',
+    title: 'Cat image',
     titleGenerated: true,
   })
   expect(task.events).toEqual(
     expect.arrayContaining([
       expect.objectContaining({
-        text: 'über please fix the titlte of this chat',
+        text: 'image of a cat',
         type: 'user-message',
       }),
       expect.objectContaining({ text: 'Done.', type: 'assistant-message' }),
     ]),
   )
   await expect(store.get(task.id)).resolves.toMatchObject({
-    title: 'Fix the chat title',
+    title: 'Cat image',
     titleGenerated: true,
   })
-  expect(updates).toContain('Fix the chat title')
+  expect(updates).toContain('Cat image')
 })
 
 test('answers a general question and follow-up when no workspace is open', async () => {

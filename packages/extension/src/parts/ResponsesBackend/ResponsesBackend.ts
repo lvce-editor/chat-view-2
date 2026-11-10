@@ -971,7 +971,7 @@ export const createResponsesBackend = ({
               },
             ],
             instructions:
-              'Create a concise, descriptive title for the user message. Correct spelling mistakes. Return only the title, with no quotes or explanation.',
+              'Create a concise, descriptive title for the user message. Preserve its main subject and intent; do not drop an important noun just because the message uses introductory or filler words. For example, title “image of a cat” as “Cat image”, not “Image of”. Correct spelling mistakes. Return only the title, with no quotes or explanation.',
             max_output_tokens: 40,
             model: modelId,
             store: false,

@@ -193,6 +193,8 @@ test('generates a title with the selected model, a single message, and no tools'
     tools: [],
   })
   expect(request.instructions).toContain('Return only the title')
+  expect(request.instructions).toContain('Preserve its main subject and intent')
+  expect(request.instructions).toContain('“image of a cat” as “Cat image”')
   expect(fetchMock.mock.calls[0]?.[1]?.headers).toEqual(
     expect.objectContaining({ Authorization: 'Bearer editor-token' }),
   )
