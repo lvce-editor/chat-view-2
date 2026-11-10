@@ -141,6 +141,10 @@ const requestsImageGeneration = (input: AgentStepOptions['input']): boolean =>
       ),
   )
 
+const usesImageGeneration = (options: AgentStepOptions): boolean =>
+  supportsImageGenerationTool(options.modelId) &&
+  requestsImageGeneration(options.input)
+
 const createResponseRequest = (
   options: AgentStepOptions,
   openAiWebSearch: boolean,
@@ -152,7 +156,11 @@ const createResponseRequest = (
       include: ['web_search_call.action.sources'],
     }),
   model: options.modelId,
-  ...(options.thinkingMode && { reasoning: { effort: options.thinkingMode } }),
+  // Explicit reasoning effort can end image calls without returning a result.
+  ...(options.thinkingMode &&
+    !usesImageGeneration(options) && {
+      reasoning: { effort: options.thinkingMode },
+    }),
   ...(options.previousResponseId && {
     previous_response_id: options.previousResponseId,
   }),
@@ -167,8 +175,7 @@ const createResponseRequest = (
     !options.modelId.toLowerCase().startsWith('openrouter/')
       ? [{ type: 'web_search' }]
       : []),
-    ...(supportsImageGenerationTool(options.modelId) &&
-    requestsImageGeneration(options.input)
+    ...(usesImageGeneration(options)
       ? [{ model: 'gpt-image-2.5-sunburst', type: 'image_generation' }]
       : []),
   ],

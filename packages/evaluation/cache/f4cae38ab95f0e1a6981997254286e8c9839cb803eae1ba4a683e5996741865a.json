@@ -1,0 +1,7 @@
+{
+  "body": "data: {\"type\":\"response.created\",\"response\":{\"id\":\"response-image-circle\",\"status\":\"in_progress\",\"output\":[]}}\n\ndata: {\"type\":\"response.output_item.done\",\"item\":{\"id\":\"image-circle\",\"type\":\"image_generation_call\",\"status\":\"completed\",\"output_format\":\"png\",\"result\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==\"}}\n\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"response-image-circle\",\"status\":\"completed\",\"output\":[{\"id\":\"image-circle\",\"type\":\"image_generation_call\",\"status\":\"completed\",\"output_format\":\"png\",\"result\":\"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPj/HwADAgH/5ncLrgAAAABJRU5ErkJggg==\"}]}}\n\n",
+  "headers": {
+    "content-type": "text/event-stream"
+  },
+  "status": 200
+}
