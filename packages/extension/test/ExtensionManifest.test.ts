@@ -175,6 +175,7 @@ test('contributes every preference read by Chat 2', async () => {
       'chat2.assistantMessageFontFamily',
       'chat2.computerUseEnabled',
       'chat2.experimentalFocusMode',
+      'chat2.followUpBehavior',
       'chat2.fontFamily',
       'chat2.fontSize',
       'chat2.openAiWebSearch',

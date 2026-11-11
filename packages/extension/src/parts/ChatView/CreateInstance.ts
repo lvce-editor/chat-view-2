@@ -43,7 +43,7 @@ import {
   isChatPath,
   parseChatTaskHash,
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
-import { setStatus } from '../ChatTask/ChatTask.ts'
+import { createEvent, setStatus } from '../ChatTask/ChatTask.ts'
 import {
   createDefaultChatApi,
   type DefaultChatApiOptions,
@@ -598,6 +598,15 @@ export const createInstance = async (
     ?.thinkingModes?.includes(savedThinkingMode)
     ? savedThinkingMode
     : 'medium'
+  let followUpBehavior: 'queue' | 'steer' = 'queue'
+  try {
+    const value = await (readPreference || getPreference)(
+      'chat2.followUpBehavior',
+    )
+    if (value === 'steer') followUpBehavior = value
+  } catch {
+    // Queue safely when preferences are unavailable.
+  }
   let thinkingModeEnabled = true
   try {
     thinkingModeEnabled =
@@ -666,6 +675,7 @@ export const createInstance = async (
     errorMessage,
     focusMode: chatRoute || (focusModeEnabled && (await getFocusMode())),
     focusModeEnabled,
+    followUpBehavior,
     fontFamily,
     fontSize,
     loginPending: false,
@@ -1127,10 +1137,36 @@ export const createInstance = async (
     }
     const modelId = state.selectedModelId
     const initialTask = state.selectedTask
+    const thinkingMode = state.selectedThinkingMode
     const submissionApi = api
     const controller = new AbortController()
     const completion = Promise.withResolvers<void>()
+    const previousCompletion = initialTask && runCompletions.get(initialTask.id)
+    if (initialTask && isWorking(initialTask) && !previousCompletion) {
+      releaseReservation()
+      throw new Error('This conversation is running in another window.')
+    }
     let runningTaskId: string | undefined
+    const queuedMessage =
+      initialTask && previousCompletion
+        ? {
+            event: createEvent({
+              attachments: state.composerImages.flatMap((image) =>
+                image.attachment ? [image.attachment] : [],
+              ),
+              text: message,
+              type: 'user-message',
+            }),
+            taskId: initialTask.id,
+          }
+        : undefined
+    if (queuedMessage) {
+      state.queuedMessages = [...(state.queuedMessages || []), queuedMessage]
+      // Each follow-up owns a place in the chain before persistence yields.
+      runningTaskId = queuedMessage.taskId
+      runCompletions.set(runningTaskId, completion.promise)
+      if (followUpBehavior === 'steer') activeRuns.get(runningTaskId)?.abort()
+    }
     try {
       if (state.focusMode) {
         scrollToLatestTurn = true
@@ -1140,47 +1176,41 @@ export const createInstance = async (
       state.composerImages = []
       state.modelPickerOpen = false
       await saveDraft()
-      let latestTask =
+      if (queuedMessage) {
+        releaseReservation()
+        await context?.requestRerender()
+      }
+      if (previousCompletion) await previousCompletion
+      if (disposed || (initialTask && archivedTaskIds.has(initialTask.id)))
+        return
+      const latestTask =
         initialTask &&
         (state.tasks.find((task) => task.id === initialTask.id) || initialTask)
-      const previousCompletion =
-        latestTask?.status !== 'running' && latestTask
-          ? runCompletions.get(latestTask.id)
-          : undefined
-      if (previousCompletion) {
-        // Completion can render before the previous backend releases its lock.
-        await previousCompletion
-        latestTask =
-          state.tasks.find((task) => task.id === latestTask?.id) || latestTask
-      }
       const selectedTask = latestTask ? { ...latestTask, modelId } : undefined
-      if (selectedTask?.status === 'running') {
-        if (!activeRuns.has(selectedTask.id)) {
-          throw new Error('This conversation is running in another window.')
-        }
-        await submissionApi.steer(selectedTask.id, message, attachments)
-        if (requestRerender) {
-          await context?.requestRerender()
-        }
-        return
+      if (queuedMessage) {
+        state.queuedMessages = (state.queuedMessages || []).filter(
+          (item) => item !== queuedMessage,
+        )
       }
       runningTaskId = selectedTask?.id
       if (runningTaskId) {
         activeRuns.set(runningTaskId, controller)
-        runCompletions.set(runningTaskId, completion.promise)
+        if (!runCompletions.has(runningTaskId))
+          runCompletions.set(runningTaskId, completion.promise)
       }
       const options = {
         attachments,
         ...(state.models
           .find((model) => model.id === modelId)
-          ?.thinkingModes?.includes(state.selectedThinkingMode) && {
-          thinkingMode: state.selectedThinkingMode,
+          ?.thinkingModes?.includes(thinkingMode) && {
+          thinkingMode,
         }),
         onUpdate: (task: ChatTask): Promise<void> => {
           runningTaskId = task.id
           if (task.status === 'idle' || isWorking(task)) {
             activeRuns.set(task.id, controller)
-            runCompletions.set(task.id, completion.promise)
+            if (!runCompletions.has(task.id))
+              runCompletions.set(task.id, completion.promise)
           }
           if (task.status !== 'idle') {
             releaseReservation()
@@ -1201,6 +1231,10 @@ export const createInstance = async (
         await context?.requestRerender()
       }
     } finally {
+      if (queuedMessage)
+        state.queuedMessages = (state.queuedMessages || []).filter(
+          (item) => item !== queuedMessage,
+        )
       releaseReservation()
       if (runningTaskId && activeRuns.get(runningTaskId) === controller) {
         activeRuns.delete(runningTaskId)

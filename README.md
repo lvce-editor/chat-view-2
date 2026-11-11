@@ -76,3 +76,11 @@ npm test
 npm run type-check
 npm run lint
 ```
+
+### Follow-up messages
+
+`chat2.followUpBehavior` defaults to `"queue"`. Messages sent while a task is
+running appear at the bottom of the conversation with a Queued label and run
+in order after the current response finishes. Set it to `"steer"` to cancel the
+current task and send the follow-up once cancellation finishes. Reopen the chat
+view after changing this setting.

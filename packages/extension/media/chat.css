@@ -1581,3 +1581,16 @@
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
+
+.ChatQueuedMessage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0.8;
+}
+
+.ChatQueuedMessageLabel {
+  text-align: end;
+  font-size: 0.9em;
+  margin-block: 4px 12px;
+}
