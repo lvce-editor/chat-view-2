@@ -141,77 +141,109 @@ test('reserves a pending submission before draft persistence can yield to anothe
   instance.dispose?.()
 })
 
-test('an older turn finishing cannot release a newer pending steering submission', async () => {
-  const started = Promise.withResolvers<void>()
-  const finish = Promise.withResolvers<void>()
-  const steeringStarted = Promise.withResolvers<void>()
-  const steeringFinished = Promise.withResolvers<void>()
-  const api = createMockChatApi()
-  jest
-    .spyOn(api, 'createTask')
-    .mockImplementation(
-      async (
-        message,
-        modelId,
-        options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
-      ) => {
-        const task: ChatTask = {
-          createdAt: new Date().toISOString(),
-          events: [createEvent({ text: message, type: 'user-message' })],
-          id: 'pending-reservation-task',
+test.each(['queue', 'steer', 'invalid'])(
+  'serializes follow-ups with %s behavior and preserves their order across navigation',
+  async (behavior) => {
+    const started = Promise.withResolvers<void>()
+    const finish = Promise.withResolvers<void>()
+    const api = createMockChatApi()
+    const createTask = jest
+      .spyOn(api, 'createTask')
+      .mockImplementation(
+        async (
+          message,
           modelId,
-          status: 'running',
-          title: 'Pending reservation',
-          updatedAt: new Date().toISOString(),
-        }
-        await options?.onUpdate?.(task)
-        started.resolve()
-        await finish.promise
-        const completed = { ...task, status: 'completed' as const }
-        await options?.onUpdate?.(completed)
-        return completed
-      },
+          options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+        ) => {
+          const task: ChatTask = {
+            createdAt: new Date().toISOString(),
+            events: [createEvent({ text: message, type: 'user-message' })],
+            id: 'queued-task',
+            modelId,
+            status: 'running',
+            title: 'Queue',
+            updatedAt: new Date().toISOString(),
+          }
+          await options?.onUpdate?.(task)
+          started.resolve()
+          await finish.promise
+          const completed = {
+            ...task,
+            events: [
+              ...task.events,
+              createEvent({
+                text: 'First response',
+                type: 'assistant-message',
+              }),
+            ],
+            status: 'completed' as const,
+          }
+          await options?.onUpdate?.(completed)
+          return completed
+        },
+      )
+    const sendMessage = jest.spyOn(api, 'sendMessage')
+    const steer = jest.spyOn(api, 'steer')
+    const instance = await createInstance(undefined, api, async (key) =>
+      key === 'chat2.followUpBehavior' ? behavior : undefined,
     )
-  const sendMessage = jest.spyOn(api, 'sendMessage')
-  const steer = jest.spyOn(api, 'steer').mockImplementation(async () => {
-    steeringStarted.resolve()
-    await steeringFinished.promise
-  })
-  const instance = await createInstance(undefined, api)
-  try {
-    await dispatch(instance, {
-      name: 'composer',
-      type: 'input',
-      value: 'Start this turn',
-    })
-    const first = instance.submit()
-    await started.promise
-    await dispatch(instance, {
-      name: 'composer',
-      type: 'input',
-      value: 'Steer this turn',
-    })
-    const second = instance.submit()
-    await steeringStarted.promise
-    finish.resolve()
-    await first
-    await dispatch(instance, {
-      name: 'composer',
-      type: 'input',
-      value: 'Preserve this draft',
-    })
-    await instance.submit()
-    expect(sendMessage).not.toHaveBeenCalled()
-    expect(steer).toHaveBeenCalledTimes(1)
-    expect(instance.getState().draft).toBe('Preserve this draft')
-    steeringFinished.resolve()
-    await second
-  } finally {
-    finish.resolve()
-    steeringFinished.resolve()
-    instance.dispose?.()
-  }
-})
+    const submissions: Promise<void>[] = []
+    try {
+      await dispatch(instance, {
+        name: 'composer',
+        type: 'input',
+        value: 'First',
+      })
+      submissions.push(instance.submit())
+      await started.promise
+      for (const message of ['Second', 'Third']) {
+        await dispatch(instance, {
+          name: 'composer',
+          type: 'input',
+          value: message,
+        })
+        submissions.push(instance.submit())
+        await flushPromises()
+      }
+      expect(sendMessage).not.toHaveBeenCalled()
+      expect(steer).not.toHaveBeenCalled()
+      expect(createTask.mock.calls[0][2]?.signal?.aborted).toBe(
+        behavior === 'steer',
+      )
+      expect(instance.getState().draft).toBe('')
+      const queued = getNodesByClass(instance.render(), 'ChatQueuedMessage')
+      expect(queued).toHaveLength(2)
+      expect(getText(instance.render())).toContain('Queued')
+      await instance.newChat()
+      expect(
+        getNodesByClass(instance.render(), 'ChatQueuedMessage'),
+      ).toHaveLength(0)
+      finish.resolve()
+      await Promise.all(submissions)
+      expect(sendMessage).toHaveBeenCalledTimes(2)
+      expect(sendMessage.mock.calls[0][1]).toBe('Second')
+      expect(sendMessage.mock.calls[1][1]).toBe('Third')
+      expect(
+        sendMessage.mock.calls[1][0].events.some(
+          (event) => event.type === 'user-message' && event.text === 'Second',
+        ),
+      ).toBe(true)
+      expect(
+        sendMessage.mock.calls[0][0].events.some(
+          (event) =>
+            event.type === 'assistant-message' &&
+            event.text === 'First response',
+        ),
+      ).toBe(true)
+      expect(instance.getState().selectedTask).toBeUndefined()
+      expect(instance.getState().queuedMessages).toHaveLength(0)
+    } finally {
+      finish.resolve()
+      await Promise.all(submissions)
+      instance.dispose?.()
+    }
+  },
+)
 
 test('a follow-up waits for its own completed turn to release execution', async () => {
   const terminalShown = Promise.withResolvers<void>()

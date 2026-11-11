@@ -1157,6 +1157,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
   const {
     composerImages,
     draft,
+    followUpBehavior,
     modelPickerOpen,
     preserveComposerValue = false,
     selectedModelId,
@@ -1164,7 +1165,9 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
   } = state
   const running = isRunning(selectedTask)
   const placeholder = running
-    ? 'Steer the current task'
+    ? followUpBehavior === 'steer'
+      ? 'Steer the current task'
+      : 'Queue a follow-up message'
     : selectedTask
       ? 'Ask for a follow-up change'
       : 'Describe a programming task'
@@ -1224,7 +1227,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
           'ChatModelButton',
           { ariaExpanded: modelPickerOpen },
         ),
-        running && draft.trim() !== '/status'
+        running && !draft.trim() && composerImages.length === 0
           ? Dom.button('stop', '■', 'ChatSubmitButton', {
               ariaLabel: 'Stop task',
               title: 'Stop task',
@@ -1469,6 +1472,7 @@ const renderDetailView = (
     errorMessage,
     focusMode,
     imagePreview,
+    queuedMessages = [],
     selectedTask: task,
     sessionsVisible,
   } = state
@@ -1526,7 +1530,22 @@ const renderDetailView = (
   const changes = renderChanges(state)
   const composer = renderComposer(state)
   const messages = Dom.div('ChatMessages', [
-    Dom.div('ChatMessagesContent', messageContent),
+    Dom.div('ChatMessagesContent', [
+      ...messageContent,
+      ...queuedMessages
+        .filter((item) => item.taskId === task.id)
+        .map((item) =>
+          Dom.div('ChatQueuedMessage', [
+            renderMessage(
+              item.event,
+              copiedMessageId,
+              copiedCodeId,
+              renderedMath,
+            ),
+            Dom.div('ChatQueuedMessageLabel', [Dom.textNode('Queued')]),
+          ]),
+        ),
+    ]),
   ])
   if (focusMode) {
     return Dom.div(
