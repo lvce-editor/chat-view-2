@@ -127,6 +127,11 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getCss: () => string
   readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
   readonly getState: () => Readonly<ChatViewState>
+  readonly getQuickPickItems: () => readonly {
+    readonly id: string
+    readonly title: string
+  }[]
+  readonly openQuickPickItem: (id: string) => Promise<void>
   readonly handleDragOver: () => void
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly handleImageDrop: (dropId: unknown) => Promise<void>
@@ -463,6 +468,22 @@ export const toggleActiveChatViewFocusMode = async (): Promise<void> => {
 
 export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
   await getActiveInstance()?.toggleSessionsList(true)
+}
+
+export const getActiveChatQuickPickItems = (): readonly {
+  readonly id: string
+  readonly title: string
+}[] => {
+  return getActiveInstance()?.getQuickPickItems() ?? []
+}
+
+export const openActiveChatQuickPickItem = async (
+  id: unknown,
+): Promise<void> => {
+  if (typeof id !== 'string' || !id) {
+    return
+  }
+  await getActiveInstance()?.openQuickPickItem(id)
 }
 
 const activeRuns = new Map<string, AbortController>()
@@ -1417,6 +1438,14 @@ export const createInstance = async (
     },
     getState(): Readonly<ChatViewState> {
       return state
+    },
+    getQuickPickItems() {
+      return state.tasks
+        .filter((task) => !archivedTaskIds.has(task.id))
+        .map(({ id, title }) => ({ id, title }))
+    },
+    async openQuickPickItem(id: string): Promise<void> {
+      await openTask(id)
     },
     handleDragOver(): void {},
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {

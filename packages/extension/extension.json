@@ -122,7 +122,9 @@
     "onCommand:chat2.showBoardLayout",
     "onCommand:chat2.showAiNativeLayout",
     "onView:chat2.views.board",
-    "onCommand:chat2.showIdeLayout"
+    "onCommand:chat2.showIdeLayout",
+    "onCommand:chat2.getQuickPickItems",
+    "onCommand:chat2.openQuickPickItem"
   ],
   "rpc": [
     {
@@ -217,6 +219,16 @@
     {
       "id": "chat2.showIdeLayout",
       "label": "View: Open IDE Layout"
+    },
+    {
+      "id": "chat2.getQuickPickItems",
+      "label": "Chat 2: Get Quick Pick Items",
+      "internal": true
+    },
+    {
+      "id": "chat2.openQuickPickItem",
+      "label": "Chat 2: Open Quick Pick Item",
+      "internal": true
     }
   ],
   "views": [
