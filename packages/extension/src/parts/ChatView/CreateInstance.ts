@@ -1000,7 +1000,10 @@ export const createInstance = async (
   }
 
   let openingTaskId: string | undefined
-  const openTask = async (id: string): Promise<void> => {
+  const openTask = async (
+    id: string,
+    requestRerender = false,
+  ): Promise<void> => {
     if (state.selectedTask?.id === id || openingTaskId === id) {
       return
     }
@@ -1036,6 +1039,9 @@ export const createInstance = async (
       state.activityExpanded = false
       state.changesExpanded = false
       void syncWindowTitle().catch(() => {})
+      if (requestRerender) {
+        await context?.requestRerender()
+      }
     } finally {
       if (openingTaskId === id) {
         openingTaskId = undefined
@@ -1943,7 +1949,7 @@ export const createInstance = async (
     handleTitleMenuClick,
     newChat,
     async openQuickPickItem(id: string): Promise<void> {
-      await openTask(id)
+      await openTask(id, true)
     },
     render(): readonly VirtualDomNode[] {
       const { selectedTask } = state
