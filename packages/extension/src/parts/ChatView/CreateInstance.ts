@@ -1036,6 +1036,7 @@ export const createInstance = async (
       state.activityExpanded = false
       state.changesExpanded = false
       void syncWindowTitle().catch(() => {})
+      await context?.requestRerender()
     } finally {
       if (openingTaskId === id) {
         openingTaskId = undefined
