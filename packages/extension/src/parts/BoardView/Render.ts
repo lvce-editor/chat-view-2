@@ -14,6 +14,7 @@ export interface BoardState {
   readonly connectedIds: readonly string[]
   readonly error: BoardError | undefined
   readonly loading: boolean
+  readonly providerSelected: boolean
 }
 
 const input = (name: string, label: string, value?: string): Dom.Node =>
@@ -32,7 +33,9 @@ const input = (name: string, label: string, value?: string): Dom.Node =>
   ])
 
 export const render = (state: BoardState): Dom.Node => {
-  const { board, boardId, connectedIds, error, loading } = state
+  const { board, boardId, connectedIds, error, loading, providerSelected } =
+    state
+  const showProviderGrid = !providerSelected
   const cards = board?.cards || []
   const cardsByList = new Map<string, Dom.Node[]>()
   for (const card of cards) {
@@ -103,46 +106,75 @@ export const render = (state: BoardState): Dom.Node => {
         ]
       : [
           Dom.div('BoardSetup', [
-            Dom.heading(2, 'BoardSetupTitle', 'Connect a Trello board'),
-            Dom.div('BoardIntro', [
-              Dom.textNode(
-                'Bring your lists and cards into the editor. This view is read-only; changes stay in Trello.',
-              ),
-            ]),
-            Dom.div('BoardCredentialsHelp', [
-              Dom.textNode(
-                'Use your Trello API key and a token with read access. Your credentials stay in memory until the editor reloads. Board IDs are remembered in settings.',
-              ),
-            ]),
-            Dom.link(
-              'https://developer.atlassian.com/cloud/trello/guides/rest-api/authorization/',
-              'How to get a Trello API key and token',
-              'BoardHelpLink',
-            ),
-            Dom.form('board-connect', 'BoardConnect', [
-              input('board-id', 'Board URL or ID', boardId),
-              input('board-api-key', 'Trello API key'),
-              input('board-token', 'Trello read token'),
-              Dom.node(
-                VirtualDomElements.Button,
-                {
-                  buttonType: 'submit',
-                  className: primaryButtonClass,
-                  disabled: loading,
-                },
-                [Dom.textNode('Connect board')],
-              ),
-            ]),
-            ...(connectedIds.length > 0
+            Dom.heading(2, 'BoardSetupTitle', 'Connect a board'),
+            ...(showProviderGrid
               ? [
-                  Dom.div('BoardRemembered', [
-                    Dom.heading(3, 'BoardRememberedTitle', 'Remembered boards'),
-                    ...connectedIds.map((id) =>
-                      Dom.button(`board-select:${id}`, id, 'BoardButton'),
+                  Dom.div('BoardProviderGrid', [
+                    Dom.button(
+                      'board-provider:trello',
+                      'Connect Trello',
+                      'BoardProviderCard',
+                      { ariaLabel: 'Connect Trello' },
                     ),
                   ]),
                 ]
-              : []),
+              : [
+                  Dom.div('BoardProviderSetup', [
+                    Dom.button(
+                      'board-providers',
+                      'All providers',
+                      'BoardBackButton',
+                    ),
+                    Dom.heading(
+                      3,
+                      'BoardProviderTitle',
+                      'Connect a Trello board',
+                    ),
+                  ]),
+                  Dom.div('BoardIntro', [
+                    Dom.textNode(
+                      'Bring your lists and cards into the editor. This view is read-only; changes stay in Trello.',
+                    ),
+                  ]),
+                  Dom.div('BoardCredentialsHelp', [
+                    Dom.textNode(
+                      'Use your Trello API key and a token with read access. Your credentials stay in memory until the editor reloads. Board IDs are remembered in settings.',
+                    ),
+                  ]),
+                  Dom.link(
+                    'https://developer.atlassian.com/cloud/trello/guides/rest-api/authorization/',
+                    'How to get a Trello API key and token',
+                    'BoardHelpLink',
+                  ),
+                  Dom.form('board-connect', 'BoardConnect', [
+                    input('board-id', 'Board URL or ID', boardId),
+                    input('board-api-key', 'Trello API key'),
+                    input('board-token', 'Trello read token'),
+                    Dom.node(
+                      VirtualDomElements.Button,
+                      {
+                        buttonType: 'submit',
+                        className: primaryButtonClass,
+                        disabled: loading,
+                      },
+                      [Dom.textNode('Connect board')],
+                    ),
+                  ]),
+                  ...(connectedIds.length > 0
+                    ? [
+                        Dom.div('BoardRemembered', [
+                          Dom.heading(
+                            3,
+                            'BoardRememberedTitle',
+                            'Remembered boards',
+                          ),
+                          ...connectedIds.map((id) =>
+                            Dom.button(`board-select:${id}`, id, 'BoardButton'),
+                          ),
+                        ]),
+                      ]
+                    : []),
+                ]),
           ]),
         ]),
     ...(loading

@@ -34,6 +34,14 @@ const defaultHost: BoardHost = {
   write: setPreference,
 }
 
+const getProviderAction = (
+  name: string | undefined,
+): 'trello' | 'providers' | undefined => {
+  if (name === 'board-provider:trello') return 'trello'
+  if (name === 'board-providers') return 'providers'
+  return undefined
+}
+
 export const createInstance = async (
   context?: ViewContext,
   host: BoardHost = defaultHost,
@@ -66,6 +74,7 @@ export const createInstance = async (
     connectedIds,
     error: undefined,
     loading: false,
+    providerSelected: false,
   }
   let apiKey = connection?.apiKey || ''
   let token = connection?.token || ''
@@ -144,6 +153,7 @@ export const createInstance = async (
       connectedIds: ids,
       error: undefined,
       loading: false,
+      providerSelected: false,
     }
     apiKey = ''
     token = ''
@@ -166,6 +176,43 @@ export const createInstance = async (
     apiKey = selectedKey
     token = selectedToken
     state = { ...state, board }
+  }
+  const handleClick = async (event: Readonly<ViewEvent>): Promise<void> => {
+    const providerAction = getProviderAction(event.name)
+    if (providerAction) {
+      const { error } = state
+      state = {
+        ...state,
+        error: providerAction === 'providers' ? undefined : error,
+        providerSelected: providerAction === 'trello',
+      }
+      return
+    }
+    if (event.name === 'board-chat')
+      await host.execute('chat2.showAiNativeLayout')
+    else if (event.name === 'board-ide')
+      await host.execute('chat2.showIdeLayout')
+    if (
+      event.name === 'board-change' ||
+      event.name?.startsWith('board-select:')
+    ) {
+      cancel()
+      apiKey = ''
+      token = ''
+      state = {
+        ...state,
+        board: undefined,
+        boardId: event.name.startsWith('board-select:')
+          ? event.name.slice('board-select:'.length)
+          : '',
+        error: undefined,
+        loading: false,
+        providerSelected: false,
+      }
+      const { boardId } = state
+      restoreConnection(boardId)
+    }
+    if (event.name === 'board-disconnect') await disconnect()
   }
   return {
     dispose(): void {
@@ -204,31 +251,7 @@ export const createInstance = async (
         void connect()
         return
       }
-      if (event.type !== 'click') return
-      if (event.name === 'board-chat')
-        await host.execute('chat2.showAiNativeLayout')
-      else if (event.name === 'board-ide')
-        await host.execute('chat2.showIdeLayout')
-      if (
-        event.name === 'board-change' ||
-        event.name?.startsWith('board-select:')
-      ) {
-        cancel()
-        apiKey = ''
-        token = ''
-        state = {
-          ...state,
-          board: undefined,
-          boardId: event.name.startsWith('board-select:')
-            ? event.name.slice('board-select:'.length)
-            : '',
-          error: undefined,
-          loading: false,
-        }
-        const { boardId } = state
-        restoreConnection(boardId)
-      }
-      if (event.name === 'board-disconnect') await disconnect()
+      if (event.type === 'click') await handleClick(event)
     },
     render: () => render(state),
     renderTitle: (): string => {
