@@ -619,6 +619,21 @@ test('opens a task on click when configured', async () => {
   }
 })
 
+test('rerenders after opening a quick pick item', async () => {
+  const requestRerender = jest.fn(async () => {})
+  const instance = await createInstance(
+    { ...createViewContext(undefined), requestRerender },
+    createMockChatApi(),
+  )
+  try {
+    await instance.openQuickPickItem('mock-task-1')
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+    expect(requestRerender).toHaveBeenCalledTimes(1)
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('renames the selected chat from its title context menu', async () => {
   const baseApi = createMockChatApi()
   const originalTask = await baseApi.getTask('mock-task-1')
