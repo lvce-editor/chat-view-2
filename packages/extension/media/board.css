@@ -1,0 +1,161 @@
+.BoardView {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  overflow: auto;
+  color: var(--SideBarForeground, #ccc);
+  background: var(--SideBarBackground, #181a1b);
+  font: inherit;
+}
+.BoardToolbar,
+.BoardActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 24px;
+}
+.BoardTitle {
+  margin: 0 auto 0 0;
+  font-size: 20px;
+  overflow-wrap: anywhere;
+}
+.BoardButton {
+  border: 1px solid var(--InputBorder, #777);
+  border-radius: 4px;
+  padding: 7px 12px;
+  background: var(--InputBoxBackground, #252729);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.BoardButton:hover {
+  background: var(--ListHoverBackground, #383b3e);
+}
+.BoardButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.BoardButton:focus-visible,
+.BoardInput:focus-visible,
+.BoardHelpLink:focus-visible,
+.BoardColumns:focus-visible {
+  outline: 2px solid var(--FocusBorder, #3794ff);
+  outline-offset: 2px;
+}
+.BoardPrimaryButton {
+  background: var(--ButtonBackground, #0e639c);
+  color: var(--ButtonForeground, #fff);
+}
+.BoardSetup {
+  width: min(100%, 520px);
+  box-sizing: border-box;
+  margin: auto;
+  padding: 32px 24px;
+}
+.BoardSetupTitle {
+  margin: 0 0 12px;
+  font-size: 24px;
+}
+.BoardIntro,
+.BoardCredentialsHelp {
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.BoardHelpLink {
+  color: var(--LinkForeground, #6cb6ff);
+  text-underline-offset: 3px;
+}
+.BoardConnect {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 18px;
+  margin-top: 24px;
+}
+.BoardField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.BoardInput {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid var(--InputBorder, #777);
+  border-radius: 3px;
+  padding: 9px;
+  color: var(--InputBoxForeground, #ddd);
+  background: var(--InputBoxBackground, #252729);
+  font: inherit;
+}
+.BoardRemembered {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 24px;
+}
+.BoardRememberedTitle {
+  width: 100%;
+  font-size: 14px;
+}
+.BoardColumns {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  padding: 8px 24px 24px;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+.BoardColumn {
+  flex: 0 0 280px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  border-radius: 8px;
+  background: var(--InputBoxBackground, #252729);
+}
+.BoardColumnTitle {
+  margin: 0;
+  padding: 16px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.BoardCards {
+  overflow-y: auto;
+  padding: 0 12px 12px;
+}
+.BoardCard {
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--InputBorder, #777);
+  border-radius: 6px;
+  background: var(--SideBarBackground, #181a1b);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.BoardEmptyList {
+  padding: 4px;
+}
+.BoardEmpty,
+.BoardStatus {
+  padding: 16px 24px;
+}
+.BoardError {
+  margin: 8px 24px;
+  padding: 16px;
+  border: 1px solid var(--ErrorForeground, #f48771);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.BoardErrorTitle {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+.BoardError .BoardButton {
+  margin: 12px 0 0;
+  display: block;
+}

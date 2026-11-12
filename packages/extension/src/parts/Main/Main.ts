@@ -5,6 +5,10 @@ import {
   registerView,
 } from '@lvce-editor/api'
 import {
+  view as boardView,
+  viewId as boardViewId,
+} from '../BoardView/BoardView.ts'
+import {
   getUrl,
   isChatPath,
   parseChatTaskHash,
@@ -29,6 +33,30 @@ export const activate = async (): Promise<void> => {
   state.activated = true
   await activateExtensionApi()
   registerView(view)
+  registerView(boardView)
+  registerCommand({
+    async execute() {
+      await executeCommand('Layout.leaveSideBarFocusMode')
+      await executeCommand('SideBar.show', boardViewId, true)
+      await executeCommand('Layout.enterSideBarFocusMode', 'primary', true)
+    },
+    id: 'chat2.showBoardLayout',
+  })
+  registerCommand({
+    async execute() {
+      await executeCommand('Layout.leaveSideBarFocusMode')
+      await executeCommand('SideBar.show', viewId, true)
+      await toggleActiveChatViewFocusMode()
+    },
+    id: 'chat2.showAiNativeLayout',
+  })
+  registerCommand({
+    async execute() {
+      await executeCommand('Layout.leaveSideBarFocusMode')
+      await executeCommand('SideBar.show', viewId, true)
+    },
+    id: 'chat2.showIdeLayout',
+  })
   registerCommand({
     async execute(modelId?: unknown) {
       return headlessChatCommands.createSession(modelId)
@@ -79,7 +107,10 @@ export const activate = async (): Promise<void> => {
   for (const id of ['chat2.toggleFocusMode', 'chat2.toggleAiNativeLayout']) {
     registerCommand({
       async execute() {
-        if (!(await executeCommand('Layout.getSideBarFocusMode'))) {
+        if (
+          !(await executeCommand('Layout.getSideBarFocusMode')) ||
+          (await executeCommand('Layout.getActiveSideBarView')) === boardViewId
+        ) {
           await executeCommand('SideBar.show', viewId, true)
         }
         await toggleActiveChatViewFocusMode()

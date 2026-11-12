@@ -84,3 +84,9 @@ running appear at the bottom of the conversation with a Queued label and run
 in order after the current response finishes. Set it to `"steer"` to cancel the
 current task and send the follow-up once cancellation finishes. Reopen the chat
 view after changing this setting.
+
+## Board layout
+
+Run **View: Open Board Layout** from the command picker to connect a Trello board. Enter its URL or ID, your Trello API key, and a token with read access. [Trello's authorization guide](https://developer.atlassian.com/cloud/trello/guides/rest-api/authorization/) explains how to create these credentials. The view displays open lists and cards in their Trello order, including empty lists. Refresh to load changes; editing stays in Trello.
+
+Board IDs are remembered in `chat2.connectedBoardIds`. Credentials remain only in the isolated extension host's memory until the editor reloads; disconnecting a board forgets its credentials and ID. Remembered boards need credentials again after a reload. The host's activity bar supports upward gestures from IDE to chat to boards, with downward gestures returning through chat to IDE.

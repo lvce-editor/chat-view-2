@@ -171,6 +171,7 @@ test('contributes every preference read by Chat 2', async () => {
   ).toEqual(
     [
       'chat2.backendUrl',
+      'chat2.connectedBoardIds',
       'chat2.aiNativeTheme',
       'chat2.assistantMessageFontFamily',
       'chat2.computerUseEnabled',

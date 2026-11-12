@@ -98,6 +98,14 @@
       "type": "boolean",
       "default": true,
       "description": "Enable the optional desktop computer-use tools on supported Electron hosts."
+    },
+    "chat2.connectedBoardIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Remembered Trello board IDs. API keys and tokens are never stored here."
     }
   },
   "activation": [
@@ -110,7 +118,11 @@
     "onCommand:chat2.submit",
     "onCommand:chat2.toggleFocusMode",
     "onCommand:chat2.toggleAiNativeLayout",
-    "onCommand:chat2.toggleSessionsList"
+    "onCommand:chat2.toggleSessionsList",
+    "onCommand:chat2.showBoardLayout",
+    "onCommand:chat2.showAiNativeLayout",
+    "onView:chat2.views.board",
+    "onCommand:chat2.showIdeLayout"
   ],
   "rpc": [
     {
@@ -193,6 +205,18 @@
     {
       "id": "chat2.toggleSessionsList",
       "label": "Chat 2: Toggle Sessions List"
+    },
+    {
+      "id": "chat2.showBoardLayout",
+      "label": "View: Open Board Layout"
+    },
+    {
+      "id": "chat2.showAiNativeLayout",
+      "label": "View: Open AI-Native Chat Layout"
+    },
+    {
+      "id": "chat2.showIdeLayout",
+      "label": "View: Open IDE Layout"
     }
   ],
   "views": [
@@ -201,6 +225,15 @@
       "displayName": "Chat 2",
       "id": "chat2.views.chat",
       "title": "Chat 2",
+      "icon": "media/chat.svg",
+      "kind": "virtualDom",
+      "showSideBarHeader": false
+    },
+    {
+      "css": "media/board.css",
+      "displayName": "Boards",
+      "id": "chat2.views.board",
+      "title": "Boards",
       "icon": "media/chat.svg",
       "kind": "virtualDom",
       "showSideBarHeader": false
