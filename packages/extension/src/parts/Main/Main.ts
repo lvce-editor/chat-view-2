@@ -15,7 +15,9 @@ import {
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { view, viewId } from '../ChatView/ChatView.ts'
 import {
+  getActiveChatQuickPickItems,
   newChatInActiveChatViewInstance,
+  openActiveChatQuickPickItem,
   submitActiveChatViewInstance,
   toggleActiveChatViewFocusMode,
   toggleActiveChatViewSessionsList,
@@ -123,6 +125,18 @@ export const activate = async (): Promise<void> => {
       return toggleActiveChatViewSessionsList()
     },
     id: 'chat2.toggleSessionsList',
+  })
+  registerCommand({
+    execute() {
+      return getActiveChatQuickPickItems()
+    },
+    id: 'chat2.getQuickPickItems',
+  })
+  registerCommand({
+    async execute(id: unknown) {
+      await openActiveChatQuickPickItem(id)
+    },
+    id: 'chat2.openQuickPickItem',
   })
   try {
     const href = await executeCommand('Layout.getHref')

@@ -126,6 +126,10 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getCss: () => string
   readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
+  readonly getQuickPickItems: () => readonly {
+    readonly id: string
+    readonly title: string
+  }[]
   readonly getState: () => Readonly<ChatViewState>
   readonly handleDragOver: () => void
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
@@ -168,6 +172,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   ) => Promise<void>
   readonly handleTitleMenuClick: (x: unknown, y: unknown) => Promise<void>
   readonly newChat: (requestRerender?: boolean) => Promise<void>
+  readonly openQuickPickItem: (id: string) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderFocus: (
     oldContext: Readonly<Record<string, boolean>>,
@@ -463,6 +468,22 @@ export const toggleActiveChatViewFocusMode = async (): Promise<void> => {
 
 export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
   await getActiveInstance()?.toggleSessionsList(true)
+}
+
+export const getActiveChatQuickPickItems = (): readonly {
+  readonly id: string
+  readonly title: string
+}[] => {
+  return getActiveInstance()?.getQuickPickItems() ?? []
+}
+
+export const openActiveChatQuickPickItem = async (
+  id: unknown,
+): Promise<void> => {
+  if (typeof id !== 'string' || !id) {
+    return
+  }
+  await getActiveInstance()?.openQuickPickItem(id)
 }
 
 const activeRuns = new Map<string, AbortController>()
@@ -1415,6 +1436,11 @@ export const createInstance = async (
         },
       ]
     },
+    getQuickPickItems() {
+      return state.tasks
+        .filter((task) => !archivedTaskIds.has(task.id))
+        .map(({ id, title }) => ({ id, title }))
+    },
     getState(): Readonly<ChatViewState> {
       return state
     },
@@ -1916,6 +1942,9 @@ export const createInstance = async (
     },
     handleTitleMenuClick,
     newChat,
+    async openQuickPickItem(id: string): Promise<void> {
+      await openTask(id)
+    },
     render(): readonly VirtualDomNode[] {
       const { selectedTask } = state
       if (selectedTask) {
