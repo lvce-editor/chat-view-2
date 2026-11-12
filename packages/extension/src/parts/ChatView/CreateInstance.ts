@@ -126,12 +126,11 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getCss: () => string
   readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
-  readonly getState: () => Readonly<ChatViewState>
   readonly getQuickPickItems: () => readonly {
     readonly id: string
     readonly title: string
   }[]
-  readonly openQuickPickItem: (id: string) => Promise<void>
+  readonly getState: () => Readonly<ChatViewState>
   readonly handleDragOver: () => void
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
   readonly handleImageDrop: (dropId: unknown) => Promise<void>
@@ -173,6 +172,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   ) => Promise<void>
   readonly handleTitleMenuClick: (x: unknown, y: unknown) => Promise<void>
   readonly newChat: (requestRerender?: boolean) => Promise<void>
+  readonly openQuickPickItem: (id: string) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderFocus: (
     oldContext: Readonly<Record<string, boolean>>,
@@ -1436,16 +1436,13 @@ export const createInstance = async (
         },
       ]
     },
-    getState(): Readonly<ChatViewState> {
-      return state
-    },
     getQuickPickItems() {
       return state.tasks
         .filter((task) => !archivedTaskIds.has(task.id))
         .map(({ id, title }) => ({ id, title }))
     },
-    async openQuickPickItem(id: string): Promise<void> {
-      await openTask(id)
+    getState(): Readonly<ChatViewState> {
+      return state
     },
     handleDragOver(): void {},
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
@@ -1945,6 +1942,9 @@ export const createInstance = async (
     },
     handleTitleMenuClick,
     newChat,
+    async openQuickPickItem(id: string): Promise<void> {
+      await openTask(id)
+    },
     render(): readonly VirtualDomNode[] {
       const { selectedTask } = state
       if (selectedTask) {
