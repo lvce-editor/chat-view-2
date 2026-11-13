@@ -114,6 +114,24 @@ export const parseBoardId = (input: string): string => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
+const getResponseError = async (
+  response: Response,
+  mapError: (status: number) => BoardError,
+): Promise<BoardError> => {
+  if (response.status !== 403) return mapError(response.status)
+  try {
+    const body: unknown = await response.json()
+    if (isRecord(body) && body.code === 'TRELLO_REAUTHORIZE_REQUIRED') {
+      return {
+        code: 'TRELLO_REAUTHORIZE_REQUIRED',
+        message: 'Reconnect Trello to allow moving cards, then try again.',
+      }
+    }
+  } catch {
+    // Keep the safe, generic access error for unreadable responses.
+  }
+  return mapError(response.status)
+}
 const isList = (value: unknown): value is TrelloList =>
   isRecord(value) &&
   typeof value.id === 'string' &&
@@ -169,6 +187,11 @@ export interface TrelloClient {
     input: string,
     signal: Readonly<AbortSignal>,
   ) => Promise<TrelloBoard>
+  readonly moveCard: (
+    cardId: string,
+    listId: string,
+    signal: Readonly<AbortSignal>,
+  ) => Promise<void>
   readonly status: (signal: Readonly<AbortSignal>) => Promise<TrelloStatus>
   readonly updateCard: (
     id: string,
@@ -223,7 +246,8 @@ export const createTrelloClient = (
       const token = await config.refreshAccessToken()
       if (token) response = await send(token)
     }
-    if (!response.ok) throw new TrelloError(mapError(response.status))
+    if (!response.ok)
+      throw new TrelloError(await getResponseError(response, mapError))
     return {
       baseUrl: config.baseUrl,
       data:
@@ -431,7 +455,30 @@ export const createTrelloClient = (
       })
     }
   }
-  return { authorize, boards, createCard, disconnect, load, status, updateCard }
+  const moveCard = async (
+    cardId: string,
+    listId: string,
+    signal: Readonly<AbortSignal>,
+  ): Promise<void> => {
+    if (!cardIdPattern.test(cardId) || !cardIdPattern.test(listId)) {
+      throw new TrelloError({
+        code: 'TRELLO_INVALID_MOVE',
+        message:
+          'This card or list could not be identified. Refresh the board.',
+      })
+    }
+    await call(`cards/${cardId}/list/${listId}`, signal, 'PUT')
+  }
+  return {
+    authorize,
+    boards,
+    createCard,
+    disconnect,
+    load,
+    moveCard,
+    status,
+    updateCard,
+  }
 }
 
 export const trelloClient = createTrelloClient()

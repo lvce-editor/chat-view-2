@@ -34,6 +34,8 @@ export interface BoardState {
   readonly boards: readonly TrelloBoardSummary[]
   readonly cardDraft?: CardDraft | undefined
   readonly connectedIds: readonly string[]
+  readonly draggedCardId?: string | undefined
+  readonly dropTargetId?: string | undefined
   readonly editDesc?: string
   readonly editError?: string | undefined
   readonly editingCard?: TrelloCard | undefined
@@ -250,7 +252,7 @@ const renderSetup = (state: BoardState): Dom.Node => {
           ]),
           Dom.div('BoardIntro', [
             Dom.textNode(
-              'Bring your lists and cards into the editor. Add and edit cards here to update them in Trello.',
+              'Bring your lists and cards into the editor. Add, edit, and move cards here to update them in Trello.',
             ),
           ]),
           ...renderConnection(state),
@@ -358,7 +360,16 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
 }
 
 export const render = (state: BoardState): Dom.Node => {
-  const { authorizing, board, cardDraft, error, loading } = state
+  const {
+    authorizing,
+    board,
+    cardDraft,
+    draggedCardId,
+    dropTargetId,
+    editingCard,
+    error,
+    loading,
+  } = state
   const cards = board?.cards || []
   const cardsByList = new Map<string, Dom.Node[]>()
   for (const card of cards) {
@@ -368,9 +379,15 @@ export const render = (state: BoardState): Dom.Node => {
         VirtualDomElements.Button,
         {
           buttonType: 'button',
-          className: cardButtonClass,
+          className: mergeClassNames(
+            cardButtonClass,
+            draggedCardId === card.id ? 'BoardCardDragging' : '',
+          ),
+          draggable: !editingCard && !loading,
           name: `board-card:${card.id}`,
           onClick: 'handleClick',
+          onDragEnd: 'handleBoardDragEnd',
+          onDragStart: 'handleBoardDragStart',
         },
         [
           ...(card.coverDataUrl
@@ -405,6 +422,24 @@ export const render = (state: BoardState): Dom.Node => {
             [
               Dom.heading(2, 'BoardErrorTitle', error.code),
               Dom.textNode(error.message),
+              ...(error.code === 'TRELLO_REAUTHORIZE_REQUIRED'
+                ? [
+                    Dom.button(
+                      'board-reconnect',
+                      'Reconnect Trello',
+                      'BoardButton',
+                    ),
+                    ...(state.authorizationUrl
+                      ? [
+                          Dom.link(
+                            state.authorizationUrl,
+                            'Continue to Trello',
+                            primaryButtonClass,
+                          ),
+                        ]
+                      : []),
+                  ]
+                : []),
               Dom.button(
                 board ? 'board-retry' : 'board-check-account',
                 'Try again',
@@ -449,12 +484,20 @@ export const render = (state: BoardState): Dom.Node => {
                     'BoardColumnTitle',
                     `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
                   ),
-                  Dom.div('BoardCards', [
-                    ...(cardsByList.get(list.id) || [
-                      Dom.div('BoardEmptyList', [Dom.textNode('No cards')]),
-                    ]),
-                    renderComposer(state, list.id, list.name),
-                  ]),
+                  Dom.div(
+                    `BoardCards${dropTargetId === list.id ? ' BoardCardsDropTarget' : ''}`,
+                    [
+                      ...(cardsByList.get(list.id) || [
+                        Dom.div('BoardEmptyList', [Dom.textNode('No cards')]),
+                      ]),
+                      renderComposer(state, list.id, list.name),
+                    ],
+                    {
+                      name: `board-list:${list.id}`,
+                      onDragOver: 'handleBoardDragOver',
+                      onDrop: 'handleBoardDrop',
+                    },
+                  ),
                 ],
               ),
             ),

@@ -197,6 +197,11 @@
   overflow-y: auto;
   padding: 0 12px 12px;
 }
+
+.BoardCardsDropTarget {
+  outline: 2px dashed var(--vscode-focusBorder, #4daafc);
+  outline-offset: -4px;
+}
 .BoardCard {
   padding: 0;
   margin-bottom: 10px;
@@ -286,6 +291,10 @@
 }
 .BoardCardTitle {
   padding: 12px;
+}
+
+.BoardCardDragging {
+  opacity: 0.55;
 }
 .BoardEmptyList {
   padding: 4px;

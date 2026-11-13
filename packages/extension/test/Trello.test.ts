@@ -352,6 +352,52 @@ test('normalizes comment and attachment badges without rejecting older boards', 
     [0, 0],
     [0, 0],
   ])
+test('moves a card through the authenticated backend without exposing Trello tokens', async () => {
+  const request = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response(null, { status: 204 }))
+  const client = createTrelloClient(configuration, request)
+  await client.moveCard(
+    '0123456789abcdef01234567',
+    '89abcdef0123456701234567',
+    new AbortController().signal,
+  )
+  expect(request).toHaveBeenCalledWith(
+    'https://backend.test/api/integrations/trello/cards/0123456789abcdef01234567/list/89abcdef0123456701234567',
+    expect.objectContaining({
+      credentials: 'omit',
+      headers: { Authorization: 'Bearer lvce-token' },
+      method: 'PUT',
+      redirect: 'error',
+    }),
+  )
+})
+
+test('reports when Trello needs renewed write permission', async () => {
+  const request = jest
+    .fn<typeof fetch>()
+    .mockResolvedValue(
+      Response.json({ code: 'TRELLO_REAUTHORIZE_REQUIRED' }, { status: 403 }),
+    )
+  const client = createTrelloClient(configuration, request)
+  await expect(
+    client.moveCard(
+      '0123456789abcdef01234567',
+      '89abcdef0123456701234567',
+      new AbortController().signal,
+    ),
+  ).rejects.toMatchObject({
+    details: { code: 'TRELLO_REAUTHORIZE_REQUIRED' },
+  })
+})
+
+test('rejects malformed card or list IDs before making a request', async () => {
+  const request = requestWith({})
+  const client = createTrelloClient(configuration, request)
+  await expect(
+    client.moveCard('../members/me', 'list', new AbortController().signal),
+  ).rejects.toMatchObject({ details: { code: 'TRELLO_INVALID_MOVE' } })
+  expect(request).not.toHaveBeenCalled()
 })
 
 test('creates cards through the backend without provider credentials', async () => {
