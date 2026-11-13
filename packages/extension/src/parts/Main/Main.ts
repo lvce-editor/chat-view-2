@@ -10,6 +10,7 @@ import {
 } from '../BoardView/BoardView.ts'
 import {
   getUrl,
+  isBoardPath,
   isChatPath,
   parseChatTaskHash,
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
@@ -18,6 +19,7 @@ import {
   getActiveChatQuickPickItems,
   newChatInActiveChatViewInstance,
   openActiveChatQuickPickItem,
+  setWorkbenchLayoutUrl,
   submitActiveChatViewInstance,
   toggleActiveChatViewFocusMode,
   toggleActiveChatViewSessionsList,
@@ -39,6 +41,7 @@ export const activate = async (): Promise<void> => {
   registerCommand({
     async execute() {
       await executeCommand('Layout.leaveSideBarFocusMode')
+      await setWorkbenchLayoutUrl(executeCommand, 'board')
       await executeCommand('SideBar.show', boardViewId, true)
       await executeCommand('Layout.enterSideBarFocusMode', 'primary', true)
     },
@@ -47,6 +50,7 @@ export const activate = async (): Promise<void> => {
   registerCommand({
     async execute() {
       await executeCommand('Layout.leaveSideBarFocusMode')
+      await setWorkbenchLayoutUrl(executeCommand, 'ai-native')
       await executeCommand('SideBar.show', viewId, true)
       await toggleActiveChatViewFocusMode()
     },
@@ -55,6 +59,7 @@ export const activate = async (): Promise<void> => {
   registerCommand({
     async execute() {
       await executeCommand('Layout.leaveSideBarFocusMode')
+      await setWorkbenchLayoutUrl(executeCommand, 'ide')
       await executeCommand('SideBar.show', viewId, true)
     },
     id: 'chat2.showIdeLayout',
@@ -142,6 +147,13 @@ export const activate = async (): Promise<void> => {
     const href = await executeCommand('Layout.getHref')
     const url = typeof href === 'string' ? getUrl(href) : undefined
     if (
+      typeof href === 'string' &&
+      url !== undefined &&
+      isBoardPath(url.pathname)
+    ) {
+      await executeCommand('SideBar.show', boardViewId, true)
+      await executeCommand('Layout.enterSideBarFocusMode', 'primary', true)
+    } else if (
       typeof href === 'string' &&
       (parseChatTaskHash(href).type === 'task' ||
         (url !== undefined && isChatPath(url.pathname)))

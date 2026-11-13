@@ -182,10 +182,24 @@ export const render = (state: BoardState): Dom.Node => {
   const cardsByList = new Map<string, Dom.Node[]>()
   for (const card of cards) {
     const cards = cardsByList.get(card.idList) || []
-    cards.push(Dom.div('BoardCard', [Dom.textNode(card.name)]))
+    cards.push(
+      Dom.div('BoardCard', [
+        ...(card.coverUrl
+          ? [
+              Dom.node(VirtualDomElements.Img, {
+                alt: '',
+                className: 'BoardCardCover',
+                loading: 'lazy',
+                src: card.coverUrl,
+              }),
+            ]
+          : []),
+        Dom.div('BoardCardTitle', [Dom.textNode(card.name)]),
+      ]),
+    )
     cardsByList.set(card.idList, cards)
   }
-  return Dom.div('BoardView', [
+  return Dom.div(mergeClassNames('BoardView', board ? 'BoardViewTrello' : ''), [
     Dom.div('BoardToolbar', [
       Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
       Dom.button('board-chat', 'Chat', 'BoardButton'),
