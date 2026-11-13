@@ -168,6 +168,11 @@ export interface TrelloClient {
   readonly boards: (
     signal: Readonly<AbortSignal>,
   ) => Promise<readonly TrelloBoardSummary[]>
+  readonly createCard: (
+    idList: string,
+    name: string,
+    signal: Readonly<AbortSignal>,
+  ) => Promise<TrelloCard>
   readonly disconnect: (signal: Readonly<AbortSignal>) => Promise<void>
   readonly load: (
     input: string,
@@ -377,7 +382,39 @@ export const createTrelloClient = (
       })
     }
   }
-  return { authorize, boards, disconnect, load, status, updateCard }
+  const createCard = async (
+    idList: string,
+    name: string,
+    signal: Readonly<AbortSignal>,
+  ): Promise<TrelloCard> => {
+    try {
+      const { data } = await call('cards', signal, 'POST', {
+        idList,
+        name: name.trim(),
+      })
+      const card = normalizeCard(data)
+      if (!card || card.idList !== idList)
+        throw new Error('Invalid card response')
+      return card
+    } catch (error) {
+      if (signal.aborted) throw error
+      if (
+        error instanceof TrelloError &&
+        error.details.code === 'TRELLO_ACCESS_DENIED'
+      )
+        throw new TrelloError({
+          code: 'TRELLO_WRITE_DENIED',
+          message:
+            'Check that you can add cards to this board, or disconnect and reconnect Trello to allow changes.',
+        })
+      throw new TrelloError({
+        code: 'TRELLO_CREATE_FAILED',
+        message:
+          'The card could not be confirmed. Refresh the board before trying again to avoid duplicates. Your title has been kept.',
+      })
+    }
+  }
+  return { authorize, boards, createCard, disconnect, load, status, updateCard }
 }
 
 export const trelloClient = createTrelloClient()
