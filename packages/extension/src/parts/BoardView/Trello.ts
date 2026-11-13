@@ -175,7 +175,7 @@ export const createTrelloClient = (
     ])
     const send = (token: string): Promise<Response> =>
       request(url.href, {
-        body,
+        body: body ?? null,
         credentials: 'omit',
         headers: {
           Authorization: `Bearer ${token}`,
