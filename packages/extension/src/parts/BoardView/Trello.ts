@@ -4,6 +4,8 @@ import {
 } from '../BackendConfiguration/BackendConfiguration.ts'
 
 export interface TrelloCard {
+  readonly attachmentCount?: number
+  readonly commentCount?: number
   readonly coverDataUrl?: string
   readonly desc: string
   readonly id: string
@@ -120,19 +122,30 @@ const isList = (value: unknown): value is TrelloList =>
   Number.isFinite(value.pos)
 const isCard = (
   value: unknown,
-): value is TrelloCard & { readonly coverDataUrl?: unknown } =>
-  isList(value) && 'idList' in value && typeof value.idList === 'string'
+): value is TrelloCard & {
+  readonly badges?: unknown
+  readonly coverDataUrl?: unknown
+} => isList(value) && 'idList' in value && typeof value.idList === 'string'
+
+const normalizeCount = (value: unknown): number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : 0
 
 const normalizeCard = (value: unknown): TrelloCard | undefined => {
   if (!isCard(value)) return undefined
   const { coverDataUrl } = value
+  const badges = isRecord(value.badges) ? value.badges : undefined
   return {
+    attachmentCount: normalizeCount(badges?.attachments),
+    commentCount: normalizeCount(badges?.comments),
     desc: typeof value.desc === 'string' ? value.desc : '',
     id: value.id,
     idList: value.idList,
     name: value.name,
     pos: value.pos,
-    ...(typeof coverDataUrl === 'string' && { coverDataUrl }),
+    ...(typeof coverDataUrl === 'string' &&
+      coverDataUrl.startsWith('data:image/') && { coverDataUrl }),
   }
 }
 

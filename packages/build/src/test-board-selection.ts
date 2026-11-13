@@ -30,6 +30,9 @@ export const testBoardSelection = async (
     } else {
       loaded.push(path)
       body = {
+        id: '22222222',
+        name: 'Engineering',
+        lists: [{ id: 'list-1', name: 'Todo', pos: 1 }],
         cards: [
           {
             coverDataUrl:
@@ -38,11 +41,16 @@ export const testBoardSelection = async (
             idList: 'list-1',
             name: 'Card with cover',
             pos: 1,
+            badges: { comments: 3, attachments: 1 },
+          },
+          {
+            id: 'card-2',
+            idList: 'list-1',
+            name: 'No activity',
+            pos: 2,
+            badges: { comments: 0, attachments: 0 },
           },
         ],
-        id: '22222222',
-        lists: [{ id: 'list-1', name: 'Todo', pos: 1 }],
-        name: 'Engineering',
       }
     }
     await route.fulfill({ status, json: body })
@@ -143,6 +151,22 @@ export const testBoardSelection = async (
     assert.ok(coverSrc)
     assert.match(coverSrc, /^data:image\/png;base64,/u)
     await page.getByText('Card with cover', { exact: true }).waitFor()
+    const badges = page.locator('.BoardCardBadges')
+    await badges.waitFor()
+    assert.equal(await badges.count(), 1)
+    assert.equal(
+      await badges
+        .getByRole('img', { name: '3 comments', exact: true })
+        .textContent(),
+      '3',
+    )
+    assert.equal(
+      await badges
+        .getByRole('img', { name: '1 attachment', exact: true })
+        .textContent(),
+      '1',
+    )
+    assert.equal(await page.locator('.BoardCardBadgeIcon').count(), 2)
     assert.deepEqual(loaded, ['/api/integrations/trello/boards/22222222'])
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })
