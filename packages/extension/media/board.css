@@ -353,6 +353,6 @@ a.BoardPrimaryButton {
   background: #185abc;
   border-color: #185abc;
 }
-.BoardConnect + .BoardButton {
+.BoardConnect ~ .BoardButton {
   margin-top: 12px;
 }
