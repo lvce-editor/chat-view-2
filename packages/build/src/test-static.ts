@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { loadEnvFile } from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { chromium, firefox } from 'playwright'
+import { testBoardSelection } from './test-board-selection.ts'
 import { testComposerPaste } from './test-composer-paste.ts'
 import {
   startEvaluationProxy,
@@ -129,6 +130,7 @@ try {
   const browserType = process.argv.includes('--firefox') ? firefox : chromium
   const browser = await browserType.launch({ headless: true })
   const testExported = async (evaluation: EvaluationProxy): Promise<void> => {
+    await testBoardSelection(browser, baseUrl)
     const startup = await browser.newContext()
     const startupPage = await startup.newPage()
     try {
