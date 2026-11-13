@@ -7,8 +7,9 @@ const bundleBudgets = new Map([
   // Same Node 26.12.1 build and lockfile: recorded Trello OAuth baseline
   // 344,635 bytes, board selection 347,439 (+2,804 / 0.81%).
   // With main's board route and card covers: 349,601 bytes (+2,162).
-  // Card editing adds 7,359 bytes; keep 1,540 bytes of headroom.
-  ['chatMain.js', 358_500],
+  // Card editing adds 7,359 bytes. Direct Trello reads plus card badges are
+  // 358,970 bytes; keep 1,540 bytes of headroom.
+  ['chatMain.js', 360_510],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],
