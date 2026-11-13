@@ -237,3 +237,20 @@
     grid-template-columns: 1fr;
   }
 }
+
+.BoardAuthorizationActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+a.BoardPrimaryButton {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.BoardPrimaryButton:hover {
+  color: #ffffff;
+  background: #185abc;
+  border-color: #185abc;
+}

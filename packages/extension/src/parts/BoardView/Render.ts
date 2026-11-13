@@ -72,31 +72,33 @@ const renderConnection = (state: BoardState): readonly Dom.Node[] => {
               : 'Sign in to LVCE, then authorize Trello to read your boards.',
           ),
         ]),
-        ...(authorizationUrl
-          ? [
-              Dom.link(
-                authorizationUrl,
-                'Continue to Trello',
-                primaryButtonClass,
-              ),
-            ]
-          : [
-              Dom.button(
-                'board-authorize',
-                authorizing ? 'Preparing connection…' : 'Authorize Trello',
-                primaryButtonClass,
-                { disabled: loading || Boolean(authorizing) },
-              ),
-            ]),
-        ...(authorizing
-          ? [
-              Dom.button(
-                'board-cancel-authorization',
-                'Stop waiting',
-                'BoardButton',
-              ),
-            ]
-          : []),
+        Dom.div('BoardAuthorizationActions', [
+          ...(authorizationUrl
+            ? [
+                Dom.link(
+                  authorizationUrl,
+                  'Continue to Trello',
+                  primaryButtonClass,
+                ),
+              ]
+            : [
+                Dom.button(
+                  'board-authorize',
+                  authorizing ? 'Preparing connection…' : 'Authorize Trello',
+                  primaryButtonClass,
+                  { disabled: loading || Boolean(authorizing) },
+                ),
+              ]),
+          ...(authorizing
+            ? [
+                Dom.button(
+                  'board-cancel-authorization',
+                  'Stop waiting',
+                  'BoardButton',
+                ),
+              ]
+            : []),
+        ]),
       ]
 }
 const renderSetup = (state: BoardState): Dom.Node => {
