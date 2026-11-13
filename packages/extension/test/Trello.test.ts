@@ -47,14 +47,44 @@ test('accepts board URLs and IDs, rejecting unrelated URLs', () => {
 })
 
 test('loads source-ordered lists and cards through the backend with only the LVCE bearer token', async () => {
-  const request = requestWith(board)
+  const request = requestWith({
+    ...board,
+    cards: [
+      ...board.cards,
+      {
+        cover: { url: 'https://trello.com/1/cards/card/cover' },
+        id: 'covered',
+        idList: 'now',
+        name: 'Cover',
+        pos: 3,
+      },
+      {
+        cover: { url: 'https://evil.test/image.png' },
+        id: 'unsafe',
+        idList: 'now',
+        name: 'No cover',
+        pos: 4,
+      },
+    ],
+  })
   const result = await loadBoard(
     '5k8NLHLh',
     new AbortController().signal,
     request,
   )
   expect(result.lists.map((list) => list.name)).toEqual(['Now', 'Later'])
-  expect(result.cards.map((card) => card.name)).toEqual(['First', 'Second'])
+  expect(result.cards.map((card) => card.name)).toEqual([
+    'First',
+    'Second',
+    'Cover',
+    'No cover',
+  ])
+  expect(result.cards.find((card) => card.name === 'Cover')?.coverUrl).toBe(
+    'https://trello.com/1/cards/card/cover',
+  )
+  expect(
+    result.cards.find((card) => card.name === 'No cover')?.coverUrl,
+  ).toBeUndefined()
   expect(request).toHaveBeenCalledWith(
     'https://backend.test/api/integrations/trello/boards/5k8NLHLh',
     expect.objectContaining({

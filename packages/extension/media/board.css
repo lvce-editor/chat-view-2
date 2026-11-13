@@ -18,6 +18,17 @@
   background: var(--BoardBackground);
   font: inherit;
 }
+.BoardViewTrello {
+  background: linear-gradient(135deg, #0c66e4, #09326c);
+}
+.BoardViewTrello .BoardTitle,
+.BoardViewTrello .BoardStatus,
+.BoardViewTrello .BoardEmpty {
+  color: #ffffff;
+}
+.BoardViewTrello .BoardError {
+  background: var(--BoardBackground);
+}
 .BoardToolbar,
 .BoardActions {
   display: flex;
@@ -186,21 +197,35 @@
   overflow-y: auto;
   padding: 0 12px 12px;
 }
-.BoardCardButton {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  padding: 12px;
+.BoardCard {
+  padding: 0;
   margin-bottom: 10px;
   border: 1px solid var(--BoardBorder);
   border-radius: 6px;
   background: var(--BoardBackground);
   line-height: 1.5;
   overflow-wrap: anywhere;
+}
+.BoardCardButton {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0;
+  cursor: pointer;
   color: inherit;
   font: inherit;
   text-align: left;
-  cursor: pointer;
+  background: var(--BoardBackground);
+}
+.BoardCardCover {
+  display: block;
+  width: 100%;
+  max-height: 150px;
+  object-fit: cover;
+  border-radius: 5px 5px 0 0;
+}
+.BoardCardTitle {
+  padding: 12px;
 }
 .BoardCardButton:hover {
   background: var(--BoardHover);
@@ -251,6 +276,16 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
+}
+.BoardCardCover {
+  display: block;
+  width: 100%;
+  max-height: 150px;
+  object-fit: cover;
+  border-radius: 5px 5px 0 0;
+}
+.BoardCardTitle {
+  padding: 12px;
 }
 .BoardEmptyList {
   padding: 4px;

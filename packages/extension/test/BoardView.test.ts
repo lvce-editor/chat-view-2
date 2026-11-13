@@ -59,6 +59,7 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   const context = createContext()
   const view = await createInstance(context, host)
   expect(JSON.stringify(await view.render())).toContain('Connect Trello')
+  expect(JSON.stringify(await view.render())).not.toContain('BoardViewTrello')
   expect(JSON.stringify(await view.render())).not.toContain('Trello API key')
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
@@ -71,12 +72,14 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
   await flush()
   const dom = JSON.stringify(await view.render())
+  expect(dom).toContain('BoardViewTrello')
   expect(dom).toContain('A task')
   expect(dom).toContain('No cards')
   expect(host.write).toHaveBeenCalledWith('chat2.connectedBoardIds', [
     '5k8NLHLh',
   ])
   await view.handleEvent?.({ name: 'board-change', type: 'click' })
+  expect(JSON.stringify(await view.render())).not.toContain('BoardViewTrello')
   expect(JSON.stringify(await view.render())).toContain('Connect Trello')
   expect(JSON.stringify(await view.render())).not.toContain('Trello API key')
   expect(JSON.stringify(view.saveState?.())).not.toContain('private')
@@ -167,9 +170,23 @@ test('restores remembered IDs, never credentials, and disconnects', async () => 
 })
 
 test('groups cards without dropping empty columns', () => {
+  const coveredBoard: TrelloBoard = {
+    ...board,
+    cards: [
+      ...board.cards,
+      {
+        coverUrl: 'https://trello.com/1/cards/card/cover',
+        desc: '',
+        id: 'covered',
+        idList: 'todo',
+        name: 'Covered task',
+        pos: 2,
+      },
+    ],
+  }
   const dom = render({
     accountConnected: true,
-    board,
+    board: coveredBoard,
     boardId: '5k8NLHLh',
     connectedIds: [],
     error: undefined,
@@ -178,8 +195,11 @@ test('groups cards without dropping empty columns', () => {
   })
   expect(dom.filter((node) => node.className === 'BoardColumn')).toHaveLength(2)
   expect(
-    dom.filter((node) => node.className === 'BoardCardButton'),
-  ).toHaveLength(1)
+    dom.filter((node) => String(node.className).includes('BoardCardButton')),
+  ).toHaveLength(2)
+  expect(JSON.stringify(dom)).toContain('BoardCardCover')
+  expect(JSON.stringify(dom)).toContain('https://trello.com/1/cards/card/cover')
+  expect(JSON.stringify(dom)).toContain('A task')
 })
 
 test('opens a card editor and updates the board only after Trello confirms the save', async () => {

@@ -1,9 +1,11 @@
 // cspell:ignore Fwith
 import { expect, test } from '@jest/globals'
 import {
+  getBoardPath,
   getChatPath,
   getChatTaskHash,
   getIdePath,
+  isBoardPath,
   isChatPath,
   parseChatTaskHash,
 } from '../src/parts/ChatSessionUrl/ChatSessionUrl.ts'
@@ -82,4 +84,20 @@ test('detects chat routes and preserves the deployment prefix', () => {
     '/prefix/',
   )
   expect(getIdePath('https://example.com/chat/')).toBe('/')
+})
+
+test('creates and detects the board route and returns to the hosted IDE path', () => {
+  expect(isBoardPath('/board')).toBe(true)
+  expect(isBoardPath('/prefix/board/')).toBe(true)
+  expect(isBoardPath('/prefix/board/settings')).toBe(false)
+  expect(
+    getBoardPath('https://example.com/prefix/?workspace=one', '/prefix/commit'),
+  ).toBe('/prefix/board')
+  expect(getBoardPath('https://example.com/?workspace=one', '/commit')).toBe(
+    '/board',
+  )
+  expect(
+    getIdePath('https://example.com/prefix/board?workspace=one#workspace=x'),
+  ).toBe('/prefix/')
+  expect(getIdePath('https://example.com/board/')).toBe('/')
 })

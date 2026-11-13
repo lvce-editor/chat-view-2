@@ -4,6 +4,7 @@ import {
 } from '../BackendConfiguration/BackendConfiguration.ts'
 
 export interface TrelloCard {
+  readonly coverUrl?: string
   readonly desc: string
   readonly id: string
   readonly idList: string
@@ -112,8 +113,33 @@ const isList = (value: unknown): value is TrelloList =>
   typeof value.name === 'string' &&
   typeof value.pos === 'number' &&
   Number.isFinite(value.pos)
-const isCard = (value: unknown): value is TrelloCard =>
+const isCard = (
+  value: unknown,
+): value is TrelloCard & { readonly cover?: unknown } =>
   isList(value) && 'idList' in value && typeof value.idList === 'string'
+
+const isTrelloCoverUrl = (value: unknown): value is string => {
+  return (
+    typeof value === 'string' &&
+    URL.canParse(value) &&
+    new URL(value).protocol === 'https:' &&
+    new URL(value).hostname === 'trello.com'
+  )
+}
+
+const normalizeCard = (value: unknown): TrelloCard | undefined => {
+  if (!isCard(value)) return undefined
+  const cover = isRecord(value.cover) ? value.cover : undefined
+  const coverUrl = cover?.url
+  return {
+    desc: typeof value.desc === 'string' ? value.desc : '',
+    id: value.id,
+    idList: value.idList,
+    name: value.name,
+    pos: value.pos,
+    ...(isTrelloCoverUrl(coverUrl) && { coverUrl }),
+  }
+}
 
 export interface TrelloStatus {
   readonly configured: boolean
@@ -234,7 +260,7 @@ export const createTrelloClient = (
         !Array.isArray(data.lists) ||
         !data.lists.every(isList) ||
         !Array.isArray(data.cards) ||
-        !data.cards.every(isCard)
+        data.cards.some((card) => !normalizeCard(card))
       ) {
         throw new TrelloError({
           code: 'TRELLO_INVALID_RESPONSE',
@@ -242,7 +268,10 @@ export const createTrelloClient = (
         })
       }
       return {
-        cards: data.cards.toSorted((a, b) => a.pos - b.pos),
+        cards: data.cards
+          .map(normalizeCard)
+          .filter((card): card is TrelloCard => Boolean(card))
+          .toSorted((a, b) => a.pos - b.pos),
         id: data.id,
         lists: data.lists.toSorted((a, b) => a.pos - b.pos),
         name: data.name,
@@ -274,26 +303,19 @@ export const createTrelloClient = (
         { desc, name },
         cardUpdateError,
       )
+      const updatedCard = isRecord(data) ? normalizeCard(data) : undefined
       if (
+        !updatedCard ||
         !isRecord(data) ||
         data.id !== id ||
-        typeof data.name !== 'string' ||
-        typeof data.desc !== 'string' ||
-        typeof data.idList !== 'string' ||
-        typeof data.pos !== 'number'
+        typeof data.desc !== 'string'
       ) {
         throw new TrelloError({
           code: 'TRELLO_INVALID_RESPONSE',
           message: 'Trello returned an unreadable card. Refresh the board.',
         })
       }
-      return {
-        desc: data.desc,
-        id: data.id,
-        idList: data.idList,
-        name: data.name,
-        pos: data.pos,
-      }
+      return { ...updatedCard, desc: data.desc }
     } catch (error) {
       if (signal.aborted) throw error
       if (error instanceof TrelloError) throw error

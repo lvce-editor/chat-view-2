@@ -7,6 +7,7 @@ import type { BoardError, TrelloBoard, TrelloCard } from './Trello.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 
 const primaryButtonClass = mergeClassNames('BoardButton', 'BoardPrimaryButton')
+const cardButtonClass = mergeClassNames('BoardCard', 'BoardCardButton')
 const descriptionInputClass = mergeClassNames(
   'BoardInput',
   'BoardDescriptionInput',
@@ -179,7 +180,6 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
           Dom.textNode('Description'),
           Dom.node(VirtualDomElements.TextArea, {
             ariaLabel: 'Description',
-            autoFocus: true,
             className: descriptionInputClass,
             ...(savingCard && { disabled: true }),
             name: 'edit-card-desc',
@@ -222,12 +222,33 @@ export const render = (state: BoardState): Dom.Node => {
   for (const card of cards) {
     const cards = cardsByList.get(card.idList) || []
     cards.push(
-      Dom.button(`board-card:${card.id}`, card.name, 'BoardCardButton'),
+      Dom.node(
+        VirtualDomElements.Button,
+        {
+          buttonType: 'button',
+          className: cardButtonClass,
+          name: `board-card:${card.id}`,
+          onClick: 'handleClick',
+        },
+        [
+          ...(card.coverUrl
+            ? [
+                Dom.node(VirtualDomElements.Img, {
+                  alt: '',
+                  className: 'BoardCardCover',
+                  loading: 'lazy',
+                  src: card.coverUrl,
+                }),
+              ]
+            : []),
+          Dom.div('BoardCardTitle', [Dom.textNode(card.name)]),
+        ],
+      ),
     )
     cardsByList.set(card.idList, cards)
   }
   const cardDialog = renderCardDialog(state)
-  return Dom.div('BoardView', [
+  return Dom.div(mergeClassNames('BoardView', board ? 'BoardViewTrello' : ''), [
     Dom.div('BoardToolbar', [
       Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
       Dom.button('board-chat', 'Chat', 'BoardButton'),
