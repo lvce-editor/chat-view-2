@@ -274,8 +274,54 @@ test('accepts empty discovery and rejects malformed board lists', async () => {
   }
 })
 
+test('normalizes comment and attachment badges without rejecting older boards', async () => {
+  const values: readonly unknown[] = [
+    undefined,
+    null,
+    {},
+    { attachments: 1, comments: 3 },
+    { attachments: '2', comments: -1 },
+    { attachments: Infinity, comments: 1.5 },
+  ]
+  const result = await loadBoard(
+    '5k8NLHLh',
+    new AbortController().signal,
+    requestWith({
+      ...board,
+      cards: values.map((badges, index) => ({
+        badges,
+        id: String(index),
+        idList: 'now',
+        name: 'Task',
+        pos: index,
+      })),
+    }),
+  )
+  expect(
+    result.cards.map(({ attachmentCount, commentCount }) => [
+      commentCount,
+      attachmentCount,
+    ]),
+  ).toEqual([
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [3, 1],
+    [0, 0],
+    [0, 0],
+  ])
+})
+
 test('creates cards through the backend without provider credentials', async () => {
-  const card = { desc: '', id: 'new', idList: 'todo', name: 'New task', pos: 3 }
+  const card = {
+    attachmentCount: 0,
+    commentCount: 0,
+    desc: '',
+    id: 'new',
+    idList: 'todo',
+    name: 'New task',
+    pos: 3,
+  }
   const request = requestWith(card)
   const client = createTrelloClient(configuration, request)
   expect(

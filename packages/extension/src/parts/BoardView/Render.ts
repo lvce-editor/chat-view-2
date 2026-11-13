@@ -268,6 +268,39 @@ const renderSetup = (state: BoardState): Dom.Node => {
   ])
 }
 
+const renderBadges = (card: Readonly<TrelloCard>): readonly Dom.Node[] => {
+  const badges: Dom.Node[] = []
+  for (const [count, label, icon] of [
+    [card.commentCount, 'comment', 'Comment'],
+    [card.attachmentCount, 'attachment', 'Attachment'],
+  ] as const) {
+    if (!count) continue
+    const description = `${count} ${label}${count === 1 ? '' : 's'}`
+    badges.push(
+      Dom.node(
+        VirtualDomElements.Span,
+        {
+          ariaLabel: description,
+          className: 'BoardCardBadge',
+          role: 'img',
+          title: description,
+        },
+        [
+          Dom.node(VirtualDomElements.Span, {
+            ariaHidden: true,
+            className: mergeClassNames(
+              'BoardCardBadgeIcon',
+              `BoardCardBadge${icon}Icon`,
+            ),
+          }),
+          Dom.textNode(String(count)),
+        ],
+      ),
+    )
+  }
+  return badges.length > 0 ? [Dom.div('BoardCardBadges', badges)] : []
+}
+
 const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
   const { editDesc, editError, editingCard, editName, savingCard } = state
   if (!editingCard) return undefined
@@ -351,6 +384,7 @@ export const render = (state: BoardState): Dom.Node => {
               ]
             : []),
           Dom.div('BoardCardTitle', [Dom.textNode(card.name)]),
+          ...renderBadges(card),
         ],
       ),
     )
