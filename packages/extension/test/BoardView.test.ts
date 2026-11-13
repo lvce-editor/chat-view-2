@@ -28,15 +28,13 @@ const createHost = (): BoardHost => ({
   boards: jest
     .fn<BoardHost['boards']>()
     .mockResolvedValue([{ id: '5k8NLHLh', name: 'Work' }]),
-  createCard: jest
-    .fn<BoardHost['createCard']>()
-    .mockResolvedValue({
-      desc: '',
-      id: 'new',
-      idList: 'todo',
-      name: 'New task',
-      pos: 2,
-    }),
+  createCard: jest.fn<BoardHost['createCard']>().mockResolvedValue({
+    desc: '',
+    id: 'new',
+    idList: 'todo',
+    name: 'New task',
+    pos: 2,
+  }),
   execute: jest.fn<BoardHost['execute']>().mockResolvedValue(undefined),
   load: jest.fn<BoardHost['load']>().mockResolvedValue(board),
   read: jest.fn<BoardHost['read']>().mockResolvedValue([]),
@@ -600,15 +598,13 @@ test.each(['board-change', 'dispose'])(
 
 test('newly created cards can be edited without losing existing cards', async () => {
   const host = createHost()
-  jest
-    .mocked(host.updateCard)
-    .mockResolvedValue({
-      desc: '',
-      id: 'new',
-      idList: 'todo',
-      name: 'Edited new task',
-      pos: 2,
-    })
+  jest.mocked(host.updateCard).mockResolvedValue({
+    desc: '',
+    id: 'new',
+    idList: 'todo',
+    name: 'Edited new task',
+    pos: 2,
+  })
   const view = await openBoard(host)
   await view.handleEvent?.({ name: 'board-add:todo', type: 'click' })
   await view.handleEvent?.({
