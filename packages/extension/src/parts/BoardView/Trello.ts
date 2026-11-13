@@ -4,7 +4,7 @@ import {
 } from '../BackendConfiguration/BackendConfiguration.ts'
 
 export interface TrelloCard {
-  readonly coverUrl?: string
+  readonly coverDataUrl?: string
   readonly id: string
   readonly idList: string
   readonly name: string
@@ -109,28 +109,18 @@ const isList = (value: unknown): value is TrelloList =>
   Number.isFinite(value.pos)
 const isCard = (
   value: unknown,
-): value is TrelloCard & { readonly cover?: unknown } =>
+): value is TrelloCard & { readonly coverDataUrl?: unknown } =>
   isList(value) && 'idList' in value && typeof value.idList === 'string'
-
-const isTrelloCoverUrl = (value: unknown): value is string => {
-  return (
-    typeof value === 'string' &&
-    URL.canParse(value) &&
-    new URL(value).protocol === 'https:' &&
-    new URL(value).hostname === 'trello.com'
-  )
-}
 
 const normalizeCard = (value: unknown): TrelloCard | undefined => {
   if (!isCard(value)) return undefined
-  const cover = isRecord(value.cover) ? value.cover : undefined
-  const coverUrl = cover?.url
+  const { coverDataUrl } = value
   return {
     id: value.id,
     idList: value.idList,
     name: value.name,
     pos: value.pos,
-    ...(isTrelloCoverUrl(coverUrl) && { coverUrl }),
+    ...(typeof coverDataUrl === 'string' && { coverDataUrl }),
   }
 }
 

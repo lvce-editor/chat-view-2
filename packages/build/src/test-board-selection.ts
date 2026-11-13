@@ -29,7 +29,21 @@ export const testBoardSelection = async (
           ]
     } else {
       loaded.push(path)
-      body = { id: '22222222', name: 'Engineering', lists: [], cards: [] }
+      body = {
+        cards: [
+          {
+            coverDataUrl:
+              'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
+            id: 'card-1',
+            idList: 'list-1',
+            name: 'Card with cover',
+            pos: 1,
+          },
+        ],
+        id: '22222222',
+        lists: [{ id: 'list-1', name: 'Todo', pos: 1 }],
+        name: 'Engineering',
+      }
     }
     await route.fulfill({ status, json: body })
   })
@@ -123,6 +137,12 @@ export const testBoardSelection = async (
     await page
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
+    const cover = page.locator('.BoardCardCover')
+    await cover.waitFor({ state: 'visible' })
+    const coverSrc = await cover.getAttribute('src')
+    assert.ok(coverSrc)
+    assert.match(coverSrc, /^data:image\/png;base64,/u)
+    await page.getByText('Card with cover', { exact: true }).waitFor()
     assert.deepEqual(loaded, ['/api/integrations/trello/boards/22222222'])
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })

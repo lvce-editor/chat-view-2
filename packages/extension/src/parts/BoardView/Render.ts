@@ -184,13 +184,13 @@ export const render = (state: BoardState): Dom.Node => {
     const cards = cardsByList.get(card.idList) || []
     cards.push(
       Dom.div('BoardCard', [
-        ...(card.coverUrl
+        ...(card.coverDataUrl
           ? [
               Dom.node(VirtualDomElements.Img, {
                 alt: '',
                 className: 'BoardCardCover',
                 loading: 'lazy',
-                src: card.coverUrl,
+                src: card.coverDataUrl,
               }),
             ]
           : []),
