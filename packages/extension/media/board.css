@@ -384,3 +384,23 @@ a.BoardPrimaryButton {
 .BoardCardBadgeAttachmentIcon {
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m21.4 11.6-9.2 9.2a6 6 0 0 1-8.5-8.5l10-10a4 4 0 0 1 5.7 5.7l-10 10a2 2 0 0 1-2.8-2.8l9.2-9.2'/%3E%3C/svg%3E");
 }
+
+.BoardAddCard {
+  width: 100%;
+  text-align: left;
+}
+.BoardCardComposer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.BoardCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.BoardCardError {
+  color: #8c1d18;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

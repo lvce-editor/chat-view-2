@@ -22,6 +22,7 @@ export const connectionsPreference = 'chat2.connectedBoardIds'
 export interface BoardHost {
   readonly authorize: typeof trelloClient.authorize
   readonly boards: typeof trelloClient.boards
+  readonly createCard: typeof trelloClient.createCard
   readonly execute: typeof executeCommand
   readonly load: typeof trelloClient.load
   readonly read: typeof getPreference
@@ -37,6 +38,7 @@ interface BoardViewInstance extends VirtualDomViewInstance {
 const defaultHost: BoardHost = {
   authorize: trelloClient.authorize,
   boards: trelloClient.boards,
+  createCard: trelloClient.createCard,
   execute: executeCommand,
   load: trelloClient.load,
   read: getPreference,
@@ -108,6 +110,7 @@ export const createInstance = async (
       ...state,
       authorizationUrl: undefined,
       authorizing: false,
+      cardDraft: undefined,
       loading: false,
       savingCard: false,
     }
@@ -121,7 +124,10 @@ export const createInstance = async (
     state = { ...state, editError: undefined, editingCard: undefined }
   }
   const connect = async (): Promise<void> => {
+    const { board, cardDraft } = state
+    const draft = board && !cardDraft?.saving ? cardDraft : undefined
     cancel()
+    state = { ...state, cardDraft: draft }
     const requestGeneration = generation
     controller = new AbortController()
     const signal = AbortSignal.any([
@@ -403,6 +409,87 @@ export const createInstance = async (
     }
     await notify()
   }
+  const createCard = async (): Promise<void> => {
+    const { board, boardId, cardDraft, editingCard, loading } = state
+    if (
+      !board ||
+      editingCard ||
+      !cardDraft ||
+      cardDraft.saving ||
+      loading ||
+      !cardDraft.title.trim() ||
+      cardDraft.title.trim().length > 16_384 ||
+      board.lists.every((list) => list.id !== cardDraft.listId)
+    )
+      return
+    const requestGeneration = generation
+    controller = new AbortController()
+    state = {
+      ...state,
+      cardDraft: { ...cardDraft, error: undefined, saving: true },
+    }
+    try {
+      const card = await host.createCard(
+        cardDraft.listId,
+        cardDraft.title.trim(),
+        AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)]),
+      )
+      if (disposed || generation !== requestGeneration) return
+      const updated = {
+        ...board,
+        cards: [...board.cards, card].toSorted((a, b) => a.pos - b.pos),
+      }
+      host.session.set(boardId, { board: updated })
+      state = { ...state, board: updated, cardDraft: undefined }
+    } catch (error) {
+      if (disposed || generation !== requestGeneration) return
+      state = {
+        ...state,
+        cardDraft: {
+          ...cardDraft,
+          error:
+            error instanceof TrelloError
+              ? error.details.message
+              : 'The card could not be confirmed. Refresh the board before trying again. Your title has been kept.',
+          saving: false,
+        },
+      }
+    }
+    await notify()
+  }
+  const openNewCard = (listId: string): void => {
+    const { board, cardDraft, editingCard, loading } = state
+    if (
+      !editingCard &&
+      !loading &&
+      !cardDraft?.saving &&
+      board?.lists.some((list) => list.id === listId)
+    )
+      state = { ...state, cardDraft: { listId, saving: false, title: '' } }
+  }
+  const cancelCard = (): void => {
+    const { cardDraft } = state
+    if (!cardDraft?.saving) state = { ...state, cardDraft: undefined }
+  }
+  const handleInput = (name: string | undefined, value: string): void => {
+    const { cardDraft } = state
+    switch (name) {
+      case 'board-card-title':
+        if (cardDraft && !cardDraft.saving)
+          state = { ...state, cardDraft: { ...cardDraft, title: value } }
+        break
+      case 'board-id':
+        cancel()
+        state = { ...state, boardId: value, error: undefined, loading: false }
+        break
+      case 'edit-card-desc':
+        state = { ...state, editDesc: value, editError: undefined }
+        break
+      case 'edit-card-name':
+        state = { ...state, editError: undefined, editName: value }
+        break
+    }
+  }
   const openCard = (name: string | undefined): void => {
     if (!name?.startsWith('board-card:')) return
     const { board } = state
@@ -483,23 +570,11 @@ export const createInstance = async (
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'input' && typeof event.value === 'string') {
-        switch (event.name) {
-          case 'board-id':
-            cancel()
-            state = {
-              ...state,
-              boardId: event.value,
-              error: undefined,
-              loading: false,
-            }
-            break
-          case 'edit-card-desc':
-            state = { ...state, editDesc: event.value, editError: undefined }
-            break
-          case 'edit-card-name':
-            state = { ...state, editError: undefined, editName: event.value }
-            break
-        }
+        handleInput(event.name, event.value)
+        return
+      }
+      if (event.type === 'submit' && event.name === 'board-create-card') {
+        void createCard()
         return
       }
       if (
@@ -517,9 +592,14 @@ export const createInstance = async (
         return
       }
       if (event.type === 'click') {
+        if (event.name?.startsWith('board-add:')) {
+          openNewCard(event.name.slice('board-add:'.length))
+          return
+        }
         const actions: Readonly<Record<string, () => void | Promise<void>>> = {
           'board-authorize': authorize,
           'board-cancel-authorization': cancel,
+          'board-cancel-card': cancelCard,
           'board-check-account': checkAccount,
           'board-disconnect-account': revoke,
         }
