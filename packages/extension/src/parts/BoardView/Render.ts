@@ -151,7 +151,7 @@ export const render = (state: BoardState): Dom.Node => {
     cards.push(Dom.div('BoardCard', [Dom.textNode(card.name)]))
     cardsByList.set(card.idList, cards)
   }
-  return Dom.div('BoardView', [
+  return Dom.div(mergeClassNames('BoardView', board ? 'BoardViewTrello' : ''), [
     Dom.div('BoardToolbar', [
       Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
       Dom.button('board-chat', 'Chat', 'BoardButton'),
