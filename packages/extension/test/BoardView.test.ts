@@ -48,6 +48,7 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   const context = createContext()
   const view = await createInstance(context, host)
   expect(JSON.stringify(await view.render())).toContain('Connect Trello')
+  expect(JSON.stringify(await view.render())).not.toContain('BoardViewTrello')
   expect(JSON.stringify(await view.render())).not.toContain('Trello API key')
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
@@ -60,12 +61,14 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
   await flush()
   const dom = JSON.stringify(await view.render())
+  expect(dom).toContain('BoardViewTrello')
   expect(dom).toContain('A task')
   expect(dom).toContain('No cards')
   expect(host.write).toHaveBeenCalledWith('chat2.connectedBoardIds', [
     '5k8NLHLh',
   ])
   await view.handleEvent?.({ name: 'board-change', type: 'click' })
+  expect(JSON.stringify(await view.render())).not.toContain('BoardViewTrello')
   expect(JSON.stringify(await view.render())).toContain('Connect Trello')
   expect(JSON.stringify(await view.render())).not.toContain('Trello API key')
   expect(JSON.stringify(view.saveState?.())).not.toContain('private')
