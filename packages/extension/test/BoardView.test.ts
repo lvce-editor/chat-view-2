@@ -1,4 +1,4 @@
-import type { ViewContext } from '@lvce-editor/api'
+import type { ViewContext, VirtualDomViewInstance } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { createSession } from '../src/parts/BoardView/BoardSession.ts'
 import {
@@ -23,6 +23,9 @@ const createHost = (): BoardHost => ({
     .mockResolvedValue(
       'https://backend.test/auth/trello/connect?ticket=one-use',
     ),
+  boards: jest
+    .fn<BoardHost['boards']>()
+    .mockResolvedValue([{ id: '5k8NLHLh', name: 'Work' }]),
   execute: jest.fn<BoardHost['execute']>().mockResolvedValue(undefined),
   load: jest.fn<BoardHost['load']>().mockResolvedValue(board),
   read: jest.fn<BoardHost['read']>().mockResolvedValue([]),
@@ -43,6 +46,13 @@ const flush = async (): Promise<void> => {
   await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
+const selectedControl = async (
+  view: VirtualDomViewInstance,
+): Promise<unknown> => {
+  const dom = await view.render()
+  return dom.find((node) => node.name === 'board-id')
+}
+
 test('shows setup, renders empty lists and saves only board IDs', async () => {
   const host = createHost()
   const context = createContext()
@@ -52,7 +62,7 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   expect(JSON.stringify(await view.render())).not.toContain('Trello API key')
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
-  expect(JSON.stringify(await view.render())).toContain('Board URL or ID')
+  expect(JSON.stringify(await view.render())).toContain('Trello board')
   await view.handleEvent?.({
     name: 'board-id',
     type: 'input',
@@ -176,6 +186,7 @@ test('groups cards without dropping empty columns', () => {
     accountConnected: true,
     board: coveredBoard,
     boardId: '5k8NLHLh',
+    boards: [],
     connectedIds: [],
     error: undefined,
     loading: false,
@@ -219,7 +230,8 @@ test('offers browser authorization and cancels polling when the view is disposed
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
   expect(JSON.stringify(await view.render())).toContain('Authorize Trello')
-  expect(JSON.stringify(await view.render())).not.toContain('Board URL or ID')
+  const setupDom = await view.render()
+  expect(setupDom.some((node) => node.name === 'board-id')).toBe(false)
   await view.handleEvent?.({ name: 'board-authorize', type: 'click' })
   await flush()
   const dom = JSON.stringify(await view.render())
@@ -284,7 +296,7 @@ test('updates automatically when browser consent completes', async () => {
     expect(JSON.stringify(await view.render())).toContain('Continue to Trello')
     await jest.advanceTimersByTimeAsync(2000)
     const dom = JSON.stringify(await view.render())
-    expect(dom).toContain('Board URL or ID')
+    expect(dom).toContain('Trello board')
     expect(dom).not.toContain('Continue to Trello')
     expect(dom).not.toContain('Waiting for Trello')
   } finally {
@@ -304,3 +316,82 @@ test('opens remembered boards after reload without requesting Trello credentials
   expect(JSON.stringify(await view.render())).toContain('A task')
   expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.anything())
 })
+
+test('discovers named boards and opens the selected option without typing an ID', async () => {
+  const host = createHost()
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  const dom = await view.render()
+  const select = dom.find((node) => node.name === 'board-id')
+  expect(select).toMatchObject({ ariaLabel: 'Trello board', disabled: false })
+  expect(JSON.stringify(dom)).toContain('Select a board')
+  expect(dom.some((node) => node.value === '5k8NLHLh')).toBe(true)
+  expect(host.load).not.toHaveBeenCalled()
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '5k8NLHLh',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+  expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.anything())
+  expect(JSON.stringify(await view.render())).toContain('A task')
+})
+
+test('empty discovery disables selection and can be refreshed', async () => {
+  const host = createHost()
+  jest.mocked(host.boards).mockResolvedValueOnce([])
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('No open boards found')
+  expect(await selectedControl(view)).toMatchObject({ disabled: true })
+  await view.handleEvent?.({ name: 'board-check-account', type: 'click' })
+  await flush()
+  expect(await selectedControl(view)).toMatchObject({ disabled: false })
+})
+
+test('failed discovery retries the board list instead of loading an empty ID', async () => {
+  const host = createHost()
+  jest.mocked(host.boards).mockRejectedValueOnce(new Error('offline'))
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain(
+    'Unable to connect Trello',
+  )
+  await view.handleEvent?.({ name: 'board-check-account', type: 'click' })
+  await flush()
+  expect(host.boards).toHaveBeenCalledTimes(2)
+  expect(host.load).not.toHaveBeenCalled()
+  expect(await selectedControl(view)).toMatchObject({ disabled: false })
+})
+
+test.each(['navigate', 'disconnect', 'dispose'])(
+  'late discovery cannot restore options after %s',
+  async (action) => {
+    const host = createHost()
+    const pending =
+      Promise.withResolvers<readonly { id: string; name: string }[]>()
+    jest.mocked(host.boards).mockReturnValueOnce(pending.promise)
+    const view = await createInstance(createContext(), host)
+    await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+    await flush()
+    expect(JSON.stringify(await view.render())).toContain('Loading boards')
+    if (action === 'dispose') view.dispose?.()
+    else
+      await view.handleEvent?.({
+        name:
+          action === 'navigate'
+            ? 'board-providers'
+            : 'board-disconnect-account',
+        type: 'click',
+      })
+    await flush()
+    pending.resolve([{ id: '11111111', name: 'Stale options' }])
+    await flush()
+    expect(JSON.stringify(await view.render())).not.toContain('Stale options')
+    expect(jest.mocked(host.boards).mock.calls[0][0].aborted).toBe(true)
+  },
+)

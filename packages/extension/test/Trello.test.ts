@@ -248,3 +248,38 @@ test('supports status, launching consent, and disconnect without Trello credenti
   await client.disconnect(signal)
   expect(request.mock.calls[2]?.[1]?.method).toBe('POST')
 })
+
+test('discovers and sorts named boards through the authenticated backend', async () => {
+  const request = requestWith([
+    { id: '22222222', name: 'Zebra' },
+    { extra: 'discard', id: '11111111', name: 'Alpha' },
+  ])
+  const client = createTrelloClient(configuration, request)
+  expect(await client.boards(new AbortController().signal)).toEqual([
+    { id: '11111111', name: 'Alpha' },
+    { id: '22222222', name: 'Zebra' },
+  ])
+  expect(request).toHaveBeenCalledWith(
+    'https://backend.test/api/integrations/trello/boards',
+    expect.objectContaining({
+      credentials: 'omit',
+      headers: { Authorization: 'Bearer lvce-token' },
+    }),
+  )
+})
+
+test('accepts empty discovery and rejects malformed board lists', async () => {
+  const { signal } = new AbortController()
+  expect(
+    await createTrelloClient(configuration, requestWith([])).boards(signal),
+  ).toEqual([])
+  for (const data of [
+    {},
+    [{ id: '../bad', name: 'Work' }],
+    [{ id: '11111111', name: null }],
+  ]) {
+    await expect(
+      createTrelloClient(configuration, requestWith(data)).boards(signal),
+    ).rejects.toMatchObject({ details: { code: 'TRELLO_INVALID_RESPONSE' } })
+  }
+})

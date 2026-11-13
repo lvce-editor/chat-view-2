@@ -17,6 +17,11 @@ export interface TrelloList {
   readonly pos: number
 }
 
+export interface TrelloBoardSummary {
+  readonly id: string
+  readonly name: string
+}
+
 export interface TrelloBoard {
   readonly cards: readonly TrelloCard[]
   readonly id: string
@@ -136,6 +141,9 @@ export interface TrelloStatus {
 
 export interface TrelloClient {
   readonly authorize: (signal: Readonly<AbortSignal>) => Promise<string>
+  readonly boards: (
+    signal: Readonly<AbortSignal>,
+  ) => Promise<readonly TrelloBoardSummary[]>
   readonly disconnect: (signal: Readonly<AbortSignal>) => Promise<void>
   readonly load: (
     input: string,
@@ -281,7 +289,42 @@ export const createTrelloClient = (
       throw new TrelloError(boardError(0))
     }
   }
-  return { authorize, disconnect, load, status }
+  const boards = async (
+    signal: Readonly<AbortSignal>,
+  ): Promise<readonly TrelloBoardSummary[]> => {
+    try {
+      const { data } = await call('boards', signal)
+      if (
+        !Array.isArray(data) ||
+        !data.every(
+          (board): board is TrelloBoardSummary =>
+            isRecord(board) &&
+            typeof board.id === 'string' &&
+            boardIdPattern.test(board.id) &&
+            typeof board.name === 'string',
+        )
+      )
+        throw new TrelloError({
+          code: 'TRELLO_INVALID_RESPONSE',
+          message:
+            'Trello returned an unreadable board list. Try again shortly.',
+        })
+      return data
+        .map(({ id, name }) => ({ id, name }))
+        .toSorted(
+          (a: Readonly<TrelloBoardSummary>, b: Readonly<TrelloBoardSummary>) =>
+            a.name.localeCompare(b.name),
+        )
+    } catch (error) {
+      if (signal.aborted || error instanceof TrelloError) throw error
+      throw new TrelloError({
+        code: 'TRELLO_REQUEST_FAILED',
+        message:
+          'Unable to load your boards. Check your connection and try again.',
+      })
+    }
+  }
+  return { authorize, boards, disconnect, load, status }
 }
 
 export const trelloClient = createTrelloClient()
