@@ -94,8 +94,7 @@ export const testBoardSelection = async (
     await select.waitFor()
     await page.waitForFunction(
       () =>
-        !document.querySelector<HTMLSelectElement>('select[name="board-id"]')
-          ?.disabled,
+        !globalThis.document.querySelector('select[name="board-id"]')?.disabled,
     )
     assert.deepEqual(await select.locator('option').allTextContents(), [
       'Select a board',
@@ -111,8 +110,7 @@ export const testBoardSelection = async (
     await page.keyboard.press('Tab')
     await page.waitForFunction(
       () =>
-        !document.querySelector<HTMLButtonElement>('button[type="submit"]')
-          ?.disabled,
+        !globalThis.document.querySelector('button[type="submit"]')?.disabled,
     )
     await open.click()
     await page
@@ -141,7 +139,7 @@ export const testBoardSelection = async (
       .waitFor()
     assert.equal(await page.getByRole('alert').count(), 0)
     await page.waitForFunction(() => {
-      const control = document.querySelector<HTMLSelectElement>(
+      const control = globalThis.document.querySelector(
         'select[name="board-id"]',
       )
       return control && !control.disabled && control.options.length === 3
