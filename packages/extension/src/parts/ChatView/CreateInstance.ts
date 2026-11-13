@@ -39,7 +39,9 @@ import {
   getUrl,
   getChatTaskHash,
   getChatPath,
+  getBoardPath,
   getIdePath,
+  isBoardPath,
   isChatPath,
   parseChatTaskHash,
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
@@ -340,9 +342,9 @@ const setChatTaskHash = async (
   }
 }
 
-const setWorkbenchLayoutUrl = async (
+export const setWorkbenchLayoutUrl = async (
   execute: ExecuteCommand,
-  layout: 'ide' | 'ai-native',
+  layout: 'ide' | 'ai-native' | 'board',
   taskId?: string,
 ): Promise<void> => {
   try {
@@ -361,16 +363,28 @@ const setWorkbenchLayoutUrl = async (
       return
     }
     const wasChatPath = isChatPath(url.pathname)
-    if (layout === 'ai-native') {
+    if (layout === 'ai-native' || layout === 'board') {
       const assetDir = await execute('Layout.getAssetDir')
       if (typeof assetDir !== 'string' || !assetDir) {
         return
       }
-      url.pathname = getChatPath(href, assetDir)
-      url.hash = taskId ? getChatTaskHash(taskId) : ''
+      const wasBoardPath = isBoardPath(url.pathname)
+      url.pathname =
+        layout === 'ai-native'
+          ? getChatPath(href, assetDir)
+          : getBoardPath(href, assetDir)
+      if (layout === 'ai-native') {
+        if (taskId) {
+          url.hash = getChatTaskHash(taskId)
+        } else if (parseChatTaskHash(href).type !== 'none') {
+          url.hash = ''
+        }
+      } else if (!wasBoardPath && parseChatTaskHash(href).type !== 'none') {
+        url.hash = ''
+      }
     } else {
       url.pathname = getIdePath(href)
-      if (wasChatPath) {
+      if (wasChatPath && parseChatTaskHash(href).type !== 'none') {
         url.hash = ''
       }
     }
