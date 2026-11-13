@@ -96,6 +96,7 @@ test('creates and detects the board route and returns to the hosted IDE path', (
   expect(getBoardPath('https://example.com/?workspace=one', '/commit')).toBe(
     '/board',
   )
+  expect(getBoardPath('https://example.com/?workspace=one', '')).toBe('/board')
   expect(
     getIdePath('https://example.com/prefix/board?workspace=one#workspace=x'),
   ).toBe('/prefix/')

@@ -109,6 +109,7 @@
     }
   },
   "activation": [
+    "onStartupFinished",
     "onView:chat2.views.chat",
     "onCommand:chat2.createSession",
     "onCommand:chat2.newChat",

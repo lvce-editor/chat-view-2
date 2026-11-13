@@ -143,26 +143,40 @@ export const activate = async (): Promise<void> => {
     },
     id: 'chat2.openQuickPickItem',
   })
-  try {
-    const href = await executeCommand('Layout.getHref')
-    const url = typeof href === 'string' ? getUrl(href) : undefined
-    if (
-      typeof href === 'string' &&
-      url !== undefined &&
-      isBoardPath(url.pathname)
-    ) {
-      await executeCommand('SideBar.show', boardViewId, true)
-      await executeCommand('Layout.enterSideBarFocusMode', 'primary', true)
-    } else if (
-      typeof href === 'string' &&
-      (parseChatTaskHash(href).type === 'task' ||
-        (url !== undefined && isChatPath(url.pathname)))
-    ) {
-      await executeCommand('SideBar.show', viewId, true)
+  const selectInitialLayout = async (): Promise<boolean | undefined> => {
+    try {
+      const href = await executeCommand('Layout.getHref')
+      if (typeof href !== 'string') {
+        return undefined
+      }
+      const url = typeof href === 'string' ? getUrl(href) : undefined
+      if (url !== undefined && isBoardPath(url.pathname)) {
+        await executeCommand('SideBar.show', boardViewId, true)
+        await executeCommand('Layout.enterSideBarFocusMode', 'primary', true)
+        return true
+      }
+      if (
+        parseChatTaskHash(href).type === 'task' ||
+        (url !== undefined && isChatPath(url.pathname))
+      ) {
+        await executeCommand('SideBar.show', viewId, true)
+        return true
+      }
+      return false
+    } catch {
+      // The editor may not expose URL commands while the extension is activating.
+      return undefined
     }
-  } catch {
-    // The editor may not expose URL commands while the extension is activating.
   }
+  const selectInitialLayoutWhenReady = async (): Promise<void> => {
+    for (let attempt = 0; attempt < 50; attempt++) {
+      if ((await selectInitialLayout()) !== undefined) {
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+  }
+  void selectInitialLayoutWhenReady()
 }
 
 export const deactivate = (): void => {}
