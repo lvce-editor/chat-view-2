@@ -134,16 +134,14 @@ export const testBoardSelection = async (
     fail = false
     empty = false
     await page.getByRole('button', { name: 'Try again', exact: true }).click()
-    await page
-      .getByText('Select a board to open it.', { exact: false })
-      .waitFor()
-    assert.equal(await page.getByRole('alert').count(), 0)
+    await page.getByRole('alert').waitFor({ state: 'detached' })
     await page.waitForFunction(() => {
       const control = globalThis.document.querySelector(
         'select[name="board-id"]',
       )
       return control && !control.disabled && control.options.length === 3
     })
+    assert.equal(await page.getByRole('alert').count(), 0)
     assert.equal(await select.isEnabled(), true)
     await page.setViewportSize({ width: 390, height: 844 })
     if (process.env.BOARD_SELECTION_SCREENSHOT)
