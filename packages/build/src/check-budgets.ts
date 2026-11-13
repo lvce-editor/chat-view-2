@@ -4,11 +4,9 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  // Same Node 26.12.1 build and lockfile: recorded Trello OAuth baseline
-  // 344,635 bytes, board selection 347,439 (+2,804 / 0.81%).
-  // With main's board route and card covers: 349,601 bytes (+2,162).
-  // Card editing adds 7,359 bytes; keep 1,540 bytes of headroom.
-  ['chatMain.js', 358_500],
+  // Same Node 26.12.1 build and lockfile: card badge baseline 358,117 bytes,
+  // card creation 362,794 (+4,677 / 1.31%). Keep 1,706 bytes of headroom.
+  ['chatMain.js', 364_500],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],
