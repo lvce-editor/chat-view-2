@@ -21,6 +21,7 @@ export const connectionsPreference = 'chat2.connectedBoardIds'
 
 export interface BoardHost {
   readonly authorize: typeof trelloClient.authorize
+  readonly boards: typeof trelloClient.boards
   readonly createCard: typeof trelloClient.createCard
   readonly execute: typeof executeCommand
   readonly load: typeof trelloClient.load
@@ -32,6 +33,7 @@ export interface BoardHost {
 }
 const defaultHost: BoardHost = {
   authorize: trelloClient.authorize,
+  boards: trelloClient.boards,
   createCard: trelloClient.createCard,
   execute: executeCommand,
   load: trelloClient.load,
@@ -82,6 +84,7 @@ export const createInstance = async (
     authorizing: false,
     board: connection?.board,
     boardId: initialId,
+    boards: [],
     connectedIds,
     error: undefined,
     loading: false,
@@ -211,19 +214,45 @@ export const createInstance = async (
               message: 'Unable to connect Trello. Try again.',
             },
       loading: false,
+      ...(error instanceof TrelloError &&
+        error.details.code === 'TRELLO_CONNECTION_REQUIRED' && {
+          accountConnected: false,
+          boards: [],
+        }),
+    }
+  }
+  const loadBoards = async (
+    signal: Readonly<AbortSignal>,
+    requestGeneration: number,
+  ): Promise<void> => {
+    if (disposed || generation !== requestGeneration) return
+    const boards = await host.boards(signal)
+    if (disposed || generation !== requestGeneration) return
+    const { boardId } = state
+    state = {
+      ...state,
+      boardId: boards.some((board) => board.id === boardId) ? boardId : '',
+      boards,
+      loading: false,
     }
   }
   const checkAccount = async (): Promise<void> => {
     cancel()
     const requestGeneration = generation
     controller = new AbortController()
-    state = { ...state, error: undefined, loading: true }
+    const { signal } = controller
+    state = { ...state, boards: [], error: undefined, loading: true }
     try {
       const result = await host.status(
-        AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+        AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       )
       if (disposed || generation !== requestGeneration) return
       state = { ...state, accountConnected: result.connected, loading: false }
+      if (result.connected) {
+        state = { ...state, loading: true }
+        await notify()
+        await loadBoards(signal, requestGeneration)
+      }
       if (!result.configured)
         state = {
           ...state,
@@ -272,7 +301,10 @@ export const createInstance = async (
             accountConnected: true,
             authorizationUrl: undefined,
             authorizing: false,
+            loading: true,
           }
+          await notify()
+          await loadBoards(signal, requestGeneration)
           await notify()
           return
         }
@@ -300,6 +332,8 @@ export const createInstance = async (
         ...state,
         accountConnected: false,
         board: undefined,
+        boardId: '',
+        boards: [],
         loading: false,
         providerSelected: true,
       }
@@ -375,7 +409,7 @@ export const createInstance = async (
       state = { ...state, cardDraft: { ...cardDraft, title: value } }
     if (name === 'board-id') {
       cancel()
-      state = { ...state, boardId: value, loading: false }
+      state = { ...state, boardId: value, error: undefined, loading: false }
     }
   }
   const handleClick = async (event: Readonly<ViewEvent>): Promise<void> => {

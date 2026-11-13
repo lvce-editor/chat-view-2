@@ -3,7 +3,7 @@ import {
   mergeClassNames,
   VirtualDomElements,
 } from '@lvce-editor/virtual-dom-worker'
-import type { BoardError, TrelloBoard } from './Trello.ts'
+import type { BoardError, TrelloBoard, TrelloBoardSummary } from './Trello.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 
 const primaryButtonClass = mergeClassNames('BoardButton', 'BoardPrimaryButton')
@@ -21,6 +21,7 @@ export interface BoardState {
   readonly authorizing?: boolean
   readonly board: TrelloBoard | undefined
   readonly boardId: string
+  readonly boards: readonly TrelloBoardSummary[]
   readonly cardDraft?: CardDraft | undefined
   readonly connectedIds: readonly string[]
   readonly error: BoardError | undefined
@@ -96,28 +97,76 @@ const renderComposer = (
   ])
 }
 
+const boardSelect = (state: BoardState): Dom.Node => {
+  const { boardId, boards, loading } = state
+  return Dom.node(VirtualDomElements.Label, { className: 'BoardField' }, [
+    Dom.textNode('Trello board'),
+    Dom.node(
+      VirtualDomElements.Select,
+      {
+        ariaLabel: 'Trello board',
+        className: 'BoardInput',
+        disabled: loading || boards.length === 0,
+        name: 'board-id',
+        onInput: 'handleInput',
+      },
+      [
+        Dom.node(
+          VirtualDomElements.Option,
+          {
+            selected: boards.every((board) => board.id !== boardId),
+            value: '',
+          },
+          [Dom.textNode(loading ? 'Loading boards…' : 'Select a board')],
+        ),
+        ...boards.map((board) =>
+          Dom.node(
+            VirtualDomElements.Option,
+            { selected: board.id === boardId, value: board.id },
+            [Dom.textNode(board.name)],
+          ),
+        ),
+      ],
+    ),
+  ])
+}
+
+const connectionHelp = (state: BoardState): string => {
+  const { boards, error, loading } = state
+  if (loading) return 'Loading your Trello boards…'
+  if (boards.length === 0 && !error)
+    return 'No open boards found. Create a board in Trello, then refresh this list.'
+  return 'Trello is connected. Select a board to open it.'
+}
+
 const renderConnection = (state: BoardState): readonly Dom.Node[] => {
-  const { accountConnected, authorizationUrl, authorizing, boardId, loading } =
-    state
+  const {
+    accountConnected,
+    authorizationUrl,
+    authorizing,
+    boardId,
+    boards,
+    loading,
+  } = state
   return accountConnected
     ? [
-        Dom.div('BoardCredentialsHelp', [
-          Dom.textNode(
-            'Trello is connected. Enter a board URL or ID to open it.',
-          ),
-        ]),
+        Dom.div('BoardCredentialsHelp', [Dom.textNode(connectionHelp(state))]),
         Dom.form('board-connect', 'BoardConnect', [
-          input('board-id', 'Board URL or ID', boardId),
+          boardSelect(state),
           Dom.node(
             VirtualDomElements.Button,
             {
               buttonType: 'submit',
               className: primaryButtonClass,
-              disabled: loading,
+              disabled:
+                loading || boards.every((board) => board.id !== boardId),
             },
             [Dom.textNode('Open board')],
           ),
         ]),
+        Dom.button('board-check-account', 'Refresh boards', 'BoardButton', {
+          disabled: loading,
+        }),
         Dom.button(
           'board-disconnect-account',
           'Disconnect Trello',
@@ -204,8 +253,7 @@ const renderSetup = (state: BoardState): Dom.Node => {
 }
 
 export const render = (state: BoardState): Dom.Node => {
-  const { accountConnected, authorizing, board, cardDraft, error, loading } =
-    state
+  const { authorizing, board, cardDraft, error, loading } = state
   const cards = board?.cards || []
   const cardsByList = new Map<string, Dom.Node[]>()
   for (const card of cards) {
@@ -242,7 +290,7 @@ export const render = (state: BoardState): Dom.Node => {
               Dom.heading(2, 'BoardErrorTitle', error.code),
               Dom.textNode(error.message),
               Dom.button(
-                accountConnected ? 'board-retry' : 'board-check-account',
+                board ? 'board-retry' : 'board-check-account',
                 'Try again',
                 'BoardButton',
                 {
