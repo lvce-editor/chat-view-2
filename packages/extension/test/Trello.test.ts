@@ -52,14 +52,13 @@ test('loads source-ordered lists and cards through the backend with only the LVC
     cards: [
       ...board.cards,
       {
-        cover: { url: 'https://trello.com/1/cards/card/cover' },
+        coverDataUrl: 'data:image/webp;base64,dGVzdA==',
         id: 'covered',
         idList: 'now',
         name: 'Cover',
         pos: 3,
       },
       {
-        cover: { url: 'https://evil.test/image.png' },
         id: 'unsafe',
         idList: 'now',
         name: 'No cover',
@@ -79,11 +78,11 @@ test('loads source-ordered lists and cards through the backend with only the LVC
     'Cover',
     'No cover',
   ])
-  expect(result.cards.find((card) => card.name === 'Cover')?.coverUrl).toBe(
-    'https://trello.com/1/cards/card/cover',
+  expect(result.cards.find((card) => card.name === 'Cover')?.coverDataUrl).toBe(
+    'data:image/webp;base64,dGVzdA==',
   )
   expect(
-    result.cards.find((card) => card.name === 'No cover')?.coverUrl,
+    result.cards.find((card) => card.name === 'No cover')?.coverDataUrl,
   ).toBeUndefined()
   expect(request).toHaveBeenCalledWith(
     'https://backend.test/api/integrations/trello/boards/5k8NLHLh',

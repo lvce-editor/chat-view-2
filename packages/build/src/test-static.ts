@@ -128,6 +128,7 @@ try {
       process.env.EVALUATION_UPSTREAM_URL || 'http://127.0.0.1:1/api/v1',
   })
   const browserType = process.argv.includes('--firefox') ? firefox : chromium
+  const boardSelectionOnly = process.argv.includes('--board-selection-only')
   const browser = await browserType.launch({ headless: true })
   const testExported = async (evaluation: EvaluationProxy): Promise<void> => {
     await testBoardSelection(browser, baseUrl)
@@ -498,8 +499,12 @@ try {
     assert.deepEqual(failures, [], 'Exported e2e tests failed')
   }
   try {
-    await testComposerPaste(browser, baseUrl)
-    if (!process.argv.includes('--paste-only')) {
+    if (boardSelectionOnly) {
+      await testBoardSelection(browser, baseUrl)
+    } else {
+      await testComposerPaste(browser, baseUrl)
+    }
+    if (!boardSelectionOnly && !process.argv.includes('--paste-only')) {
       await testExported(replay)
     }
   } finally {
