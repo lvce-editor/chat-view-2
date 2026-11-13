@@ -152,10 +152,10 @@ export const testBoardSelection = async (
       '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name&list_fields=name%2Cpos&lists=open',
     ])
     assert.deepEqual(proxiedLoads, [])
-    const refresh = page.waitForRequest(
-      (request) =>
-        request.method() === 'GET' &&
-        request.url().startsWith('https://api.trello.com/1/boards/22222222?'),
+    const refresh = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        response.url().startsWith('https://api.trello.com/1/boards/22222222?'),
     )
     await page
       .getByRole('button', { name: 'Refresh board', exact: true })
