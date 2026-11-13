@@ -435,7 +435,6 @@ export const render = (state: BoardState): Dom.Node => {
     authorizing,
     board,
     cardDraft,
-    error,
     draggedCardId,
     dropTargetId,
     editingCard,
