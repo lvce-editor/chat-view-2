@@ -3,10 +3,20 @@ import {
   mergeClassNames,
   VirtualDomElements,
 } from '@lvce-editor/virtual-dom-worker'
-import type { BoardError, TrelloBoard, TrelloBoardSummary } from './Trello.ts'
+import type {
+  BoardError,
+  TrelloBoard,
+  TrelloBoardSummary,
+  TrelloCard,
+} from './Trello.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 
 const primaryButtonClass = mergeClassNames('BoardButton', 'BoardPrimaryButton')
+const cardButtonClass = mergeClassNames('BoardCard', 'BoardCardButton')
+const descriptionInputClass = mergeClassNames(
+  'BoardInput',
+  'BoardDescriptionInput',
+)
 
 export interface CardDraft {
   readonly error?: string | undefined
@@ -24,9 +34,14 @@ export interface BoardState {
   readonly boards: readonly TrelloBoardSummary[]
   readonly cardDraft?: CardDraft | undefined
   readonly connectedIds: readonly string[]
+  readonly editDesc?: string
+  readonly editError?: string | undefined
+  readonly editingCard?: TrelloCard | undefined
+  readonly editName?: string
   readonly error: BoardError | undefined
   readonly loading: boolean
   readonly providerSelected: boolean
+  readonly savingCard?: boolean
 }
 
 const input = (
@@ -41,11 +56,12 @@ const input = (
       ariaLabel: label,
       autoComplete: 'off',
       className: 'BoardInput',
-      disabled,
+      ...(disabled && { disabled: true }),
       inputType: 'text',
       name,
       onInput: 'handleInput',
       spellcheck: false,
+      ...(name === 'edit-card-name' && { autoFocus: true }),
       ...(value !== undefined && { value }),
     }),
   ])
@@ -234,7 +250,7 @@ const renderSetup = (state: BoardState): Dom.Node => {
           ]),
           Dom.div('BoardIntro', [
             Dom.textNode(
-              'Bring your lists and cards into the editor. Add cards here and see them in Trello.',
+              'Bring your lists and cards into the editor. Add and edit cards here to update them in Trello.',
             ),
           ]),
           ...renderConnection(state),
@@ -252,6 +268,62 @@ const renderSetup = (state: BoardState): Dom.Node => {
   ])
 }
 
+const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
+  const { editDesc, editError, editingCard, editName, savingCard } = state
+  if (!editingCard) return undefined
+  return Dom.node(
+    VirtualDomElements.Div,
+    {
+      ariaLabel: 'Edit Trello card',
+      ariaModal: true,
+      className: 'BoardDialogOverlay',
+      onKeyDown: 'handleDialogKeyDown',
+      role: 'dialog',
+      tabIndex: -1,
+    },
+    [
+      Dom.form('board-card-edit', 'BoardDialog', [
+        Dom.heading(2, 'BoardDialogTitle', 'Edit card'),
+        input('edit-card-name', 'Title', editName, savingCard),
+        Dom.node(VirtualDomElements.Label, { className: 'BoardField' }, [
+          Dom.textNode('Description'),
+          Dom.node(VirtualDomElements.TextArea, {
+            ariaLabel: 'Description',
+            className: descriptionInputClass,
+            ...(savingCard && { disabled: true }),
+            name: 'edit-card-desc',
+            onInput: 'handleInput',
+            value: editDesc || '',
+          }),
+        ]),
+        ...(editError
+          ? [
+              Dom.node(
+                VirtualDomElements.Div,
+                { className: 'BoardDialogError', role: 'alert' },
+                [Dom.textNode(editError)],
+              ),
+            ]
+          : []),
+        Dom.div('BoardDialogActions', [
+          Dom.button('board-card-cancel', 'Cancel', 'BoardButton', {
+            disabled: Boolean(savingCard),
+          }),
+          Dom.node(
+            VirtualDomElements.Button,
+            {
+              buttonType: 'submit',
+              className: primaryButtonClass,
+              disabled: savingCard || !(editName || '').trim(),
+            },
+            [Dom.textNode(savingCard ? 'Saving…' : 'Save changes')],
+          ),
+        ]),
+      ]),
+    ],
+  )
+}
+
 export const render = (state: BoardState): Dom.Node => {
   const { authorizing, board, cardDraft, error, loading } = state
   const cards = board?.cards || []
@@ -259,22 +331,32 @@ export const render = (state: BoardState): Dom.Node => {
   for (const card of cards) {
     const cards = cardsByList.get(card.idList) || []
     cards.push(
-      Dom.div('BoardCard', [
-        ...(card.coverUrl
-          ? [
-              Dom.node(VirtualDomElements.Img, {
-                alt: '',
-                className: 'BoardCardCover',
-                loading: 'lazy',
-                src: card.coverUrl,
-              }),
-            ]
-          : []),
-        Dom.div('BoardCardTitle', [Dom.textNode(card.name)]),
-      ]),
+      Dom.node(
+        VirtualDomElements.Button,
+        {
+          buttonType: 'button',
+          className: cardButtonClass,
+          name: `board-card:${card.id}`,
+          onClick: 'handleClick',
+        },
+        [
+          ...(card.coverUrl
+            ? [
+                Dom.node(VirtualDomElements.Img, {
+                  alt: '',
+                  className: 'BoardCardCover',
+                  loading: 'lazy',
+                  src: card.coverUrl,
+                }),
+              ]
+            : []),
+          Dom.div('BoardCardTitle', [Dom.textNode(card.name)]),
+        ],
+      ),
     )
     cardsByList.set(card.idList, cards)
   }
+  const cardDialog = renderCardDialog(state)
   return Dom.div(mergeClassNames('BoardView', board ? 'BoardViewTrello' : ''), [
     Dom.div('BoardToolbar', [
       Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
@@ -361,5 +443,6 @@ export const render = (state: BoardState): Dom.Node => {
           ),
         ]
       : []),
+    ...(cardDialog ? [cardDialog] : []),
   ])
 }

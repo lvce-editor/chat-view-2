@@ -8,8 +8,8 @@ import {
 
 const board = {
   cards: [
-    { id: 'b', idList: 'now', name: 'Second', pos: 2 },
-    { id: 'a', idList: 'now', name: 'First', pos: 1 },
+    { desc: '', id: 'b', idList: 'now', name: 'Second', pos: 2 },
+    { desc: 'Details', id: 'a', idList: 'now', name: 'First', pos: 1 },
   ],
   id: 'board-id',
   lists: [
@@ -172,6 +172,38 @@ test('refreshes the LVCE access token once on 401 and omits cookies', async () =
   })
 })
 
+test('updates only the selected card title and description through the LVCE backend', async () => {
+  const request = requestWith({
+    desc: 'Updated details',
+    id: '507f1f77bcf86cd799439011',
+    idList: 'list',
+    name: 'Updated title',
+    pos: 1,
+  })
+  const client = createTrelloClient(configuration, request)
+  const updated = await client.updateCard(
+    '507f1f77bcf86cd799439011',
+    'Updated title',
+    'Updated details',
+    new AbortController().signal,
+  )
+  expect(updated).toMatchObject({
+    desc: 'Updated details',
+    name: 'Updated title',
+  })
+  expect(request).toHaveBeenCalledWith(
+    'https://backend.test/api/integrations/trello/cards/507f1f77bcf86cd799439011',
+    expect.objectContaining({
+      body: JSON.stringify({ desc: 'Updated details', name: 'Updated title' }),
+      headers: {
+        Authorization: 'Bearer lvce-token',
+        'Content-Type': 'application/json',
+      },
+      method: 'PUT',
+    }),
+  )
+})
+
 test('rejects authorization links outside the trusted backend callback launcher', async () => {
   for (const url of [
     'https://evil.test/auth/trello/connect?ticket=x',
@@ -243,7 +275,7 @@ test('accepts empty discovery and rejects malformed board lists', async () => {
 })
 
 test('creates cards through the backend without provider credentials', async () => {
-  const card = { id: 'new', idList: 'todo', name: 'New task', pos: 3 }
+  const card = { desc: '', id: 'new', idList: 'todo', name: 'New task', pos: 3 }
   const request = requestWith(card)
   const client = createTrelloClient(configuration, request)
   expect(

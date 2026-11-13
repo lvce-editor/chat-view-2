@@ -29,7 +29,11 @@ export interface BoardHost {
   readonly revoke: typeof trelloClient.disconnect
   readonly session: BoardSession
   readonly status: typeof trelloClient.status
+  readonly updateCard: typeof trelloClient.updateCard
   readonly write: typeof setPreference
+}
+interface BoardViewInstance extends VirtualDomViewInstance {
+  readonly handleDialogKeyDown: (key: unknown) => void
 }
 const defaultHost: BoardHost = {
   authorize: trelloClient.authorize,
@@ -41,6 +45,7 @@ const defaultHost: BoardHost = {
   revoke: trelloClient.disconnect,
   session: createSession(),
   status: trelloClient.status,
+  updateCard: trelloClient.updateCard,
   write: setPreference,
 }
 
@@ -55,7 +60,7 @@ const getProviderAction = (
 export const createInstance = async (
   context?: ViewContext,
   host: BoardHost = defaultHost,
-): Promise<VirtualDomViewInstance> => {
+): Promise<BoardViewInstance> => {
   let connectedIds: readonly string[] = []
   try {
     const saved: unknown = await host.read(connectionsPreference)
@@ -93,6 +98,8 @@ export const createInstance = async (
   let generation = 0
   let controller: AbortController | undefined
   let disposed = false
+  let focusRestore = false
+  let focusCardId = ''
   const notify = async (): Promise<void> => {
     if (!disposed) await context?.requestRerender()
   }
@@ -105,7 +112,16 @@ export const createInstance = async (
       authorizing: false,
       cardDraft: undefined,
       loading: false,
+      savingCard: false,
     }
+  }
+  const closeEditor = (restoreFocus = true): void => {
+    const { editingCard } = state
+    if (restoreFocus && editingCard) {
+      focusCardId = editingCard.id
+      focusRestore = !focusRestore
+    }
+    state = { ...state, editError: undefined, editingCard: undefined }
   }
   const connect = async (): Promise<void> => {
     const { board, cardDraft } = state
@@ -166,6 +182,56 @@ export const createInstance = async (
             board: undefined,
             providerSelected: true,
           }),
+      }
+    }
+    await notify()
+  }
+  const saveCard = async (): Promise<void> => {
+    const {
+      board,
+      boardId,
+      editDesc = '',
+      editingCard,
+      editName = '',
+      savingCard,
+    } = state
+    if (!board || !editingCard || savingCard || !editName.trim()) return
+    cancel()
+    const requestGeneration = generation
+    controller = new AbortController()
+    state = { ...state, editError: undefined, savingCard: true }
+    await notify()
+    try {
+      const updatedCard = await host.updateCard(
+        editingCard.id,
+        editName,
+        editDesc,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
+      )
+      if (disposed || requestGeneration !== generation) return
+      const updatedBoard = {
+        ...board,
+        cards: board.cards.map((card) =>
+          card.id === updatedCard.id ? updatedCard : card,
+        ),
+      }
+      host.session.set(boardId, { board: updatedBoard })
+      state = {
+        ...state,
+        board: updatedBoard,
+        editError: undefined,
+        savingCard: false,
+      }
+      closeEditor()
+    } catch (error) {
+      if (disposed || requestGeneration !== generation) return
+      state = {
+        ...state,
+        editError:
+          error instanceof TrelloError
+            ? error.details.message
+            : 'Unable to save this card. Check your connection and try again.',
+        savingCard: false,
       }
     }
     await notify()
@@ -344,9 +410,10 @@ export const createInstance = async (
     await notify()
   }
   const createCard = async (): Promise<void> => {
-    const { board, boardId, cardDraft, loading } = state
+    const { board, boardId, cardDraft, editingCard, loading } = state
     if (
       !board ||
+      editingCard ||
       !cardDraft ||
       cardDraft.saving ||
       loading ||
@@ -390,9 +457,10 @@ export const createInstance = async (
     }
     await notify()
   }
-  const openCard = (listId: string): void => {
-    const { board, cardDraft, loading } = state
+  const openNewCard = (listId: string): void => {
+    const { board, cardDraft, editingCard, loading } = state
     if (
+      !editingCard &&
       !loading &&
       !cardDraft?.saving &&
       board?.lists.some((list) => list.id === listId)
@@ -405,12 +473,59 @@ export const createInstance = async (
   }
   const handleInput = (name: string | undefined, value: string): void => {
     const { cardDraft } = state
-    if (name === 'board-card-title' && cardDraft && !cardDraft.saving)
-      state = { ...state, cardDraft: { ...cardDraft, title: value } }
-    if (name === 'board-id') {
-      cancel()
-      state = { ...state, boardId: value, error: undefined, loading: false }
+    switch (name) {
+      case 'board-card-title':
+        if (cardDraft && !cardDraft.saving)
+          state = { ...state, cardDraft: { ...cardDraft, title: value } }
+        break
+      case 'board-id':
+        cancel()
+        state = { ...state, boardId: value, error: undefined, loading: false }
+        break
+      case 'edit-card-desc':
+        state = { ...state, editDesc: value, editError: undefined }
+        break
+      case 'edit-card-name':
+        state = { ...state, editError: undefined, editName: value }
+        break
     }
+  }
+  const openCard = (name: string | undefined): void => {
+    if (!name?.startsWith('board-card:')) return
+    const { board } = state
+    const card = board?.cards.find(
+      (item) => item.id === name.slice('board-card:'.length),
+    )
+    if (!card) return
+    cancel()
+    state = {
+      ...state,
+      editDesc: card.desc || '',
+      editError: undefined,
+      editingCard: card,
+      editName: card.name,
+      savingCard: false,
+    }
+  }
+  const changeBoard = (name: string | undefined): void => {
+    if (name !== 'board-change' && !name?.startsWith('board-select:')) return
+    cancel()
+    state = {
+      ...state,
+      board: undefined,
+      boardId: name.startsWith('board-select:')
+        ? name.slice('board-select:'.length)
+        : '',
+      editError: undefined,
+      editingCard: undefined,
+      error: undefined,
+      loading: false,
+      providerSelected: false,
+      savingCard: false,
+    }
+    const { boardId } = state
+    restoreConnection(boardId)
+    if (boardId && !host.session.get(boardId)) void connect()
   }
   const handleClick = async (event: Readonly<ViewEvent>): Promise<void> => {
     const providerAction = getProviderAction(event.name)
@@ -425,35 +540,33 @@ export const createInstance = async (
       else cancel()
       return
     }
+    if (event.name?.startsWith('board-card:')) {
+      openCard(event.name)
+      return
+    }
+    if (event.name === 'board-card-cancel') {
+      cancel()
+      closeEditor()
+      return
+    }
     if (event.name === 'board-chat')
       await host.execute('chat2.showAiNativeLayout')
     else if (event.name === 'board-ide')
       await host.execute('chat2.showIdeLayout')
-    if (
-      event.name === 'board-change' ||
-      event.name?.startsWith('board-select:')
-    ) {
-      cancel()
-      state = {
-        ...state,
-        board: undefined,
-        boardId: event.name.startsWith('board-select:')
-          ? event.name.slice('board-select:'.length)
-          : '',
-        error: undefined,
-        loading: false,
-        providerSelected: false,
-      }
-      const { boardId } = state
-      restoreConnection(boardId)
-      if (boardId && !host.session.get(boardId)) void connect()
-    }
+    changeBoard(event.name)
     if (event.name === 'board-disconnect') await disconnect()
   }
   return {
     dispose(): void {
       disposed = true
       cancel()
+    },
+    getContext: () => ({ focusRestore }),
+    handleDialogKeyDown(key: unknown): void {
+      const { editingCard, savingCard } = state
+      if (key !== 'Escape' || !editingCard || savingCard) return
+      cancel()
+      closeEditor()
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'input' && typeof event.value === 'string') {
@@ -474,9 +587,13 @@ export const createInstance = async (
         void connect()
         return
       }
+      if (event.type === 'submit' && event.name === 'board-card-edit') {
+        void saveCard()
+        return
+      }
       if (event.type === 'click') {
         if (event.name?.startsWith('board-add:')) {
-          openCard(event.name.slice('board-add:'.length))
+          openNewCard(event.name.slice('board-add:'.length))
           return
         }
         const actions: Readonly<Record<string, () => void | Promise<void>>> = {
@@ -495,6 +612,13 @@ export const createInstance = async (
       if (event.type === 'click') await handleClick(event)
     },
     render: () => render(state),
+    renderFocus: (
+      oldContext: Readonly<Record<string, boolean>>,
+      newContext: Readonly<Record<string, boolean>>,
+    ): string =>
+      oldContext.focusRestore === newContext.focusRestore || !focusCardId
+        ? ''
+        : `[name="board-card:${focusCardId}"]`,
     renderTitle: (): string => {
       const { board } = state
       return board?.name || 'Boards'
@@ -510,6 +634,12 @@ export const createInstance = async (
 export const view: View<VirtualDomViewInstance> = {
   create: createInstance,
   displayName: 'Boards',
+  eventListeners: [
+    {
+      name: 'handleDialogKeyDown',
+      params: ['handleDialogKeyDown', 'event.key'],
+    },
+  ],
   icon: 'project',
   id: viewId,
   kind: 'virtualDom',
