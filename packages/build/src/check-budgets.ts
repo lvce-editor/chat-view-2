@@ -4,7 +4,8 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  ['chatMain.js', 338_000],
+  // The board provider chooser measures 338,390 bytes in the entry bundle.
+  ['chatMain.js', 339_000],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],

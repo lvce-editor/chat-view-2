@@ -38,9 +38,10 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   const host = createHost()
   const context = createContext()
   const view = await createInstance(context, host)
-  expect(JSON.stringify(await view.render())).toContain(
-    'Connect a Trello board',
-  )
+  expect(JSON.stringify(await view.render())).toContain('Connect Trello')
+  expect(JSON.stringify(await view.render())).not.toContain('Trello API key')
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  expect(JSON.stringify(await view.render())).toContain('Trello API key')
   await view.handleEvent?.({
     name: 'board-id',
     type: 'input',
@@ -64,6 +65,9 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   expect(host.write).toHaveBeenCalledWith('chat2.connectedBoardIds', [
     '5k8NLHLh',
   ])
+  await view.handleEvent?.({ name: 'board-change', type: 'click' })
+  expect(JSON.stringify(await view.render())).toContain('Connect Trello')
+  expect(JSON.stringify(await view.render())).not.toContain('Trello API key')
   expect(JSON.stringify(view.saveState?.())).not.toContain('private')
   expect(dom).not.toContain('private')
   expect(context.requestRerender).toHaveBeenCalled()
@@ -140,15 +144,15 @@ test('restores remembered IDs, never credentials, and disconnects', async () => 
   const host = createHost()
   jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
   const view = await createInstance(createContext(), host)
+  expect(JSON.stringify(await view.render())).toContain('Connect Trello')
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   expect(JSON.stringify(await view.render())).toContain('5k8NLHLh')
   expect(host.load).not.toHaveBeenCalled()
   await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
   await flush()
   await view.handleEvent?.({ name: 'board-disconnect', type: 'click' })
   expect(host.write).toHaveBeenLastCalledWith('chat2.connectedBoardIds', [])
-  expect(JSON.stringify(await view.render())).toContain(
-    'Connect a Trello board',
-  )
+  expect(JSON.stringify(await view.render())).toContain('Connect Trello')
 })
 
 test('groups cards without dropping empty columns', () => {
@@ -158,6 +162,7 @@ test('groups cards without dropping empty columns', () => {
     connectedIds: [],
     error: undefined,
     loading: false,
+    providerSelected: false,
   })
   expect(dom.filter((node) => node.className === 'BoardColumn')).toHaveLength(2)
   expect(dom.filter((node) => node.className === 'BoardCard')).toHaveLength(1)

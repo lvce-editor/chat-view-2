@@ -1,11 +1,21 @@
 .BoardView {
+  color-scheme: light;
+  --BoardBackground: #ffffff;
+  --BoardForeground: #202124;
+  --BoardMutedForeground: #5f6368;
+  --BoardBorder: #dadce0;
+  --BoardSurface: #f8f9fa;
+  --BoardHover: #f1f3f4;
+  --BoardInputBackground: #ffffff;
+  --BoardFocus: #1a73e8;
+  --BoardPrimary: #1a73e8;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-width: 0;
   overflow: auto;
-  color: var(--SideBarForeground, #ccc);
-  background: var(--SideBarBackground, #181a1b);
+  color: var(--BoardForeground);
+  background: var(--BoardBackground);
   font: inherit;
 }
 .BoardToolbar,
@@ -22,31 +32,34 @@
   overflow-wrap: anywhere;
 }
 .BoardButton {
-  border: 1px solid var(--InputBorder, #777);
+  border: 1px solid var(--BoardBorder);
   border-radius: 4px;
   padding: 7px 12px;
-  background: var(--InputBoxBackground, #252729);
+  background: var(--BoardInputBackground);
   color: inherit;
   font: inherit;
   cursor: pointer;
 }
 .BoardButton:hover {
-  background: var(--ListHoverBackground, #383b3e);
+  background: var(--BoardHover);
 }
 .BoardButton:disabled {
   opacity: 0.6;
   cursor: default;
 }
 .BoardButton:focus-visible,
+.BoardProviderCard:focus-visible,
+.BoardBackButton:focus-visible,
 .BoardInput:focus-visible,
 .BoardHelpLink:focus-visible,
 .BoardColumns:focus-visible {
-  outline: 2px solid var(--FocusBorder, #3794ff);
+  outline: 2px solid var(--BoardFocus);
   outline-offset: 2px;
 }
 .BoardPrimaryButton {
-  background: var(--ButtonBackground, #0e639c);
-  color: var(--ButtonForeground, #fff);
+  background: var(--BoardPrimary);
+  color: #ffffff;
+  border-color: var(--BoardPrimary);
 }
 .BoardSetup {
   width: min(100%, 520px);
@@ -58,13 +71,57 @@
   margin: 0 0 12px;
   font-size: 24px;
 }
+.BoardProviderGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+.BoardProviderCard {
+  min-height: 88px;
+  padding: 20px;
+  border: 1px solid var(--BoardBorder);
+  border-radius: 8px;
+  color: var(--BoardForeground);
+  background: var(--BoardSurface);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.BoardProviderCard:hover {
+  background: var(--BoardHover);
+  border-color: var(--BoardFocus);
+}
+.BoardProviderSetup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.BoardProviderTitle {
+  margin: 0;
+  font-size: 16px;
+}
+.BoardBackButton {
+  padding: 4px 0;
+  border: 0;
+  color: var(--BoardPrimary);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.BoardBackButton:hover {
+  text-decoration: underline;
+}
 .BoardIntro,
 .BoardCredentialsHelp {
   line-height: 1.6;
   margin-bottom: 16px;
+  color: var(--BoardMutedForeground);
 }
 .BoardHelpLink {
-  color: var(--LinkForeground, #6cb6ff);
+  color: var(--BoardPrimary);
   text-underline-offset: 3px;
 }
 .BoardConnect {
@@ -83,11 +140,11 @@
 .BoardInput {
   box-sizing: border-box;
   width: 100%;
-  border: 1px solid var(--InputBorder, #777);
+  border: 1px solid var(--BoardBorder);
   border-radius: 3px;
   padding: 9px;
-  color: var(--InputBoxForeground, #ddd);
-  background: var(--InputBoxBackground, #252729);
+  color: var(--BoardForeground);
+  background: var(--BoardInputBackground);
   font: inherit;
 }
 .BoardRemembered {
@@ -116,7 +173,8 @@
   min-height: 0;
   max-height: 100%;
   border-radius: 8px;
-  background: var(--InputBoxBackground, #252729);
+  background: var(--BoardSurface);
+  border: 1px solid var(--BoardBorder);
 }
 .BoardColumnTitle {
   margin: 0;
@@ -131,9 +189,9 @@
 .BoardCard {
   padding: 12px;
   margin-bottom: 10px;
-  border: 1px solid var(--InputBorder, #777);
+  border: 1px solid var(--BoardBorder);
   border-radius: 6px;
-  background: var(--SideBarBackground, #181a1b);
+  background: var(--BoardBackground);
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -147,7 +205,8 @@
 .BoardError {
   margin: 8px 24px;
   padding: 16px;
-  border: 1px solid var(--ErrorForeground, #f48771);
+  border: 1px solid #b3261e;
+  color: #8c1d18;
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
@@ -158,4 +217,23 @@
 .BoardError .BoardButton {
   margin: 12px 0 0;
   display: block;
+}
+
+@media (max-width: 600px) {
+  .BoardToolbar,
+  .BoardActions {
+    padding-inline: 16px;
+  }
+  .BoardSetup {
+    padding: 24px 16px;
+  }
+  .BoardColumns {
+    padding-inline: 16px;
+  }
+  .BoardColumn {
+    flex-basis: min(280px, calc(100vw - 64px));
+  }
+  .BoardProviderGrid {
+    grid-template-columns: 1fr;
+  }
 }
