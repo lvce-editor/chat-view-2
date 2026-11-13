@@ -89,7 +89,8 @@ view after changing this setting.
 
 Run **View: Open Board Layout** and choose **Connect Trello**. Sign in to LVCE,
 select **Authorize Trello**, then follow **Continue to Trello** to grant read access
-in your browser. The view updates automatically after consent. Enter a board URL
+in your browser. If prompted, sign in to the same LVCE account as the editor.
+The view updates automatically after consent. Enter a board URL
 or ID to display its open lists and cards in Trello order, including empty lists.
 Refresh to load changes; editing stays in Trello.
 

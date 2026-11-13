@@ -4,8 +4,9 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  // The board provider chooser measures 338,390 bytes in the entry bundle.
-  ['chatMain.js', 339_000],
+  // Same Node 26.12.1 build and lockfile: baseline 338,390 bytes, Trello OAuth
+  // 344,635 bytes (+6,245 / 1.85%). Keep 1,365 bytes of headroom.
+  ['chatMain.js', 346_000],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],
