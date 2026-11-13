@@ -1,3 +1,8 @@
+import {
+  resolveBackendConfiguration,
+  type BackendConfiguration,
+} from '../BackendConfiguration/BackendConfiguration.ts'
+
 export interface TrelloCard {
   readonly id: string
   readonly idList: string
@@ -43,7 +48,12 @@ export const boardError = (status: number): BoardError => {
       return {
         code: 'TRELLO_ACCESS_DENIED',
         message:
-          'Trello denied access. Check your API key and token, and make sure your account can open this board.',
+          'Trello denied access. Sign in to LVCE and check your access to this board.',
+      }
+    case 409:
+      return {
+        code: 'TRELLO_CONNECTION_REQUIRED',
+        message: 'Connect Trello again to load your boards.',
       }
     case 429:
       return {
@@ -68,8 +78,6 @@ export const boardError = (status: number): BoardError => {
 const boardUrlPattern =
   /^(?:https:\/\/trello\.com\/b\/)([\dA-Za-z]{8})(?:\/[^?#]*)?(?:[?#].*)?$/u
 export const boardIdPattern = /^(?:[\dA-Za-z]{8}|[\da-f]{24})$/u
-const apiKeyPattern = /^[\dA-Za-z]+$/u
-const tokenPattern = /^[\dA-Za-z_-]+$/u
 
 export const parseBoardId = (input: string): string => {
   const value = input.trim()
@@ -96,56 +104,130 @@ const isList = (value: unknown): value is TrelloList =>
 const isCard = (value: unknown): value is TrelloCard =>
   isList(value) && 'idList' in value && typeof value.idList === 'string'
 
-export const loadBoard = async (
-  input: string,
-  apiKey: string,
-  token: string,
-  signal: Readonly<AbortSignal>,
+export interface TrelloStatus {
+  readonly configured: boolean
+  readonly connected: boolean
+}
+
+export interface TrelloClient {
+  readonly authorize: (signal: Readonly<AbortSignal>) => Promise<string>
+  readonly disconnect: (signal: Readonly<AbortSignal>) => Promise<void>
+  readonly load: (
+    input: string,
+    signal: Readonly<AbortSignal>,
+  ) => Promise<TrelloBoard>
+  readonly status: (signal: Readonly<AbortSignal>) => Promise<TrelloStatus>
+}
+
+export const createTrelloClient = (
+  configuration: () => Promise<BackendConfiguration> = resolveBackendConfiguration,
   request: typeof fetch = fetch,
-): Promise<TrelloBoard> => {
-  if (!apiKeyPattern.test(apiKey) || !tokenPattern.test(token)) {
-    throw new TrelloError({
-      code: 'TRELLO_CREDENTIALS_REQUIRED',
-      message:
-        'Enter your Trello API key and a token with read access. Credentials are kept only for this session.',
-    })
-  }
-  const id = parseBoardId(input)
-  try {
-    const response = await request(
-      `https://api.trello.com/1/boards/${id}?fields=name&lists=open&list_fields=name,pos&cards=open&card_fields=name,idList,pos`,
-      {
-        headers: {
-          Authorization: `OAuth oauth_consumer_key="${apiKey}", oauth_token="${token}"`,
-        },
-        signal,
-      },
-    )
+): TrelloClient => {
+  const call = async (
+    path: string,
+    signal: Readonly<AbortSignal>,
+    method = 'GET',
+  ): Promise<{ data: unknown; baseUrl: string }> => {
+    const config = await configuration()
+    if (!config.baseUrl || !config.accessToken)
+      throw new TrelloError({
+        code: 'TRELLO_LOGIN_REQUIRED',
+        message: 'Sign in to LVCE to connect Trello.',
+      })
+    const url = new URL(`/api/integrations/trello/${path}`, config.baseUrl)
+    if (!['https:', 'http:'].includes(url.protocol))
+      throw new TrelloError(boardError(0))
+    const timeout = path.startsWith('boards/') ? 45_000 : 15_000
+    const requestSignal = AbortSignal.any([
+      signal,
+      AbortSignal.timeout(timeout),
+    ])
+    const send = (token: string): Promise<Response> =>
+      request(url.href, {
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+        method,
+        redirect: 'error',
+        signal: requestSignal,
+      })
+    let response = await send(config.accessToken)
+    if (response.status === 401 && config.refreshAccessToken) {
+      const token = await config.refreshAccessToken()
+      if (token) response = await send(token)
+    }
     if (!response.ok) throw new TrelloError(boardError(response.status))
-    const data: unknown = await response.json()
+    return {
+      baseUrl: config.baseUrl,
+      data:
+        response.status === 204
+          ? undefined
+          : ((await response.json()) as unknown),
+    }
+  }
+  const status = async (
+    signal: Readonly<AbortSignal>,
+  ): Promise<TrelloStatus> => {
+    const { data } = await call('status', signal)
     if (
       !isRecord(data) ||
-      typeof data.id !== 'string' ||
-      typeof data.name !== 'string' ||
-      !Array.isArray(data.lists) ||
-      !data.lists.every(isList) ||
-      !Array.isArray(data.cards) ||
-      !data.cards.every(isCard)
-    ) {
-      throw new TrelloError({
-        code: 'TRELLO_INVALID_RESPONSE',
-        message: 'Trello returned an unreadable board. Try again shortly.',
-      })
-    }
-    return {
-      cards: data.cards.toSorted((a, b) => a.pos - b.pos),
-      id: data.id,
-      lists: data.lists.toSorted((a, b) => a.pos - b.pos),
-      name: data.name,
-    }
-  } catch (error) {
-    if (signal.aborted) throw error
-    if (error instanceof TrelloError) throw error
-    throw new TrelloError(boardError(0))
+      typeof data.configured !== 'boolean' ||
+      typeof data.connected !== 'boolean'
+    )
+      throw new TrelloError(boardError(0))
+    return { configured: data.configured, connected: data.connected }
   }
+  const authorize = async (signal: Readonly<AbortSignal>): Promise<string> => {
+    const { baseUrl, data } = await call('connect', signal, 'POST')
+    const url =
+      isRecord(data) && typeof data.url === 'string'
+        ? URL.parse(data.url)
+        : null
+    if (
+      !url ||
+      url.origin !== new URL(baseUrl).origin ||
+      url.pathname !== '/auth/trello/connect' ||
+      !url.searchParams.get('ticket')
+    )
+      throw new TrelloError(boardError(0))
+    return url.href
+  }
+  const disconnect = async (signal: Readonly<AbortSignal>): Promise<void> => {
+    await call('disconnect', signal, 'POST')
+  }
+  const load = async (
+    input: string,
+    signal: Readonly<AbortSignal>,
+  ): Promise<TrelloBoard> => {
+    const id = parseBoardId(input)
+    try {
+      const { data } = await call(`boards/${id}`, signal)
+      if (
+        !isRecord(data) ||
+        typeof data.id !== 'string' ||
+        typeof data.name !== 'string' ||
+        !Array.isArray(data.lists) ||
+        !data.lists.every(isList) ||
+        !Array.isArray(data.cards) ||
+        !data.cards.every(isCard)
+      ) {
+        throw new TrelloError({
+          code: 'TRELLO_INVALID_RESPONSE',
+          message: 'Trello returned an unreadable board. Try again shortly.',
+        })
+      }
+      return {
+        cards: data.cards.toSorted((a, b) => a.pos - b.pos),
+        id: data.id,
+        lists: data.lists.toSorted((a, b) => a.pos - b.pos),
+        name: data.name,
+      }
+    } catch (error) {
+      if (signal.aborted) throw error
+      if (error instanceof TrelloError) throw error
+      throw new TrelloError(boardError(0))
+    }
+  }
+  return { authorize, disconnect, load, status }
 }
+
+export const trelloClient = createTrelloClient()

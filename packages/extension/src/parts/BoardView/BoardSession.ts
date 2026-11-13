@@ -1,9 +1,7 @@
 import type { TrelloBoard } from './Trello.ts'
 
 export interface BoardConnection {
-  readonly apiKey: string
   readonly board: TrelloBoard
-  readonly token: string
 }
 
 export interface BoardSession {

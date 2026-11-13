@@ -1,5 +1,10 @@
 import { expect, jest, test } from '@jest/globals'
-import { loadBoard, parseBoardId } from '../src/parts/BoardView/Trello.ts'
+import type { BackendConfiguration } from '../src/parts/BackendConfiguration/BackendConfiguration.ts'
+import type { TrelloBoard } from '../src/parts/BoardView/Trello.ts'
+import {
+  createTrelloClient,
+  parseBoardId,
+} from '../src/parts/BoardView/Trello.ts'
 
 const board = {
   cards: [
@@ -13,6 +18,18 @@ const board = {
   ],
   name: 'Work',
 }
+
+const configuration = async (): Promise<BackendConfiguration> => ({
+  accessToken: 'lvce-token',
+  baseUrl: 'https://backend.test',
+  supportsStreaming: true,
+})
+const loadBoard = (
+  id: string,
+  signal: Readonly<AbortSignal>,
+  request: typeof fetch,
+): Promise<TrelloBoard> =>
+  createTrelloClient(configuration, request).load(id, signal)
 
 const requestWith = (data: unknown, status = 200): typeof fetch =>
   jest.fn<typeof fetch>().mockResolvedValue(Response.json(data, { status }))
@@ -29,23 +46,20 @@ test('accepts board URLs and IDs, rejecting unrelated URLs', () => {
   )
 })
 
-test('loads source-ordered lists and cards, with credentials only in the authorization header', async () => {
+test('loads source-ordered lists and cards through the backend with only the LVCE bearer token', async () => {
   const request = requestWith(board)
   const result = await loadBoard(
     '5k8NLHLh',
-    'key123',
-    'token123',
     new AbortController().signal,
     request,
   )
   expect(result.lists.map((list) => list.name)).toEqual(['Now', 'Later'])
   expect(result.cards.map((card) => card.name)).toEqual(['First', 'Second'])
   expect(request).toHaveBeenCalledWith(
-    expect.not.stringContaining('token123'),
+    'https://backend.test/api/integrations/trello/boards/5k8NLHLh',
     expect.objectContaining({
       headers: {
-        Authorization:
-          'OAuth oauth_consumer_key="key123", oauth_token="token123"',
+        Authorization: 'Bearer lvce-token',
       },
     }),
   )
@@ -63,8 +77,6 @@ for (const [status, code] of [
     await expect(
       loadBoard(
         '5k8NLHLh',
-        'key',
-        'token',
         new AbortController().signal,
         requestWith('secret upstream body', status),
       ),
@@ -79,30 +91,88 @@ test('handles transport failures, invalid JSON and malformed board data', async 
   const offline = jest
     .fn<typeof fetch>()
     .mockRejectedValue(new Error('secret upstream URL'))
+  await expect(loadBoard('5k8NLHLh', signal, offline)).rejects.toMatchObject({
+    details: { code: 'TRELLO_REQUEST_FAILED' },
+  })
   await expect(
-    loadBoard('5k8NLHLh', 'key', 'token', signal, offline),
-  ).rejects.toMatchObject({ details: { code: 'TRELLO_REQUEST_FAILED' } })
-  await expect(
-    loadBoard(
-      '5k8NLHLh',
-      'key',
-      'token',
-      signal,
-      requestWith({ ...board, lists: null }),
-    ),
+    loadBoard('5k8NLHLh', signal, requestWith({ ...board, lists: null })),
   ).rejects.toMatchObject({ details: { code: 'TRELLO_INVALID_RESPONSE' } })
   const invalidJson = jest
     .fn<typeof fetch>()
     .mockResolvedValue(new Response('not json'))
   await expect(
-    loadBoard('5k8NLHLh', 'key', 'token', signal, invalidJson),
+    loadBoard('5k8NLHLh', signal, invalidJson),
   ).rejects.toMatchObject({ details: { code: 'TRELLO_REQUEST_FAILED' } })
 })
 
-test('validates credentials before making a request', async () => {
+test('requires LVCE login and never forwards its token to an unrelated backend', async () => {
   const request = requestWith(board)
+  const client = createTrelloClient(
+    async () => ({
+      accessToken: '',
+      baseUrl: 'https://other.test',
+      supportsStreaming: false,
+    }),
+    request,
+  )
   await expect(
-    loadBoard('5k8NLHLh', '', '', new AbortController().signal, request),
-  ).rejects.toMatchObject({ details: { code: 'TRELLO_CREDENTIALS_REQUIRED' } })
+    client.load('5k8NLHLh', new AbortController().signal),
+  ).rejects.toMatchObject({ details: { code: 'TRELLO_LOGIN_REQUIRED' } })
   expect(request).not.toHaveBeenCalled()
+})
+
+test('refreshes the LVCE access token once on 401 and omits cookies', async () => {
+  const request = jest
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({}, { status: 401 }))
+    .mockResolvedValueOnce(Response.json(board))
+  const refreshAccessToken = jest
+    .fn<() => Promise<string>>()
+    .mockResolvedValue('new-lvce-token')
+  const client = createTrelloClient(
+    async () => ({ ...(await configuration()), refreshAccessToken }),
+    request,
+  )
+  await client.load('5k8NLHLh', new AbortController().signal)
+  expect(refreshAccessToken).toHaveBeenCalledTimes(1)
+  expect(request.mock.calls[1]?.[1]).toMatchObject({
+    credentials: 'omit',
+    headers: { Authorization: 'Bearer new-lvce-token' },
+    redirect: 'error',
+  })
+})
+
+test('rejects authorization links outside the trusted backend callback launcher', async () => {
+  for (const url of [
+    'https://evil.test/auth/trello/connect?ticket=x',
+    'https://backend.test/redirect?ticket=x',
+  ]) {
+    const client = createTrelloClient(configuration, requestWith({ url }))
+    await expect(
+      client.authorize(new AbortController().signal),
+    ).rejects.toThrow()
+  }
+})
+
+test('supports status, launching consent, and disconnect without Trello credentials', async () => {
+  const request = jest
+    .fn<typeof fetch>()
+    .mockResolvedValueOnce(Response.json({ configured: true, connected: true }))
+    .mockResolvedValueOnce(
+      Response.json({
+        url: 'https://backend.test/auth/trello/connect?ticket=one-use',
+      }),
+    )
+    .mockResolvedValueOnce(new Response(null, { status: 204 }))
+  const client = createTrelloClient(configuration, request)
+  const { signal } = new AbortController()
+  expect(await client.status(signal)).toEqual({
+    configured: true,
+    connected: true,
+  })
+  expect(await client.authorize(signal)).toBe(
+    'https://backend.test/auth/trello/connect?ticket=one-use',
+  )
+  await client.disconnect(signal)
+  expect(request.mock.calls[2]?.[1]?.method).toBe('POST')
 })

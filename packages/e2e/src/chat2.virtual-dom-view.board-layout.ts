@@ -12,6 +12,9 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   const providerTitle = Locator('.BoardProviderTitle')
   const allProviders = Locator('button[name="board-providers"]')
   const boardId = Locator('input[name="board-id"]')
+  const authorize = Locator('button[name="board-authorize"]')
+  const apiKey = Locator('input[name="board-api-key"]')
+  const token = Locator('input[name="board-token"]')
   await expect(board).toBeVisible()
   await expect(setupTitle).toHaveText('Connect a board')
   await expect(providerGrid).toHaveCSS('display', 'grid')
@@ -22,12 +25,18 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   // eslint-disable-next-line e2e/no-direct-click
   await trelloProvider.click()
   await expect(providerTitle).toHaveText('Connect a Trello board')
-  await expect(boardId).toBeVisible()
+  await expect(authorize).toBeVisible()
+  await expect(boardId).toHaveCount(0)
+  await expect(apiKey).toHaveCount(0)
+  await expect(token).toHaveCount(0)
   // eslint-disable-next-line e2e/no-direct-click
   await allProviders.click()
   await expect(providerGrid).toBeVisible()
   await expect(boardId).toHaveCount(0)
   // eslint-disable-next-line e2e/no-direct-click
   await trelloProvider.click()
-  await expect(boardId).toBeVisible()
+  await expect(authorize).toBeVisible()
+  await expect(boardId).toHaveCount(0)
+  await expect(apiKey).toHaveCount(0)
+  await expect(token).toHaveCount(0)
 }

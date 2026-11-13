@@ -87,6 +87,23 @@ view after changing this setting.
 
 ## Board layout
 
-Run **View: Open Board Layout** from the command picker to connect a Trello board. Enter its URL or ID, your Trello API key, and a token with read access. [Trello's authorization guide](https://developer.atlassian.com/cloud/trello/guides/rest-api/authorization/) explains how to create these credentials. The view displays open lists and cards in their Trello order, including empty lists. Refresh to load changes; editing stays in Trello.
+Run **View: Open Board Layout** and choose **Connect Trello**. Sign in to LVCE,
+select **Authorize Trello**, then follow **Continue to Trello** to grant read access
+in your browser. If prompted, sign in to the same LVCE account as the editor.
+The view updates automatically after consent. Enter a board URL
+or ID to display its open lists and cards in Trello order, including empty lists.
+Refresh to load changes; editing stays in Trello.
 
-Board IDs are remembered in `chat2.connectedBoardIds`. Credentials remain only in the isolated extension host's memory until the editor reloads; disconnecting a board forgets its credentials and ID. Remembered boards need credentials again after a reload. The host's activity bar supports upward gestures from IDE to chat to boards, with downward gestures returning through chat to IDE.
+The backend must configure a confidential Trello OAuth 2.0 client using
+`LVCE_TRELLO_CLIENT_ID` and `LVCE_TRELLO_CLIENT_SECRET`, with callback URL
+`https://lvce-editor.dev/auth/trello/callback` (or the configured backend origin
+followed by `/auth/trello/callback`). Enable `read:board:trello` in Trello; the
+backend also requests `offline_access` for refresh tokens. The client secret and
+Trello tokens stay in the backend. The editor uses its LVCE access token and
+never forwards it to a different `chat2.backendUrl` override.
+
+Board IDs are remembered in `chat2.connectedBoardIds`. **Forget board** removes
+an individual saved board; **Disconnect Trello** removes the backend connection
+and pending authorization. You can also revoke access in Trello. Board contents
+are cached only in memory across layout changes. After reload, select Trello
+and reopen a remembered board without entering credentials again.
