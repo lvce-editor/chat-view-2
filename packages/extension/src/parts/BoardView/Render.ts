@@ -359,15 +359,86 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
   )
 }
 
+const renderError = (state: Readonly<BoardState>): Dom.Node | undefined => {
+  const { authorizationUrl, board, error, loading } = state
+  if (!error) return undefined
+  return Dom.node(
+    VirtualDomElements.Div,
+    { className: 'BoardError', role: 'alert' },
+    [
+      Dom.heading(2, 'BoardErrorTitle', error.code),
+      Dom.textNode(error.message),
+      ...(error.code === 'TRELLO_REAUTHORIZE_REQUIRED'
+        ? [
+            Dom.button('board-reconnect', 'Reconnect Trello', 'BoardButton'),
+            ...(authorizationUrl
+              ? [
+                  Dom.link(
+                    authorizationUrl,
+                    'Continue to Trello',
+                    primaryButtonClass,
+                  ),
+                ]
+              : []),
+          ]
+        : []),
+      Dom.button(
+        board ? 'board-retry' : 'board-check-account',
+        'Try again',
+        'BoardButton',
+        { disabled: loading },
+      ),
+    ],
+  )
+}
+
+const renderColumns = (
+  state: BoardState,
+  board: TrelloBoard,
+  cardsByList: Readonly<ReadonlyMap<string, readonly Readonly<Dom.Node>[]>>,
+  dropTargetId?: string,
+): Dom.Node =>
+  Dom.node(
+    VirtualDomElements.Div,
+    { ariaLabel: board.name, className: 'BoardColumns', tabIndex: 0 },
+    board.lists.map((list) =>
+      Dom.node(
+        VirtualDomElements.Section,
+        { ariaLabel: list.name, className: 'BoardColumn' },
+        [
+          Dom.heading(
+            2,
+            'BoardColumnTitle',
+            `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
+          ),
+          Dom.div(
+            `BoardCards${dropTargetId === list.id ? ' BoardCardsDropTarget' : ''}`,
+            [
+              ...(cardsByList.get(list.id) || [
+                Dom.div('BoardEmptyList', [Dom.textNode('No cards')]),
+              ]),
+              renderComposer(state, list.id, list.name),
+            ],
+            {
+              name: `board-list:${list.id}`,
+              onDragOver: 'handleBoardDragOver',
+              onDrop: 'handleBoardDrop',
+            },
+          ),
+        ],
+      ),
+    ),
+  )
+
 export const render = (state: BoardState): Dom.Node => {
   const {
     authorizing,
     board,
     cardDraft,
+    error,
     draggedCardId,
     dropTargetId,
     editingCard,
-    error,
     loading,
   } = state
   const cards = board?.cards || []
@@ -408,50 +479,14 @@ export const render = (state: BoardState): Dom.Node => {
     cardsByList.set(card.idList, cards)
   }
   const cardDialog = renderCardDialog(state)
+  const errorNode = renderError(state)
   return Dom.div(mergeClassNames('BoardView', board ? 'BoardViewTrello' : ''), [
     Dom.div('BoardToolbar', [
       Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
       Dom.button('board-chat', 'Chat', 'BoardButton'),
       Dom.button('board-ide', 'IDE layout', 'BoardButton'),
     ]),
-    ...(error
-      ? [
-          Dom.node(
-            VirtualDomElements.Div,
-            { className: 'BoardError', role: 'alert' },
-            [
-              Dom.heading(2, 'BoardErrorTitle', error.code),
-              Dom.textNode(error.message),
-              ...(error.code === 'TRELLO_REAUTHORIZE_REQUIRED'
-                ? [
-                    Dom.button(
-                      'board-reconnect',
-                      'Reconnect Trello',
-                      'BoardButton',
-                    ),
-                    ...(state.authorizationUrl
-                      ? [
-                          Dom.link(
-                            state.authorizationUrl,
-                            'Continue to Trello',
-                            primaryButtonClass,
-                          ),
-                        ]
-                      : []),
-                  ]
-                : []),
-              Dom.button(
-                board ? 'board-retry' : 'board-check-account',
-                'Try again',
-                'BoardButton',
-                {
-                  disabled: loading,
-                },
-              ),
-            ],
-          ),
-        ]
-      : []),
+    ...(errorNode ? [errorNode] : []),
     ...(board
       ? [
           Dom.div('BoardActions', [
@@ -467,41 +502,7 @@ export const render = (state: BoardState): Dom.Node => {
               { disabled: loading },
             ),
           ]),
-          Dom.node(
-            VirtualDomElements.Div,
-            {
-              ariaLabel: board.name,
-              className: 'BoardColumns',
-              tabIndex: 0,
-            },
-            board.lists.map((list) =>
-              Dom.node(
-                VirtualDomElements.Section,
-                { ariaLabel: list.name, className: 'BoardColumn' },
-                [
-                  Dom.heading(
-                    2,
-                    'BoardColumnTitle',
-                    `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
-                  ),
-                  Dom.div(
-                    `BoardCards${dropTargetId === list.id ? ' BoardCardsDropTarget' : ''}`,
-                    [
-                      ...(cardsByList.get(list.id) || [
-                        Dom.div('BoardEmptyList', [Dom.textNode('No cards')]),
-                      ]),
-                      renderComposer(state, list.id, list.name),
-                    ],
-                    {
-                      name: `board-list:${list.id}`,
-                      onDragOver: 'handleBoardDragOver',
-                      onDrop: 'handleBoardDrop',
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
+          renderColumns(state, board, cardsByList, dropTargetId),
           ...(board.lists.length === 0
             ? [
                 Dom.div('BoardEmpty', [
