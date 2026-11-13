@@ -9,6 +9,9 @@ import * as Dom from '../VirtualDom/VirtualDom.ts'
 const primaryButtonClass = mergeClassNames('BoardButton', 'BoardPrimaryButton')
 
 export interface BoardState {
+  readonly accountConnected?: boolean
+  readonly authorizationUrl?: string | undefined
+  readonly authorizing?: boolean
   readonly board: TrelloBoard | undefined
   readonly boardId: string
   readonly connectedIds: readonly string[]
@@ -24,7 +27,7 @@ const input = (name: string, label: string, value?: string): Dom.Node =>
       ariaLabel: label,
       autoComplete: 'off',
       className: 'BoardInput',
-      inputType: name === 'board-id' ? 'text' : 'password',
+      inputType: 'text',
       name,
       onInput: 'handleInput',
       spellcheck: false,
@@ -32,10 +35,113 @@ const input = (name: string, label: string, value?: string): Dom.Node =>
     }),
   ])
 
-export const render = (state: BoardState): Dom.Node => {
-  const { board, boardId, connectedIds, error, loading, providerSelected } =
+const renderConnection = (state: BoardState): readonly Dom.Node[] => {
+  const { accountConnected, authorizationUrl, authorizing, boardId, loading } =
     state
+  return accountConnected
+    ? [
+        Dom.div('BoardCredentialsHelp', [
+          Dom.textNode(
+            'Trello is connected. Enter a board URL or ID to open it.',
+          ),
+        ]),
+        Dom.form('board-connect', 'BoardConnect', [
+          input('board-id', 'Board URL or ID', boardId),
+          Dom.node(
+            VirtualDomElements.Button,
+            {
+              buttonType: 'submit',
+              className: primaryButtonClass,
+              disabled: loading,
+            },
+            [Dom.textNode('Open board')],
+          ),
+        ]),
+        Dom.button(
+          'board-disconnect-account',
+          'Disconnect Trello',
+          'BoardButton',
+          { disabled: loading },
+        ),
+      ]
+    : [
+        Dom.div('BoardCredentialsHelp', [
+          Dom.textNode(
+            authorizing
+              ? 'Allow access in Trello. This view will update when you finish.'
+              : 'Sign in to LVCE, then authorize Trello to read your boards.',
+          ),
+        ]),
+        ...(authorizationUrl
+          ? [
+              Dom.link(
+                authorizationUrl,
+                'Continue to Trello',
+                primaryButtonClass,
+              ),
+            ]
+          : [
+              Dom.button(
+                'board-authorize',
+                authorizing ? 'Preparing connection…' : 'Authorize Trello',
+                primaryButtonClass,
+                { disabled: loading || Boolean(authorizing) },
+              ),
+            ]),
+        ...(authorizing
+          ? [
+              Dom.button(
+                'board-cancel-authorization',
+                'Stop waiting',
+                'BoardButton',
+              ),
+            ]
+          : []),
+      ]
+}
+const renderSetup = (state: BoardState): Dom.Node => {
+  const { connectedIds, providerSelected } = state
   const showProviderGrid = !providerSelected
+  return Dom.div('BoardSetup', [
+    Dom.heading(2, 'BoardSetupTitle', 'Connect a board'),
+    ...(showProviderGrid
+      ? [
+          Dom.div('BoardProviderGrid', [
+            Dom.button(
+              'board-provider:trello',
+              'Connect Trello',
+              'BoardProviderCard',
+              { ariaLabel: 'Connect Trello' },
+            ),
+          ]),
+        ]
+      : [
+          Dom.div('BoardProviderSetup', [
+            Dom.button('board-providers', 'All providers', 'BoardBackButton'),
+            Dom.heading(3, 'BoardProviderTitle', 'Connect a Trello board'),
+          ]),
+          Dom.div('BoardIntro', [
+            Dom.textNode(
+              'Bring your lists and cards into the editor. This view is read-only; changes stay in Trello.',
+            ),
+          ]),
+          ...renderConnection(state),
+          ...(connectedIds.length > 0
+            ? [
+                Dom.div('BoardRemembered', [
+                  Dom.heading(3, 'BoardRememberedTitle', 'Remembered boards'),
+                  ...connectedIds.map((id) =>
+                    Dom.button(`board-select:${id}`, id, 'BoardButton'),
+                  ),
+                ]),
+              ]
+            : []),
+        ]),
+  ])
+}
+
+export const render = (state: BoardState): Dom.Node => {
+  const { accountConnected, authorizing, board, error, loading } = state
   const cards = board?.cards || []
   const cardsByList = new Map<string, Dom.Node[]>()
   for (const card of cards) {
@@ -57,9 +163,14 @@ export const render = (state: BoardState): Dom.Node => {
             [
               Dom.heading(2, 'BoardErrorTitle', error.code),
               Dom.textNode(error.message),
-              Dom.button('board-retry', 'Try again', 'BoardButton', {
-                disabled: loading,
-              }),
+              Dom.button(
+                accountConnected ? 'board-retry' : 'board-check-account',
+                'Try again',
+                'BoardButton',
+                {
+                  disabled: loading,
+                },
+              ),
             ],
           ),
         ]
@@ -71,7 +182,13 @@ export const render = (state: BoardState): Dom.Node => {
               disabled: loading,
             }),
             Dom.button('board-change', 'Connect another board', 'BoardButton'),
-            Dom.button('board-disconnect', 'Disconnect board', 'BoardButton'),
+            Dom.button('board-disconnect', 'Forget board', 'BoardButton'),
+            Dom.button(
+              'board-disconnect-account',
+              'Disconnect Trello',
+              'BoardButton',
+              { disabled: loading },
+            ),
           ]),
           Dom.node(
             VirtualDomElements.Div,
@@ -104,85 +221,17 @@ export const render = (state: BoardState): Dom.Node => {
               ]
             : []),
         ]
-      : [
-          Dom.div('BoardSetup', [
-            Dom.heading(2, 'BoardSetupTitle', 'Connect a board'),
-            ...(showProviderGrid
-              ? [
-                  Dom.div('BoardProviderGrid', [
-                    Dom.button(
-                      'board-provider:trello',
-                      'Connect Trello',
-                      'BoardProviderCard',
-                      { ariaLabel: 'Connect Trello' },
-                    ),
-                  ]),
-                ]
-              : [
-                  Dom.div('BoardProviderSetup', [
-                    Dom.button(
-                      'board-providers',
-                      'All providers',
-                      'BoardBackButton',
-                    ),
-                    Dom.heading(
-                      3,
-                      'BoardProviderTitle',
-                      'Connect a Trello board',
-                    ),
-                  ]),
-                  Dom.div('BoardIntro', [
-                    Dom.textNode(
-                      'Bring your lists and cards into the editor. This view is read-only; changes stay in Trello.',
-                    ),
-                  ]),
-                  Dom.div('BoardCredentialsHelp', [
-                    Dom.textNode(
-                      'Use your Trello API key and a token with read access. Your credentials stay in memory until the editor reloads. Board IDs are remembered in settings.',
-                    ),
-                  ]),
-                  Dom.link(
-                    'https://developer.atlassian.com/cloud/trello/guides/rest-api/authorization/',
-                    'How to get a Trello API key and token',
-                    'BoardHelpLink',
-                  ),
-                  Dom.form('board-connect', 'BoardConnect', [
-                    input('board-id', 'Board URL or ID', boardId),
-                    input('board-api-key', 'Trello API key'),
-                    input('board-token', 'Trello read token'),
-                    Dom.node(
-                      VirtualDomElements.Button,
-                      {
-                        buttonType: 'submit',
-                        className: primaryButtonClass,
-                        disabled: loading,
-                      },
-                      [Dom.textNode('Connect board')],
-                    ),
-                  ]),
-                  ...(connectedIds.length > 0
-                    ? [
-                        Dom.div('BoardRemembered', [
-                          Dom.heading(
-                            3,
-                            'BoardRememberedTitle',
-                            'Remembered boards',
-                          ),
-                          ...connectedIds.map((id) =>
-                            Dom.button(`board-select:${id}`, id, 'BoardButton'),
-                          ),
-                        ]),
-                      ]
-                    : []),
-                ]),
-          ]),
-        ]),
-    ...(loading
+      : [renderSetup(state)]),
+    ...(loading || authorizing
       ? [
           Dom.node(
             VirtualDomElements.Div,
             { className: 'BoardStatus', role: 'status' },
-            [Dom.textNode('Loading board…')],
+            [
+              Dom.textNode(
+                authorizing ? 'Waiting for Trello authorization…' : 'Loading…',
+              ),
+            ],
           ),
         ]
       : []),

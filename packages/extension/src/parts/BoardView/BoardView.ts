@@ -11,7 +11,7 @@ import { createSession, type BoardSession } from './BoardSession.ts'
 import { render, type BoardState } from './Render.ts'
 import {
   boardIdPattern,
-  loadBoard,
+  trelloClient,
   parseBoardId,
   TrelloError,
 } from './Trello.ts'
@@ -20,17 +20,23 @@ export const viewId = 'chat2.views.board'
 export const connectionsPreference = 'chat2.connectedBoardIds'
 
 export interface BoardHost {
+  readonly authorize: typeof trelloClient.authorize
   readonly execute: typeof executeCommand
-  readonly load: typeof loadBoard
+  readonly load: typeof trelloClient.load
   readonly read: typeof getPreference
+  readonly revoke: typeof trelloClient.disconnect
   readonly session: BoardSession
+  readonly status: typeof trelloClient.status
   readonly write: typeof setPreference
 }
 const defaultHost: BoardHost = {
+  authorize: trelloClient.authorize,
   execute: executeCommand,
-  load: loadBoard,
+  load: trelloClient.load,
   read: getPreference,
+  revoke: trelloClient.disconnect,
   session: createSession(),
+  status: trelloClient.status,
   write: setPreference,
 }
 
@@ -69,6 +75,9 @@ export const createInstance = async (
     : connectedIds[0] || ''
   const connection = host.session.get(initialId)
   let state: BoardState = {
+    accountConnected: Boolean(connection),
+    authorizationUrl: undefined,
+    authorizing: false,
     board: connection?.board,
     boardId: initialId,
     connectedIds,
@@ -76,8 +85,6 @@ export const createInstance = async (
     loading: false,
     providerSelected: false,
   }
-  let apiKey = connection?.apiKey || ''
-  let token = connection?.token || ''
   let generation = 0
   let controller: AbortController | undefined
   let disposed = false
@@ -87,6 +94,12 @@ export const createInstance = async (
   const cancel = (): void => {
     generation++
     controller?.abort()
+    state = {
+      ...state,
+      authorizationUrl: undefined,
+      authorizing: false,
+      loading: false,
+    }
   }
   const connect = async (): Promise<void> => {
     cancel()
@@ -94,18 +107,19 @@ export const createInstance = async (
     controller = new AbortController()
     const signal = AbortSignal.any([
       controller.signal,
-      AbortSignal.timeout(30_000),
+      AbortSignal.timeout(45_000),
     ])
     state = { ...state, error: undefined, loading: true }
     try {
       const { boardId, connectedIds } = state
-      const board = await host.load(boardId, apiKey, token, signal)
+      const board = await host.load(boardId, signal)
       if (disposed || requestGeneration !== generation) return
       const id = parseBoardId(boardId)
-      host.session.set(id, { apiKey, board, token })
+      host.session.set(id, { board })
       const ids = [...new Set([...connectedIds, id])]
       state = {
         ...state,
+        accountConnected: true,
         board,
         boardId: id,
         connectedIds: ids,
@@ -137,6 +151,12 @@ export const createInstance = async (
                   'Unable to load this board. Check your connection and try again.',
               },
         loading: false,
+        ...(error instanceof TrelloError &&
+          error.details.code === 'TRELLO_CONNECTION_REQUIRED' && {
+            accountConnected: false,
+            board: undefined,
+            providerSelected: true,
+          }),
       }
     }
     await notify()
@@ -155,8 +175,6 @@ export const createInstance = async (
       loading: false,
       providerSelected: false,
     }
-    apiKey = ''
-    token = ''
     try {
       await host.write(connectionsPreference, ids)
     } catch {
@@ -172,10 +190,118 @@ export const createInstance = async (
   const restoreConnection = (id: string): void => {
     const selected = host.session.get(id)
     if (!selected) return
-    const { apiKey: selectedKey, board, token: selectedToken } = selected
-    apiKey = selectedKey
-    token = selectedToken
-    state = { ...state, board }
+    state = { ...state, accountConnected: true, board: selected.board }
+  }
+  const connectionError = (error: unknown): void => {
+    state = {
+      ...state,
+      authorizationUrl: undefined,
+      authorizing: false,
+      error:
+        error instanceof TrelloError
+          ? error.details
+          : {
+              code: 'TRELLO_CONNECTION_FAILED',
+              message: 'Unable to connect Trello. Try again.',
+            },
+      loading: false,
+    }
+  }
+  const checkAccount = async (): Promise<void> => {
+    cancel()
+    const requestGeneration = generation
+    controller = new AbortController()
+    state = { ...state, error: undefined, loading: true }
+    try {
+      const result = await host.status(
+        AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+      )
+      if (disposed || generation !== requestGeneration) return
+      state = { ...state, accountConnected: result.connected, loading: false }
+      if (!result.configured)
+        state = {
+          ...state,
+          error: {
+            code: 'TRELLO_NOT_CONFIGURED',
+            message:
+              'The server administrator needs to configure Trello OAuth.',
+          },
+        }
+    } catch (error) {
+      if (disposed || generation !== requestGeneration) return
+      connectionError(error)
+    }
+    await notify()
+  }
+  const authorize = async (): Promise<void> => {
+    cancel()
+    const requestGeneration = generation
+    controller = new AbortController()
+    const signal = AbortSignal.any([
+      controller.signal,
+      AbortSignal.timeout(600_000),
+    ])
+    state = { ...state, authorizing: true, error: undefined }
+    try {
+      const url = await host.authorize(signal)
+      if (disposed || generation !== requestGeneration) return
+      state = { ...state, authorizationUrl: url }
+      await notify()
+      while (!signal.aborted) {
+        await new Promise<void>((resolve) => {
+          const finish = (): void => {
+            clearTimeout(timer)
+            signal.removeEventListener('abort', finish)
+            resolve()
+          }
+          const timer = setTimeout(finish, 2000)
+          signal.addEventListener('abort', finish, { once: true })
+        })
+        signal.throwIfAborted()
+        const result = await host.status(signal)
+        if (disposed || generation !== requestGeneration) return
+        if (result.connected) {
+          state = {
+            ...state,
+            accountConnected: true,
+            authorizationUrl: undefined,
+            authorizing: false,
+          }
+          await notify()
+          return
+        }
+      }
+      signal.throwIfAborted()
+    } catch (error) {
+      if (disposed || generation !== requestGeneration) return
+      connectionError(error)
+      await notify()
+    }
+  }
+  const revoke = async (): Promise<void> => {
+    cancel()
+    const requestGeneration = generation
+    controller = new AbortController()
+    state = { ...state, error: undefined, loading: true }
+    try {
+      await host.revoke(
+        AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+      )
+      if (disposed || generation !== requestGeneration) return
+      const { connectedIds } = state
+      for (const id of connectedIds) host.session.remove(id)
+      state = {
+        ...state,
+        accountConnected: false,
+        board: undefined,
+        loading: false,
+        providerSelected: true,
+      }
+    } catch (error) {
+      if (disposed || generation !== requestGeneration) return
+      connectionError(error)
+    }
+    await notify()
   }
   const handleClick = async (event: Readonly<ViewEvent>): Promise<void> => {
     const providerAction = getProviderAction(event.name)
@@ -186,6 +312,8 @@ export const createInstance = async (
         error: providerAction === 'providers' ? undefined : error,
         providerSelected: providerAction === 'trello',
       }
+      if (providerAction === 'trello') void checkAccount()
+      else cancel()
       return
     }
     if (event.name === 'board-chat')
@@ -197,8 +325,6 @@ export const createInstance = async (
       event.name?.startsWith('board-select:')
     ) {
       cancel()
-      apiKey = ''
-      token = ''
       state = {
         ...state,
         board: undefined,
@@ -211,6 +337,7 @@ export const createInstance = async (
       }
       const { boardId } = state
       restoreConnection(boardId)
+      if (boardId && !host.session.get(boardId)) void connect()
     }
     if (event.name === 'board-disconnect') await disconnect()
   }
@@ -218,25 +345,13 @@ export const createInstance = async (
     dispose(): void {
       disposed = true
       cancel()
-      apiKey = ''
-      token = ''
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'input' && typeof event.value === 'string') {
         switch (event.name) {
-          case 'board-api-key':
-            cancel()
-            state = { ...state, loading: false }
-            apiKey = event.value.trim()
-            break
           case 'board-id':
             cancel()
             state = { ...state, boardId: event.value, loading: false }
-            break
-          case 'board-token':
-            cancel()
-            state = { ...state, loading: false }
-            token = event.value.trim()
             break
         }
         return
@@ -250,6 +365,19 @@ export const createInstance = async (
         // rerender are never queued behind the network request they await.
         void connect()
         return
+      }
+      if (event.type === 'click') {
+        const actions: Readonly<Record<string, () => void | Promise<void>>> = {
+          'board-authorize': authorize,
+          'board-cancel-authorization': cancel,
+          'board-check-account': checkAccount,
+          'board-disconnect-account': revoke,
+        }
+        const action = actions[event.name || '']
+        if (action) {
+          void action()
+          return
+        }
       }
       if (event.type === 'click') await handleClick(event)
     },
