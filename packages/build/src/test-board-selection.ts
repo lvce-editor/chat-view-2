@@ -55,7 +55,28 @@ export const testBoardSelection = async (
     directLoads.push(`${url.pathname}${url.search}`)
     await route.fulfill({
       headers: { 'Access-Control-Allow-Origin': '*' },
-      json: { id: '22222222', name: 'Engineering', lists: [], cards: [] },
+      json: {
+        id: '22222222',
+        name: 'Engineering',
+        lists: [{ id: 'todo', name: 'Todo', pos: 1 }],
+        cards: [
+          {
+            id: 'one',
+            idList: 'todo',
+            name: 'Discuss design',
+            pos: 1,
+            badges: { comments: 3, attachments: 1 },
+          },
+          {
+            id: 'two',
+            idList: 'todo',
+            name: 'No activity',
+            pos: 2,
+            badges: { comments: 0, attachments: 0 },
+          },
+          { id: 'three', idList: 'todo', name: 'Older response', pos: 3 },
+        ],
+      },
     })
   })
   try {
@@ -162,6 +183,23 @@ export const testBoardSelection = async (
       .click()
     await refresh
     assert.equal(directLoads.length, 2)
+    const badges = page.locator('.BoardCardBadges')
+    await badges.waitFor()
+    assert.equal(await badges.count(), 1)
+    assert.equal(
+      await badges
+        .getByRole('img', { name: '3 comments', exact: true })
+        .textContent(),
+      '3',
+    )
+    assert.equal(
+      await badges
+        .getByRole('img', { name: '1 attachment', exact: true })
+        .textContent(),
+      '1',
+    )
+    assert.equal(await page.locator('.BoardCardBadgeIcon').count(), 2)
+    assert.deepEqual(proxiedLoads, [])
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })
       .click()
