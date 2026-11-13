@@ -9,7 +9,9 @@ import { render } from '../src/parts/BoardView/Render.ts'
 import { TrelloError, type TrelloBoard } from '../src/parts/BoardView/Trello.ts'
 
 const board: TrelloBoard = {
-  cards: [{ id: 'one', idList: 'todo', name: 'A task', pos: 1 }],
+  cards: [
+    { desc: 'Details', id: 'one', idList: 'todo', name: 'A task', pos: 1 },
+  ],
   id: 'board',
   lists: [
     { id: 'todo', name: 'Todo', pos: 1 },
@@ -31,6 +33,15 @@ const createHost = (): BoardHost => ({
   status: jest
     .fn<BoardHost['status']>()
     .mockResolvedValue({ configured: true, connected: true }),
+  updateCard: jest
+    .fn<BoardHost['updateCard']>()
+    .mockImplementation(async (id, name, desc) => ({
+      desc,
+      id,
+      idList: 'todo',
+      name,
+      pos: 1,
+    })),
   write: jest.fn<BoardHost['write']>().mockResolvedValue(undefined),
 })
 const createContext = (): ViewContext => ({
@@ -166,7 +177,89 @@ test('groups cards without dropping empty columns', () => {
     providerSelected: false,
   })
   expect(dom.filter((node) => node.className === 'BoardColumn')).toHaveLength(2)
-  expect(dom.filter((node) => node.className === 'BoardCard')).toHaveLength(1)
+  expect(
+    dom.filter((node) => node.className === 'BoardCardButton'),
+  ).toHaveLength(1)
+})
+
+test('opens a card editor and updates the board only after Trello confirms the save', async () => {
+  const host = createHost()
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '5k8NLHLh',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-card:one', type: 'click' })
+  expect(JSON.stringify(await view.render())).toContain('Edit card')
+  expect(JSON.stringify(await view.render())).toContain('Details')
+  await view.handleEvent?.({
+    name: 'edit-card-name',
+    type: 'input',
+    value: 'Renamed',
+  })
+  await view.handleEvent?.({
+    name: 'edit-card-desc',
+    type: 'input',
+    value: 'New details',
+  })
+  await view.handleEvent?.({ name: 'board-card-edit', type: 'submit' })
+  await flush()
+  expect(host.updateCard).toHaveBeenCalledWith(
+    'one',
+    'Renamed',
+    'New details',
+    expect.anything(),
+  )
+  const dom = JSON.stringify(await view.render())
+  expect(dom).toContain('Renamed')
+  expect(dom).not.toContain('Edit card')
+  expect(host.session.get('5k8NLHLh')?.board.cards[0]).toMatchObject({
+    desc: 'New details',
+    name: 'Renamed',
+  })
+})
+
+test('retains the draft after a failed card save and lets users retry or cancel', async () => {
+  const host = createHost()
+  jest.mocked(host.updateCard).mockRejectedValueOnce(
+    new TrelloError({
+      code: 'TRELLO_ACCESS_DENIED',
+      message: 'Reconnect Trello and allow board editing.',
+    }),
+  )
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '5k8NLHLh',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-card:one', type: 'click' })
+  await view.handleEvent?.({
+    name: 'edit-card-name',
+    type: 'input',
+    value: 'Draft title',
+  })
+  await view.handleEvent?.({ name: 'board-card-edit', type: 'submit' })
+  await flush()
+  const failedDom = JSON.stringify(await view.render())
+  expect(failedDom).toContain('Draft title')
+  expect(failedDom).toContain('Reconnect Trello and allow board editing.')
+  expect(failedDom).toContain('Edit card')
+  expect(host.session.get('5k8NLHLh')?.board.cards[0]?.name).toBe('A task')
+  await view.handleEvent?.({ name: 'board-card-cancel', type: 'click' })
+  expect(JSON.stringify(await view.render())).not.toContain('Edit card')
+  await view.handleEvent?.({ name: 'board-card:one', type: 'click' })
+  const oldFocusContext = view.getContext?.() || {}
+  view.handleDialogKeyDown('Escape')
+  expect(JSON.stringify(await view.render())).not.toContain('Edit card')
+  expect(view.renderFocus?.(oldFocusContext, view.getContext?.() || {})).toBe(
+    '[name="board-card:one"]',
+  )
 })
 
 test('keeps connected boards across layout changes without saving credentials', async () => {
