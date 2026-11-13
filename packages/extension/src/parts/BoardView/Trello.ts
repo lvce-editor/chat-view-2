@@ -7,6 +7,7 @@ export interface TrelloCard {
   readonly attachmentCount?: number
   readonly commentCount?: number
   readonly coverUrl?: string
+  readonly desc: string
   readonly id: string
   readonly idList: string
   readonly name: string
@@ -56,7 +57,7 @@ export const boardError = (status: number): BoardError => {
       return {
         code: 'TRELLO_ACCESS_DENIED',
         message:
-          'Trello denied access. Sign in to LVCE and check your access to this board.',
+          'Trello denied access. Reconnect Trello and allow access to this board.',
       }
     case 409:
       return {
@@ -83,9 +84,19 @@ export const boardError = (status: number): BoardError => {
   }
 }
 
+const cardUpdateError = (status: number): BoardError => {
+  if (status === 400)
+    return {
+      code: 'TRELLO_INVALID_CARD',
+      message: 'Enter a title and description within Trello’s limits.',
+    }
+  return boardError(status)
+}
+
 const boardUrlPattern =
   /^(?:https:\/\/trello\.com\/b\/)([\dA-Za-z]{8})(?:\/[^?#]*)?(?:[?#].*)?$/u
 export const boardIdPattern = /^(?:[\dA-Za-z]{8}|[\da-f]{24})$/u
+const cardIdPattern = /^[\da-f]{24}$/u
 
 export const parseBoardId = (input: string): string => {
   const value = input.trim()
@@ -138,6 +149,7 @@ const normalizeCard = (value: unknown): TrelloCard | undefined => {
   return {
     attachmentCount: normalizeCount(badges?.attachments),
     commentCount: normalizeCount(badges?.comments),
+    desc: typeof value.desc === 'string' ? value.desc : '',
     id: value.id,
     idList: value.idList,
     name: value.name,
@@ -162,6 +174,12 @@ export interface TrelloClient {
     signal: Readonly<AbortSignal>,
   ) => Promise<TrelloBoard>
   readonly status: (signal: Readonly<AbortSignal>) => Promise<TrelloStatus>
+  readonly updateCard: (
+    id: string,
+    name: string,
+    desc: string,
+    signal: Readonly<AbortSignal>,
+  ) => Promise<TrelloCard>
 }
 
 export const createTrelloClient = (
@@ -172,6 +190,8 @@ export const createTrelloClient = (
     path: string,
     signal: Readonly<AbortSignal>,
     method = 'GET',
+    body?: unknown,
+    mapError: (status: number) => BoardError = boardError,
   ): Promise<{ data: unknown; baseUrl: string }> => {
     const config = await configuration()
     if (!config.baseUrl || !config.accessToken)
@@ -192,6 +212,13 @@ export const createTrelloClient = (
         credentials: 'omit',
         headers: { Authorization: `Bearer ${token}` },
         method,
+        ...(body !== undefined && { body: JSON.stringify(body) }),
+        ...(body !== undefined && {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }),
         redirect: 'error',
         signal: requestSignal,
       })
@@ -200,7 +227,7 @@ export const createTrelloClient = (
       const token = await config.refreshAccessToken()
       if (token) response = await send(token)
     }
-    if (!response.ok) throw new TrelloError(boardError(response.status))
+    if (!response.ok) throw new TrelloError(mapError(response.status))
     return {
       baseUrl: config.baseUrl,
       data:
@@ -275,6 +302,46 @@ export const createTrelloClient = (
       throw new TrelloError(boardError(0))
     }
   }
+  const updateCard = async (
+    id: string,
+    name: string,
+    desc: string,
+    signal: Readonly<AbortSignal>,
+  ): Promise<TrelloCard> => {
+    if (!cardIdPattern.test(id)) {
+      throw new TrelloError({
+        code: 'TRELLO_INVALID_CARD',
+        message:
+          'This card could not be saved. Refresh the board and try again.',
+      })
+    }
+    try {
+      const { data } = await call(
+        `cards/${id}`,
+        signal,
+        'PUT',
+        { desc, name },
+        cardUpdateError,
+      )
+      const updatedCard = isRecord(data) ? normalizeCard(data) : undefined
+      if (
+        !updatedCard ||
+        !isRecord(data) ||
+        data.id !== id ||
+        typeof data.desc !== 'string'
+      ) {
+        throw new TrelloError({
+          code: 'TRELLO_INVALID_RESPONSE',
+          message: 'Trello returned an unreadable card. Refresh the board.',
+        })
+      }
+      return { ...updatedCard, desc: data.desc }
+    } catch (error) {
+      if (signal.aborted) throw error
+      if (error instanceof TrelloError) throw error
+      throw new TrelloError(boardError(0))
+    }
+  }
   const boards = async (
     signal: Readonly<AbortSignal>,
   ): Promise<readonly TrelloBoardSummary[]> => {
@@ -310,7 +377,7 @@ export const createTrelloClient = (
       })
     }
   }
-  return { authorize, boards, disconnect, load, status }
+  return { authorize, boards, disconnect, load, status, updateCard }
 }
 
 export const trelloClient = createTrelloClient()
