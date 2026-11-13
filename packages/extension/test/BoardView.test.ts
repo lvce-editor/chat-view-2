@@ -156,9 +156,22 @@ test('restores remembered IDs, never credentials, and disconnects', async () => 
 })
 
 test('groups cards without dropping empty columns', () => {
+  const coveredBoard: TrelloBoard = {
+    ...board,
+    cards: [
+      ...board.cards,
+      {
+        coverUrl: 'https://trello.com/1/cards/card/cover',
+        id: 'covered',
+        idList: 'todo',
+        name: 'Covered task',
+        pos: 2,
+      },
+    ],
+  }
   const dom = render({
     accountConnected: true,
-    board,
+    board: coveredBoard,
     boardId: '5k8NLHLh',
     connectedIds: [],
     error: undefined,
@@ -166,7 +179,10 @@ test('groups cards without dropping empty columns', () => {
     providerSelected: false,
   })
   expect(dom.filter((node) => node.className === 'BoardColumn')).toHaveLength(2)
-  expect(dom.filter((node) => node.className === 'BoardCard')).toHaveLength(1)
+  expect(dom.filter((node) => node.className === 'BoardCard')).toHaveLength(2)
+  expect(JSON.stringify(dom)).toContain('BoardCardCover')
+  expect(JSON.stringify(dom)).toContain('https://trello.com/1/cards/card/cover')
+  expect(JSON.stringify(dom)).toContain('A task')
 })
 
 test('keeps connected boards across layout changes without saving credentials', async () => {
