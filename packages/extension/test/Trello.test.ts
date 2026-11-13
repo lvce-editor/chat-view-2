@@ -352,6 +352,8 @@ test('normalizes comment and attachment badges without rejecting older boards', 
     [0, 0],
     [0, 0],
   ])
+})
+
 test('moves a card through the authenticated backend without exposing Trello tokens', async () => {
   const request = jest
     .fn<typeof fetch>()
