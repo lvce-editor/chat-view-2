@@ -33,6 +33,13 @@ const loadBoard = (
 
 const requestWith = (data: unknown, status = 200): typeof fetch =>
   jest.fn<typeof fetch>().mockResolvedValue(Response.json(data, { status }))
+const requestSequence = (responses: readonly Response[]): typeof fetch => {
+  const request = jest.fn<typeof fetch>()
+  for (const response of responses) request.mockResolvedValueOnce(response)
+  return request
+}
+const trelloBoardUrlPattern =
+  /^https:\/\/api\.trello\.com\/1\/boards\/5k8NLHLh\?/u
 
 test('accepts board URLs and IDs, rejecting unrelated URLs', () => {
   expect(parseBoardId(' https://trello.com/b/5k8NLHLh/lvce-editor ')).toBe(
@@ -47,31 +54,29 @@ test('accepts board URLs and IDs, rejecting unrelated URLs', () => {
 })
 
 test('loads source-ordered lists and cards directly from Trello with a scoped Trello token', async () => {
-  const request = jest
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(Response.json({ accessToken: 'trello-token' }))
-    .mockResolvedValueOnce(
-      Response.json({
-        ...board,
-        cards: [
-          ...board.cards,
-          {
-            cover: { url: 'https://trello.com/1/cards/card/cover' },
-            id: 'covered',
-            idList: 'now',
-            name: 'Cover',
-            pos: 3,
-          },
-          {
-            cover: { url: 'https://evil.test/image.png' },
-            id: 'unsafe',
-            idList: 'now',
-            name: 'No cover',
-            pos: 4,
-          },
-        ],
-      }),
-    )
+  const request = requestSequence([
+    Response.json({ accessToken: 'trello-token' }),
+    Response.json({
+      ...board,
+      cards: [
+        ...board.cards,
+        {
+          cover: { url: 'https://trello.com/1/cards/card/cover' },
+          id: 'covered',
+          idList: 'now',
+          name: 'Cover',
+          pos: 3,
+        },
+        {
+          cover: { url: 'https://evil.test/image.png' },
+          id: 'unsafe',
+          idList: 'now',
+          name: 'No cover',
+          pos: 4,
+        },
+      ],
+    }),
+  ])
   const result = await loadBoard(
     '5k8NLHLh',
     new AbortController().signal,
@@ -101,9 +106,7 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
   )
   expect(request).toHaveBeenNthCalledWith(
     2,
-    expect.stringMatching(
-      /^https:\/\/api\.trello\.com\/1\/boards\/5k8NLHLh\?/u,
-    ),
+    expect.stringMatching(trelloBoardUrlPattern),
     expect.objectContaining({
       credentials: 'omit',
       headers: { Authorization: 'Bearer trello-token' },
@@ -121,17 +124,12 @@ for (const [status, code] of [
   [500, 'TRELLO_SERVER_ERROR'],
 ] as const) {
   test(`maps HTTP ${status} to ${code} without exposing the response body`, async () => {
+    const request = requestSequence([
+      Response.json({ accessToken: 'trello-token' }),
+      Response.json('secret upstream body', { status }),
+    ])
     await expect(
-      loadBoard(
-        '5k8NLHLh',
-        new AbortController().signal,
-        jest
-          .fn<typeof fetch>()
-          .mockResolvedValueOnce(Response.json({ accessToken: 'trello-token' }))
-          .mockResolvedValueOnce(
-            Response.json('secret upstream body', { status }),
-          ),
-      ),
+      loadBoard('5k8NLHLh', new AbortController().signal, request),
     ).rejects.toMatchObject({
       details: { code, message: expect.not.stringContaining('secret') },
     })
@@ -146,15 +144,12 @@ test('handles transport failures, invalid JSON and malformed board data', async 
   await expect(loadBoard('5k8NLHLh', signal, offline)).rejects.toMatchObject({
     details: { code: 'TRELLO_REQUEST_FAILED' },
   })
+  const malformedBoardRequest = requestSequence([
+    Response.json({ accessToken: 'trello-token' }),
+    Response.json({ ...board, lists: null }),
+  ])
   await expect(
-    loadBoard(
-      '5k8NLHLh',
-      signal,
-      jest
-        .fn<typeof fetch>()
-        .mockResolvedValueOnce(Response.json({ accessToken: 'trello-token' }))
-        .mockResolvedValueOnce(Response.json({ ...board, lists: null })),
-    ),
+    loadBoard('5k8NLHLh', signal, malformedBoardRequest),
   ).rejects.toMatchObject({ details: { code: 'TRELLO_INVALID_RESPONSE' } })
   const invalidJson = jest
     .fn<typeof fetch>()
@@ -167,19 +162,15 @@ test('handles transport failures, invalid JSON and malformed board data', async 
 
 test('passes cancellation to the direct Trello request', async () => {
   const controller = new AbortController()
-  const request = jest
-    .fn<typeof fetch>()
-    .mockResolvedValueOnce(Response.json({ accessToken: 'trello-token' }))
-    .mockImplementationOnce(async (_input, init) => {
-      expect(init?.signal).toBeInstanceOf(AbortSignal)
-      controller.abort()
-      throw new DOMException('Aborted', 'AbortError')
-    })
-  await expect(
-    loadBoard('5k8NLHLh', controller.signal, request),
-  ).rejects.toMatchObject({
-    name: 'AbortError',
+  const tokenResponse = Response.json({ accessToken: 'trello-token' })
+  jest.spyOn(tokenResponse, 'json').mockImplementation(async () => {
+    controller.abort()
+    return { accessToken: 'trello-token' }
   })
+  const request = requestSequence([tokenResponse, Response.json(board)])
+  await loadBoard('5k8NLHLh', controller.signal, request)
+  expect(request.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal)
+  expect(request.mock.calls[1]?.[1]?.signal?.aborted).toBe(true)
   expect(request).toHaveBeenCalledTimes(2)
 })
 
