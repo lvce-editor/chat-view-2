@@ -241,3 +241,41 @@ test('accepts empty discovery and rejects malformed board lists', async () => {
     ).rejects.toMatchObject({ details: { code: 'TRELLO_INVALID_RESPONSE' } })
   }
 })
+
+test('normalizes comment and attachment badges without rejecting older boards', async () => {
+  const values: readonly unknown[] = [
+    undefined,
+    null,
+    {},
+    { attachments: 1, comments: 3 },
+    { attachments: '2', comments: -1 },
+    { attachments: Infinity, comments: 1.5 },
+  ]
+  const result = await loadBoard(
+    '5k8NLHLh',
+    new AbortController().signal,
+    requestWith({
+      ...board,
+      cards: values.map((badges, index) => ({
+        badges,
+        id: String(index),
+        idList: 'now',
+        name: 'Task',
+        pos: index,
+      })),
+    }),
+  )
+  expect(
+    result.cards.map(({ attachmentCount, commentCount }) => [
+      commentCount,
+      attachmentCount,
+    ]),
+  ).toEqual([
+    [0, 0],
+    [0, 0],
+    [0, 0],
+    [3, 1],
+    [0, 0],
+    [0, 0],
+  ])
+})
