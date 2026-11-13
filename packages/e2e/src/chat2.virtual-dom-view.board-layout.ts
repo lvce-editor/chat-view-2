@@ -2,9 +2,23 @@ import type { Test } from '@lvce-editor/test-with-playwright'
 
 export const name = 'chat2.virtual-dom-view.board-layout'
 
+const boardPathSuffix = /board\/?$/
+
 export const test: Test = async ({ Command, expect, Locator }) => {
   await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
-  await Command.execute('SideBar.show', 'chat2.views.board', true)
+  const initialUrl = new URL(
+    (await Command.execute('Layout.getHref')) as string,
+  )
+  await Command.executeExtensionCommand('chat2.showBoardLayout')
+  const boardUrl = new URL((await Command.execute('Layout.getHref')) as string)
+  if (!boardUrl.pathname.endsWith('/board')) {
+    throw new Error(`Expected board route, received ${boardUrl.href}`)
+  }
+  if (boardUrl.search !== initialUrl.search) {
+    throw new Error(
+      `Expected workspace query to remain intact, received ${boardUrl.href}`,
+    )
+  }
   const board = Locator('.BoardView')
   const providerGrid = Locator('.BoardProviderGrid')
   const setupTitle = Locator('.BoardSetupTitle')
@@ -39,4 +53,28 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   await expect(boardId).toHaveCount(0)
   await expect(apiKey).toHaveCount(0)
   await expect(token).toHaveCount(0)
+  await Command.executeExtensionCommand('chat2.showAiNativeLayout')
+  const chatUrl = new URL((await Command.execute('Layout.getHref')) as string)
+  if (!chatUrl.pathname.endsWith('/chat')) {
+    throw new Error(`Expected chat route, received ${chatUrl.href}`)
+  }
+  if (chatUrl.search !== initialUrl.search) {
+    throw new Error(
+      `Expected workspace query to remain intact, received ${chatUrl.href}`,
+    )
+  }
+  await Command.executeExtensionCommand('chat2.showBoardLayout')
+  await Command.executeExtensionCommand('chat2.showIdeLayout')
+  const ideUrl = new URL((await Command.execute('Layout.getHref')) as string)
+  const idePath = boardUrl.pathname.replace(boardPathSuffix, '') || '/'
+  if (ideUrl.pathname !== idePath) {
+    throw new Error(
+      `Expected IDE route ${idePath}, received ${ideUrl.pathname}`,
+    )
+  }
+  if (ideUrl.search !== initialUrl.search) {
+    throw new Error(
+      `Expected workspace query to remain intact, received ${ideUrl.href}`,
+    )
+  }
 }
