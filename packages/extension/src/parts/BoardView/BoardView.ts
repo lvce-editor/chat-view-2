@@ -7,6 +7,7 @@ import {
   type ViewEvent,
   type VirtualDomViewInstance,
 } from '@lvce-editor/api'
+import { getWorkspaceTitle } from '../ChatView/CreateInstance.ts'
 import { createSession, type BoardSession } from './BoardSession.ts'
 import { render, type BoardState } from './Render.ts'
 import {
@@ -18,7 +19,6 @@ import {
 
 export const viewId = 'chat2.views.board'
 export const connectionsPreference = 'chat2.connectedBoardIds'
-const workspacePathSeparatorRegex = /[\\/]/
 
 export interface BoardHost {
   readonly authorize: typeof trelloClient.authorize
@@ -100,18 +100,8 @@ export const createInstance = async (
   const syncTitle = async (title: string): Promise<void> => {
     await host.execute('WindowTitle.set', title)
   }
-  const restoreTitle = async (): Promise<void> => {
-    let title = 'Lvce Editor'
-    try {
-      const workspacePath = await host.execute('Workspace.getPath')
-      if (typeof workspacePath === 'string' && workspacePath) {
-        title = workspacePath.split(workspacePathSeparatorRegex).at(-1) || title
-      }
-    } catch {
-      // Keep the editor title when no workspace is open.
-    }
-    await syncTitle(title)
-  }
+  const restoreTitle = async (): Promise<void> =>
+    syncTitle(await getWorkspaceTitle(host.execute))
   const { board: initialBoard } = state
   await syncTitle(initialBoard?.name || 'Boards')
   let focusRestore = false
@@ -263,7 +253,6 @@ export const createInstance = async (
       loading: false,
       providerSelected: false,
     }
-    await syncTitle('Boards')
     try {
       await host.write(connectionsPreference, ids)
     } catch {
