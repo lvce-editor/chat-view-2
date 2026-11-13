@@ -21,6 +21,7 @@ export const connectionsPreference = 'chat2.connectedBoardIds'
 
 export interface BoardHost {
   readonly authorize: typeof trelloClient.authorize
+  readonly createCard: typeof trelloClient.createCard
   readonly execute: typeof executeCommand
   readonly load: typeof trelloClient.load
   readonly read: typeof getPreference
@@ -31,6 +32,7 @@ export interface BoardHost {
 }
 const defaultHost: BoardHost = {
   authorize: trelloClient.authorize,
+  createCard: trelloClient.createCard,
   execute: executeCommand,
   load: trelloClient.load,
   read: getPreference,
@@ -98,11 +100,15 @@ export const createInstance = async (
       ...state,
       authorizationUrl: undefined,
       authorizing: false,
+      cardDraft: undefined,
       loading: false,
     }
   }
   const connect = async (): Promise<void> => {
+    const { board, cardDraft } = state
+    const draft = board && !cardDraft?.saving ? cardDraft : undefined
     cancel()
+    state = { ...state, cardDraft: draft }
     const requestGeneration = generation
     controller = new AbortController()
     const signal = AbortSignal.any([
@@ -303,6 +309,75 @@ export const createInstance = async (
     }
     await notify()
   }
+  const createCard = async (): Promise<void> => {
+    const { board, boardId, cardDraft, loading } = state
+    if (
+      !board ||
+      !cardDraft ||
+      cardDraft.saving ||
+      loading ||
+      !cardDraft.title.trim() ||
+      cardDraft.title.trim().length > 16_384 ||
+      board.lists.every((list) => list.id !== cardDraft.listId)
+    )
+      return
+    const requestGeneration = generation
+    controller = new AbortController()
+    state = {
+      ...state,
+      cardDraft: { ...cardDraft, error: undefined, saving: true },
+    }
+    try {
+      const card = await host.createCard(
+        cardDraft.listId,
+        cardDraft.title.trim(),
+        AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)]),
+      )
+      if (disposed || generation !== requestGeneration) return
+      const updated = {
+        ...board,
+        cards: [...board.cards, card].toSorted((a, b) => a.pos - b.pos),
+      }
+      host.session.set(boardId, { board: updated })
+      state = { ...state, board: updated, cardDraft: undefined }
+    } catch (error) {
+      if (disposed || generation !== requestGeneration) return
+      state = {
+        ...state,
+        cardDraft: {
+          ...cardDraft,
+          error:
+            error instanceof TrelloError
+              ? error.details.message
+              : 'The card could not be confirmed. Refresh the board before trying again. Your title has been kept.',
+          saving: false,
+        },
+      }
+    }
+    await notify()
+  }
+  const openCard = (listId: string): void => {
+    const { board, cardDraft, loading } = state
+    if (
+      !loading &&
+      !cardDraft?.saving &&
+      board?.lists.some((list) => list.id === listId)
+    )
+      state = { ...state, cardDraft: { listId, saving: false, title: '' } }
+  }
+  const cancelCard = (): void => {
+    const { cardDraft } = state
+    if (!cardDraft?.saving) state = { ...state, cardDraft: undefined }
+  }
+  const handleInput = (name: string | undefined, value: string): void => {
+    const { cardDraft } = state
+    if (name === 'board-card-title' && cardDraft && !cardDraft.saving)
+      state = { ...state, cardDraft: { ...cardDraft, title: value } }
+    if (name === 'board-id') {
+      cancel()
+      state = { ...state, boardId: value, loading: false }
+    }
+  }
   const handleClick = async (event: Readonly<ViewEvent>): Promise<void> => {
     const providerAction = getProviderAction(event.name)
     if (providerAction) {
@@ -348,12 +423,11 @@ export const createInstance = async (
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'input' && typeof event.value === 'string') {
-        switch (event.name) {
-          case 'board-id':
-            cancel()
-            state = { ...state, boardId: event.value, loading: false }
-            break
-        }
+        handleInput(event.name, event.value)
+        return
+      }
+      if (event.type === 'submit' && event.name === 'board-create-card') {
+        void createCard()
         return
       }
       if (
@@ -367,9 +441,14 @@ export const createInstance = async (
         return
       }
       if (event.type === 'click') {
+        if (event.name?.startsWith('board-add:')) {
+          openCard(event.name.slice('board-add:'.length))
+          return
+        }
         const actions: Readonly<Record<string, () => void | Promise<void>>> = {
           'board-authorize': authorize,
           'board-cancel-authorization': cancel,
+          'board-cancel-card': cancelCard,
           'board-check-account': checkAccount,
           'board-disconnect-account': revoke,
         }

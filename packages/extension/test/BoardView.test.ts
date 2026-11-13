@@ -1,4 +1,4 @@
-import type { ViewContext } from '@lvce-editor/api'
+import type { ViewContext, VirtualDomViewInstance } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { createSession } from '../src/parts/BoardView/BoardSession.ts'
 import {
@@ -23,6 +23,9 @@ const createHost = (): BoardHost => ({
     .mockResolvedValue(
       'https://backend.test/auth/trello/connect?ticket=one-use',
     ),
+  createCard: jest
+    .fn<BoardHost['createCard']>()
+    .mockResolvedValue({ id: 'new', idList: 'todo', name: 'New task', pos: 2 }),
   execute: jest.fn<BoardHost['execute']>().mockResolvedValue(undefined),
   load: jest.fn<BoardHost['load']>().mockResolvedValue(board),
   read: jest.fn<BoardHost['read']>().mockResolvedValue([]),
@@ -304,3 +307,90 @@ test('opens remembered boards after reload without requesting Trello credentials
   expect(JSON.stringify(await view.render())).toContain('A task')
   expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.anything())
 })
+
+const openBoard = async (host: BoardHost): Promise<VirtualDomViewInstance> => {
+  host.session.set('5k8NLHLh', { board })
+  jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
+  return createInstance(createContext(), host)
+}
+
+test('adds a card to its list, prevents duplicate submissions and updates the cached board', async () => {
+  const host = createHost()
+  const pending =
+    Promise.withResolvers<Awaited<ReturnType<BoardHost['createCard']>>>()
+  jest.mocked(host.createCard).mockReturnValue(pending.promise)
+  const view = await openBoard(host)
+  await view.handleEvent?.({ name: 'board-add:todo', type: 'click' })
+  await view.handleEvent?.({ name: 'board-create-card', type: 'submit' })
+  expect(host.createCard).not.toHaveBeenCalled()
+  await view.handleEvent?.({
+    name: 'board-card-title',
+    type: 'input',
+    value: ' New task ',
+  })
+  await view.handleEvent?.({ name: 'board-create-card', type: 'submit' })
+  await view.handleEvent?.({ name: 'board-create-card', type: 'submit' })
+  expect(host.createCard).toHaveBeenCalledTimes(1)
+  expect(host.createCard).toHaveBeenCalledWith(
+    'todo',
+    'New task',
+    expect.any(AbortSignal),
+  )
+  expect(JSON.stringify(await view.render())).toContain('Adding…')
+  pending.resolve({ id: 'new', idList: 'todo', name: 'New task', pos: 2 })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('New task')
+  expect(JSON.stringify(await view.render())).not.toContain('BoardCardComposer')
+  expect(host.session.get('5k8NLHLh')?.board.cards).toHaveLength(2)
+  expect(JSON.stringify(view.saveState?.())).not.toContain('New task')
+})
+
+test('retains failed card titles, supports cancel and ignores invalid lists', async () => {
+  const host = createHost()
+  jest.mocked(host.createCard).mockRejectedValue(
+    new TrelloError({
+      code: 'WRITE',
+      message: 'Reconnect Trello to allow changes.',
+    }),
+  )
+  const view = await openBoard(host)
+  await view.handleEvent?.({ name: 'board-add:missing', type: 'click' })
+  expect(JSON.stringify(await view.render())).not.toContain('BoardCardComposer')
+  await view.handleEvent?.({ name: 'board-add:empty', type: 'click' })
+  await view.handleEvent?.({
+    name: 'board-card-title',
+    type: 'input',
+    value: 'Keep this title',
+  })
+  await view.handleEvent?.({ name: 'board-create-card', type: 'submit' })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('Keep this title')
+  expect(JSON.stringify(await view.render())).toContain('Reconnect Trello')
+  await view.handleEvent?.({ name: 'board-cancel-card', type: 'click' })
+  expect(JSON.stringify(await view.render())).not.toContain('Keep this title')
+})
+
+test.each(['board-change', 'dispose'])(
+  'late card creation after %s cannot change the current board',
+  async (action) => {
+    const host = createHost()
+    const pending =
+      Promise.withResolvers<Awaited<ReturnType<BoardHost['createCard']>>>()
+    jest.mocked(host.createCard).mockReturnValue(pending.promise)
+    const view = await openBoard(host)
+    await view.handleEvent?.({ name: 'board-add:todo', type: 'click' })
+    await view.handleEvent?.({
+      name: 'board-card-title',
+      type: 'input',
+      value: 'Stale card',
+    })
+    await view.handleEvent?.({ name: 'board-create-card', type: 'submit' })
+    if (action === 'dispose') view.dispose?.()
+    else await view.handleEvent?.({ name: action, type: 'click' })
+    expect(jest.mocked(host.createCard).mock.calls[0]?.[2].aborted).toBe(true)
+    pending.resolve({ id: 'stale', idList: 'todo', name: 'Stale card', pos: 2 })
+    await flush()
+    expect(host.session.get('5k8NLHLh')?.board.cards).toHaveLength(1)
+    expect(JSON.stringify(await view.render())).not.toContain('Stale card')
+  },
+)

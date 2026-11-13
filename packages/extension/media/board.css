@@ -278,3 +278,23 @@ a.BoardPrimaryButton {
 .BoardConnect + .BoardButton {
   margin-top: 12px;
 }
+
+.BoardAddCard {
+  width: 100%;
+  text-align: left;
+}
+.BoardCardComposer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.BoardCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.BoardCardError {
+  color: #8c1d18;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

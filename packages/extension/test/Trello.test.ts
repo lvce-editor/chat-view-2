@@ -206,3 +206,38 @@ test('supports status, launching consent, and disconnect without Trello credenti
   await client.disconnect(signal)
   expect(request.mock.calls[2]?.[1]?.method).toBe('POST')
 })
+
+test('creates cards through the backend without provider credentials', async () => {
+  const card = { id: 'new', idList: 'todo', name: 'New task', pos: 3 }
+  const request = requestWith(card)
+  const client = createTrelloClient(configuration, request)
+  expect(
+    await client.createCard('todo', ' New task ', new AbortController().signal),
+  ).toEqual(card)
+  expect(request).toHaveBeenCalledWith(
+    'https://backend.test/api/integrations/trello/cards',
+    expect.objectContaining({
+      body: JSON.stringify({ idList: 'todo', name: 'New task' }),
+      headers: {
+        Authorization: 'Bearer lvce-token',
+        'Content-Type': 'application/json',
+      },
+      method: 'POST',
+    }),
+  )
+})
+
+test('write denial explains reconnecting and unconfirmed writes are never retried', async () => {
+  for (const status of [403, 500]) {
+    const request = requestWith({ secret: 'private' }, status)
+    const client = createTrelloClient(configuration, request)
+    await expect(
+      client.createCard('todo', 'Task', new AbortController().signal),
+    ).rejects.toMatchObject({
+      details: {
+        code: status === 403 ? 'TRELLO_WRITE_DENIED' : 'TRELLO_CREATE_FAILED',
+      },
+    })
+    expect(request).toHaveBeenCalledTimes(1)
+  }
+})
