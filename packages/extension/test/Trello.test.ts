@@ -33,7 +33,9 @@ const loadBoard = (
 
 const requestWith = (data: unknown, status = 200): typeof fetch =>
   jest.fn<typeof fetch>().mockResolvedValue(Response.json(data, { status }))
-const requestSequence = (responses: readonly Response[]): typeof fetch => {
+const requestSequence = (
+  responses: readonly Response[],
+): jest.MockedFunction<typeof fetch> => {
   const request = jest.fn<typeof fetch>()
   for (const response of responses) request.mockResolvedValueOnce(response)
   return request
