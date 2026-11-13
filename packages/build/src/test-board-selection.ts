@@ -11,7 +11,8 @@ export const testBoardSelection = async (
   const backend = 'https://trello-selection.test'
   let empty = false
   let fail = false
-  const loaded: string[] = []
+  const directLoads: string[] = []
+  const proxiedLoads: string[] = []
   await context.route(`${backend}/**`, async (route) => {
     const path = new URL(route.request().url()).pathname
     assert.equal(route.request().headers().authorization, 'Bearer board-test')
@@ -19,6 +20,8 @@ export const testBoardSelection = async (
     let status = 200
     if (path.endsWith('/status')) {
       body = { configured: true, connected: true }
+    } else if (path.endsWith('/token')) {
+      body = { accessToken: 'trello-test' }
     } else if (path.endsWith('/boards')) {
       status = fail ? 503 : 200
       body = empty
@@ -28,10 +31,32 @@ export const testBoardSelection = async (
             { id: '22222222', name: 'Engineering' },
           ]
     } else {
-      loaded.push(path)
-      body = { id: '22222222', name: 'Engineering', lists: [], cards: [] }
+      proxiedLoads.push(path)
+      status = 500
+      body = { error: 'Board content must be requested directly from Trello.' }
     }
     await route.fulfill({ status, json: body })
+  })
+  await context.route('https://api.trello.com/**', async (route) => {
+    const request = route.request()
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Headers': 'authorization',
+          'Access-Control-Allow-Methods': 'GET',
+          'Access-Control-Allow-Origin': '*',
+        },
+      })
+      return
+    }
+    assert.equal(request.headers().authorization, 'Bearer trello-test')
+    const url = new URL(request.url())
+    directLoads.push(`${url.pathname}${url.search}`)
+    await route.fulfill({
+      headers: { 'Access-Control-Allow-Origin': '*' },
+      json: { id: '22222222', name: 'Engineering', lists: [], cards: [] },
+    })
   })
   try {
     const page = await context.newPage()
@@ -123,7 +148,20 @@ export const testBoardSelection = async (
     await page
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
-    assert.deepEqual(loaded, ['/api/integrations/trello/boards/22222222'])
+    assert.deepEqual(directLoads, [
+      '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name&list_fields=name%2Cpos&lists=open',
+    ])
+    assert.deepEqual(proxiedLoads, [])
+    const refresh = page.waitForRequest(
+      (request) =>
+        request.method() === 'GET' &&
+        request.url().startsWith('https://api.trello.com/1/boards/22222222?'),
+    )
+    await page
+      .getByRole('button', { name: 'Refresh board', exact: true })
+      .click()
+    await refresh
+    assert.equal(directLoads.length, 2)
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })
       .click()
