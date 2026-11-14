@@ -93,16 +93,24 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   expect(dom).toContain('BoardViewTrello')
   expect(dom).toContain('A task')
   expect(dom).toContain('No cards')
+  expect(host.execute).toHaveBeenCalledWith('WindowTitle.set', 'Work')
   expect(host.write).toHaveBeenCalledWith('chat2.connectedBoardIds', [
     '5k8NLHLh',
   ])
   await view.handleEvent?.({ name: 'board-change', type: 'click' })
   expect(JSON.stringify(await view.render())).not.toContain('BoardViewTrello')
   expect(JSON.stringify(await view.render())).toContain('Connect Trello')
+  expect(host.execute).toHaveBeenLastCalledWith('WindowTitle.set', 'Boards')
   expect(JSON.stringify(await view.render())).not.toContain('Trello API key')
   expect(JSON.stringify(view.saveState?.())).not.toContain('private')
   expect(dom).not.toContain('private')
   expect(context.requestRerender).toHaveBeenCalled()
+  view.dispose?.()
+  await flush()
+  expect(host.execute).toHaveBeenLastCalledWith(
+    'WindowTitle.set',
+    'Lvce Editor',
+  )
 })
 
 test('stale completion and disposed requests cannot replace current state', async () => {
@@ -144,6 +152,22 @@ test('stale completion and disposed requests cannot replace current state', asyn
   await flush()
   expect(jest.mocked(context.requestRerender).mock.calls).toHaveLength(
     notifications,
+  )
+})
+
+test('refreshing a renamed board updates the window title', async () => {
+  const host = createHost()
+  jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
+  host.session.set('5k8NLHLh', { board })
+  const view = await createInstance(createContext(), host)
+  jest
+    .mocked(host.load)
+    .mockResolvedValueOnce({ ...board, name: 'Renamed board' })
+  await view.handleEvent?.({ name: 'board-refresh', type: 'click' })
+  await flush()
+  expect(host.execute).toHaveBeenLastCalledWith(
+    'WindowTitle.set',
+    'Renamed board',
   )
 })
 

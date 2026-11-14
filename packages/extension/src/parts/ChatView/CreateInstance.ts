@@ -261,6 +261,19 @@ const titleMenuId = 'chat2.title'
 const maxTaskTitleLength = 80
 const fileLineHash = /^#L(\d+)$/u
 const pathSeparatorRegex = /[\\/]/
+export const getWorkspaceTitle = async (
+  execute: typeof executeCommand = executeCommand,
+): Promise<string> => {
+  try {
+    const workspacePath = await execute('Workspace.getPath')
+    if (typeof workspacePath !== 'string' || !workspacePath) {
+      return defaultWindowTitle
+    }
+    return workspacePath.split(pathSeparatorRegex).at(-1) || defaultWindowTitle
+  } catch {
+    return defaultWindowTitle
+  }
+}
 const localImagePathRegex =
   /^(?:file:\/\/|\/|~\/|[a-z]:[\\/]).+\.(?:avif|bmp|gif|jpe?g|png|webp)$/i
 const toImageFile = async (value: unknown): Promise<File | undefined> => {
@@ -740,19 +753,6 @@ export const createInstance = async (
   let preserveComposerValue = false
   let windowTitleQueue = Promise.resolve()
   let windowTitleActive = false
-  const getWorkspaceTitle = async (): Promise<string> => {
-    try {
-      const workspacePath = await execute('Workspace.getPath')
-      if (typeof workspacePath !== 'string' || !workspacePath) {
-        return defaultWindowTitle
-      }
-      return (
-        workspacePath.split(pathSeparatorRegex).at(-1) || defaultWindowTitle
-      )
-    } catch {
-      return defaultWindowTitle
-    }
-  }
   const syncWindowTitle = (): Promise<void> => {
     if (state.focusMode) {
       windowTitleActive = true
@@ -765,7 +765,10 @@ export const createInstance = async (
     windowTitleQueue = windowTitleQueue
       .catch(() => {})
       .then(async () => {
-        await execute('WindowTitle.set', title || (await getWorkspaceTitle()))
+        await execute(
+          'WindowTitle.set',
+          title || (await getWorkspaceTitle(execute)),
+        )
       })
     if (!state.focusMode) {
       windowTitleActive = false

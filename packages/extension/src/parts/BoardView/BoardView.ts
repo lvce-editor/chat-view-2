@@ -7,6 +7,7 @@ import {
   type ViewEvent,
   type VirtualDomViewInstance,
 } from '@lvce-editor/api'
+import { getWorkspaceTitle } from '../ChatView/CreateInstance.ts'
 import { createSession, type BoardSession } from './BoardSession.ts'
 import { render, type BoardState } from './Render.ts'
 import {
@@ -133,6 +134,13 @@ export const createInstance = async (
   let controller: AbortController | undefined
   let moveController: AbortController | undefined
   let disposed = false
+  const syncTitle = async (title: string): Promise<void> => {
+    await host.execute('WindowTitle.set', title)
+  }
+  const restoreTitle = async (): Promise<void> =>
+    syncTitle(await getWorkspaceTitle(host.execute))
+  const { board: initialBoard } = state
+  await syncTitle(initialBoard?.name || 'Boards')
   let focusRestore = false
   let focusCardId = ''
   const notify = async (): Promise<void> => {
@@ -192,6 +200,7 @@ export const createInstance = async (
         connectedIds: ids,
         loading: false,
       }
+      await syncTitle(board.name)
       try {
         await host.write(connectionsPreference, ids)
       } catch {
@@ -360,10 +369,14 @@ export const createInstance = async (
       }
     }
   }
-  const restoreConnection = (id: string): void => {
+  const restoreConnection = async (id: string): Promise<void> => {
     const selected = host.session.get(id)
-    if (!selected) return
+    if (!selected) {
+      await syncTitle('Boards')
+      return
+    }
     state = { ...state, accountConnected: true, board: selected.board }
+    await syncTitle(selected.board.name)
   }
   const connectionError = (error: unknown): void => {
     state = {
@@ -501,6 +514,7 @@ export const createInstance = async (
         loading: false,
         providerSelected: true,
       }
+      await syncTitle('Boards')
     } catch (error) {
       if (disposed || generation !== requestGeneration) return
       connectionError(error)
@@ -605,7 +619,7 @@ export const createInstance = async (
       savingCard: false,
     }
   }
-  const changeBoard = (name: string | undefined): void => {
+  const changeBoard = async (name: string | undefined): Promise<void> => {
     if (name !== 'board-change' && !name?.startsWith('board-select:')) return
     cancel()
     state = {
@@ -622,7 +636,7 @@ export const createInstance = async (
       savingCard: false,
     }
     const { boardId } = state
-    restoreConnection(boardId)
+    await restoreConnection(boardId)
     if (boardId && !host.session.get(boardId)) void connect()
   }
   const handleClick = async (event: Readonly<ViewEvent>): Promise<void> => {
@@ -651,13 +665,20 @@ export const createInstance = async (
       await host.execute('chat2.showAiNativeLayout')
     else if (event.name === 'board-ide')
       await host.execute('chat2.showIdeLayout')
-    changeBoard(event.name)
+    await changeBoard(event.name)
     if (event.name === 'board-disconnect') await disconnect()
   }
   return {
     dispose(): void {
       disposed = true
       cancel()
+      void (async (): Promise<void> => {
+        try {
+          await restoreTitle()
+        } catch {
+          // Ignore title restoration when the host is shutting down.
+        }
+      })()
     },
     getContext: () => ({ focusRestore }),
     handleBoardDragEnd(): Promise<void> {
