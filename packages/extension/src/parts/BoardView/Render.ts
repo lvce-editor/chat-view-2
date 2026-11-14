@@ -34,6 +34,8 @@ export interface BoardState {
   readonly boards: readonly TrelloBoardSummary[]
   readonly cardDraft?: CardDraft | undefined
   readonly connectedIds: readonly string[]
+  readonly draggedCardId?: string | undefined
+  readonly dropTargetId?: string | undefined
   readonly editDesc?: string
   readonly editError?: string | undefined
   readonly editingCard?: TrelloCard | undefined
@@ -250,7 +252,7 @@ const renderSetup = (state: BoardState): Dom.Node => {
           ]),
           Dom.div('BoardIntro', [
             Dom.textNode(
-              'Bring your lists and cards into the editor. Add and edit cards here to update them in Trello.',
+              'Bring your lists and cards into the editor. Add, edit, and move cards here to update them in Trello.',
             ),
           ]),
           ...renderConnection(state),
@@ -357,8 +359,87 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
   )
 }
 
+const renderError = (state: Readonly<BoardState>): Dom.Node | undefined => {
+  const { authorizationUrl, board, error, loading } = state
+  if (!error) return undefined
+  return Dom.node(
+    VirtualDomElements.Div,
+    { className: 'BoardError', role: 'alert' },
+    [
+      Dom.heading(2, 'BoardErrorTitle', error.code),
+      Dom.textNode(error.message),
+      ...(error.code === 'TRELLO_REAUTHORIZE_REQUIRED'
+        ? [
+            Dom.button('board-reconnect', 'Reconnect Trello', 'BoardButton'),
+            ...(authorizationUrl
+              ? [
+                  Dom.link(
+                    authorizationUrl,
+                    'Continue to Trello',
+                    primaryButtonClass,
+                  ),
+                ]
+              : []),
+          ]
+        : []),
+      Dom.button(
+        board ? 'board-retry' : 'board-check-account',
+        'Try again',
+        'BoardButton',
+        { disabled: loading },
+      ),
+    ],
+  )
+}
+
+const renderColumns = (
+  state: BoardState,
+  board: TrelloBoard,
+  cardsByList: Readonly<ReadonlyMap<string, readonly Readonly<Dom.Node>[]>>,
+  dropTargetId?: string,
+): Dom.Node =>
+  Dom.node(
+    VirtualDomElements.Div,
+    { ariaLabel: board.name, className: 'BoardColumns', tabIndex: 0 },
+    board.lists.map((list) =>
+      Dom.node(
+        VirtualDomElements.Section,
+        { ariaLabel: list.name, className: 'BoardColumn' },
+        [
+          Dom.heading(
+            2,
+            'BoardColumnTitle',
+            `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
+          ),
+          Dom.div(
+            `BoardCards${dropTargetId === list.id ? ' BoardCardsDropTarget' : ''}`,
+            [
+              ...(cardsByList.get(list.id) || [
+                Dom.div('BoardEmptyList', [Dom.textNode('No cards')]),
+              ]),
+              renderComposer(state, list.id, list.name),
+            ],
+            {
+              name: `board-list:${list.id}`,
+              onDragOver: 'handleBoardDragOver',
+              onDrop: 'handleBoardDrop',
+            },
+          ),
+        ],
+      ),
+    ),
+  )
+
 export const render = (state: BoardState): Dom.Node => {
-  const { authorizing, board, cardDraft, error, loading } = state
+  const {
+    authorizing,
+    board,
+    cardDraft,
+    draggedCardId,
+    dropTargetId,
+    editingCard,
+    loading,
+  } = state
   const cards = board?.cards || []
   const cardsByList = new Map<string, Dom.Node[]>()
   for (const card of cards) {
@@ -368,9 +449,15 @@ export const render = (state: BoardState): Dom.Node => {
         VirtualDomElements.Button,
         {
           buttonType: 'button',
-          className: cardButtonClass,
+          className: mergeClassNames(
+            cardButtonClass,
+            draggedCardId === card.id ? 'BoardCardDragging' : '',
+          ),
+          draggable: !editingCard && !loading,
           name: `board-card:${card.id}`,
           onClick: 'handleClick',
+          onDragEnd: 'handleBoardDragEnd',
+          onDragStart: 'handleBoardDragStart',
         },
         [
           ...(card.coverDataUrl
@@ -391,32 +478,14 @@ export const render = (state: BoardState): Dom.Node => {
     cardsByList.set(card.idList, cards)
   }
   const cardDialog = renderCardDialog(state)
+  const errorNode = renderError(state)
   return Dom.div(mergeClassNames('BoardView', board ? 'BoardViewTrello' : ''), [
     Dom.div('BoardToolbar', [
       Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
       Dom.button('board-chat', 'Chat', 'BoardButton'),
       Dom.button('board-ide', 'IDE layout', 'BoardButton'),
     ]),
-    ...(error
-      ? [
-          Dom.node(
-            VirtualDomElements.Div,
-            { className: 'BoardError', role: 'alert' },
-            [
-              Dom.heading(2, 'BoardErrorTitle', error.code),
-              Dom.textNode(error.message),
-              Dom.button(
-                board ? 'board-retry' : 'board-check-account',
-                'Try again',
-                'BoardButton',
-                {
-                  disabled: loading,
-                },
-              ),
-            ],
-          ),
-        ]
-      : []),
+    ...(errorNode ? [errorNode] : []),
     ...(board
       ? [
           Dom.div('BoardActions', [
@@ -432,33 +501,7 @@ export const render = (state: BoardState): Dom.Node => {
               { disabled: loading },
             ),
           ]),
-          Dom.node(
-            VirtualDomElements.Div,
-            {
-              ariaLabel: board.name,
-              className: 'BoardColumns',
-              tabIndex: 0,
-            },
-            board.lists.map((list) =>
-              Dom.node(
-                VirtualDomElements.Section,
-                { ariaLabel: list.name, className: 'BoardColumn' },
-                [
-                  Dom.heading(
-                    2,
-                    'BoardColumnTitle',
-                    `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
-                  ),
-                  Dom.div('BoardCards', [
-                    ...(cardsByList.get(list.id) || [
-                      Dom.div('BoardEmptyList', [Dom.textNode('No cards')]),
-                    ]),
-                    renderComposer(state, list.id, list.name),
-                  ]),
-                ],
-              ),
-            ),
-          ),
+          renderColumns(state, board, cardsByList, dropTargetId),
           ...(board.lists.length === 0
             ? [
                 Dom.div('BoardEmpty', [

@@ -37,6 +37,7 @@ const createHost = (): BoardHost => ({
   }),
   execute: jest.fn<BoardHost['execute']>().mockResolvedValue(undefined),
   load: jest.fn<BoardHost['load']>().mockResolvedValue(board),
+  moveCard: jest.fn<BoardHost['moveCard']>().mockResolvedValue(undefined),
   read: jest.fn<BoardHost['read']>().mockResolvedValue([]),
   revoke: jest.fn<BoardHost['revoke']>().mockResolvedValue(undefined),
   session: createSession(),
@@ -300,6 +301,81 @@ test('retains the draft after a failed card save and lets users retry or cancel'
   expect(view.renderFocus?.(oldFocusContext, view.getContext?.() || {})).toBe(
     '[name="board-card:one"]',
   )
+})
+
+test('moves one card into an empty list and keeps the saved board in session', async () => {
+  const host = createHost()
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '5k8NLHLh',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+
+  view.handleBoardDragStart('board-card:one')
+  view.handleBoardDragOver('board-list:empty')
+  expect(JSON.stringify(await view.render())).toContain('BoardCardsDropTarget')
+  await view.handleBoardDrop('board-list:empty')
+  await flush()
+
+  expect(host.moveCard).toHaveBeenCalledWith('one', 'empty', expect.anything())
+  const moved = await view.render()
+  expect(JSON.stringify(moved)).not.toContain('BoardCardsDropTarget')
+  const destinationIndex = moved.findIndex(
+    (node) => node.name === 'board-list:empty',
+  )
+  expect(String(moved[destinationIndex + 1]?.className)).toContain('BoardCard')
+  expect(host.session.get('5k8NLHLh')?.board.cards[0]?.idList).toBe('empty')
+  view.dispose?.()
+  jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
+  const reloaded = await createInstance(createContext(), host)
+  expect(JSON.stringify(await reloaded.render())).toContain('A task')
+})
+
+test('same-list and cancelled drops do not persist a move', async () => {
+  const host = createHost()
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '5k8NLHLh',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+
+  view.handleBoardDragStart('board-card:one')
+  await view.handleBoardDrop('board-list:todo')
+  view.handleBoardDragStart('board-card:one')
+  view.handleBoardDragOver('board-list:empty')
+  await view.handleBoardDragEnd()
+
+  expect(host.moveCard).not.toHaveBeenCalled()
+  expect(JSON.stringify(await view.render())).not.toContain(
+    'BoardCardsDropTarget',
+  )
+})
+
+test('failed moves restore the original list and show recoverable feedback', async () => {
+  const host = createHost()
+  jest.mocked(host.moveCard).mockRejectedValue(new Error('network failure'))
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '5k8NLHLh',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+
+  view.handleBoardDragStart('board-card:one')
+  await view.handleBoardDrop('board-list:empty')
+  await flush()
+
+  expect(JSON.stringify(await view.render())).toContain('TRELLO_MOVE_FAILED')
+  expect(JSON.stringify(await view.render())).toContain('No cards')
+  expect(host.session.get('5k8NLHLh')?.board.cards[0]?.idList).toBe('todo')
 })
 
 test('keeps connected boards across layout changes without saving credentials', async () => {
