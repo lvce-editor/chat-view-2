@@ -147,6 +147,22 @@ test('stale completion and disposed requests cannot replace current state', asyn
   )
 })
 
+test('refreshing a renamed board updates the window title', async () => {
+  const host = createHost()
+  host.read = jest.fn<BoardHost['read']>().mockResolvedValue(['5k8NLHLh'])
+  host.session.set('5k8NLHLh', { board })
+  const view = await createInstance(createContext(), host)
+  jest
+    .mocked(host.load)
+    .mockResolvedValueOnce({ ...board, name: 'Renamed board' })
+  await view.handleEvent?.({ name: 'board-refresh', type: 'click' })
+  await flush()
+  expect(host.execute).toHaveBeenLastCalledWith(
+    'WindowTitle.set',
+    'Renamed board',
+  )
+})
+
 test('shows readable failure and recovers on retry', async () => {
   const host = createHost()
   jest.mocked(host.load).mockRejectedValueOnce(
