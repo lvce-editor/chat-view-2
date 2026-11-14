@@ -27,14 +27,17 @@ import {
 import { headlessChatCommands } from '../HeadlessChat/HeadlessChat.ts'
 
 const state = {
-  activated: false,
+  activationPromise: undefined as Promise<void> | undefined,
 }
 
-export const activate = async (): Promise<void> => {
-  if (state.activated) {
-    return
+export const activate = (): Promise<void> => {
+  if (!state.activationPromise) {
+    state.activationPromise = activateMain()
   }
-  state.activated = true
+  return state.activationPromise
+}
+
+const activateMain = async (): Promise<void> => {
   await activateExtensionApi()
   registerView(view)
   registerView(boardView)

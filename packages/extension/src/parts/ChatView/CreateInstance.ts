@@ -365,7 +365,7 @@ export const setWorkbenchLayoutUrl = async (
     const wasChatPath = isChatPath(url.pathname)
     if (layout === 'ai-native' || layout === 'board') {
       const assetDir = await execute('Layout.getAssetDir')
-      if (typeof assetDir !== 'string' || !assetDir) {
+      if (typeof assetDir !== 'string') {
         return
       }
       const wasBoardPath = isBoardPath(url.pathname)
