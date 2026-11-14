@@ -57,7 +57,7 @@ export const boardError = (status: number): BoardError => {
       return {
         code: 'TRELLO_ACCESS_DENIED',
         message:
-          'Trello denied access. Reconnect Trello and allow access to this board.',
+          'Trello denied access. Connect Trello again and check your access to this board.',
       }
     case 409:
       return {
@@ -244,6 +244,23 @@ export const createTrelloClient = (
       throw new TrelloError(boardError(0))
     return { configured: data.configured, connected: data.connected }
   }
+  const trelloRequest = async (
+    path: string,
+    signal: Readonly<AbortSignal>,
+  ): Promise<unknown> => {
+    const { data } = await call('token', signal)
+    if (!isRecord(data) || typeof data.accessToken !== 'string')
+      throw new TrelloError(boardError(0))
+    const url = new URL(`/1/${path}`, 'https://api.trello.com')
+    const response = await request(url.href, {
+      credentials: 'omit',
+      headers: { Authorization: `Bearer ${data.accessToken}` },
+      redirect: 'error',
+      signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]),
+    })
+    if (!response.ok) throw new TrelloError(boardError(response.status))
+    return response.json() as Promise<unknown>
+  }
   const authorize = async (signal: Readonly<AbortSignal>): Promise<string> => {
     const { baseUrl, data } = await call('connect', signal, 'POST')
     const url =
@@ -268,7 +285,16 @@ export const createTrelloClient = (
   ): Promise<TrelloBoard> => {
     const id = parseBoardId(input)
     try {
-      const { data } = await call(`boards/${id}`, signal)
+      const data = await trelloRequest(
+        `boards/${id}?${new URLSearchParams({
+          card_fields: 'name,idList,pos,cover',
+          cards: 'open',
+          fields: 'name',
+          list_fields: 'name,pos',
+          lists: 'open',
+        })}`,
+        signal,
+      )
       if (
         !isRecord(data) ||
         typeof data.id !== 'string' ||
