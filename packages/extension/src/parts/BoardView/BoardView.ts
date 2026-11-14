@@ -15,6 +15,9 @@ import {
   trelloClient,
   parseBoardId,
   TrelloError,
+  type TrelloBoard,
+  type TrelloCard,
+  type TrelloList,
 } from './Trello.ts'
 
 export const viewId = 'chat2.views.board'
@@ -23,8 +26,10 @@ export const connectionsPreference = 'chat2.connectedBoardIds'
 export interface BoardHost {
   readonly authorize: typeof trelloClient.authorize
   readonly boards: typeof trelloClient.boards
+  readonly createCard: typeof trelloClient.createCard
   readonly execute: typeof executeCommand
   readonly load: typeof trelloClient.load
+  readonly moveCard: typeof trelloClient.moveCard
   readonly read: typeof getPreference
   readonly revoke: typeof trelloClient.disconnect
   readonly session: BoardSession
@@ -32,14 +37,45 @@ export interface BoardHost {
   readonly updateCard: typeof trelloClient.updateCard
   readonly write: typeof setPreference
 }
-interface BoardViewInstance extends VirtualDomViewInstance {
+interface BoardDragHandlers {
+  readonly handleBoardDragEnd: () => Promise<void>
+  readonly handleBoardDragOver: (name: string) => void
+  readonly handleBoardDragStart: (name: string) => void
+  readonly handleBoardDrop: (name: string) => Promise<void>
+}
+interface BoardViewInstance extends VirtualDomViewInstance, BoardDragHandlers {
   readonly handleDialogKeyDown: (key: unknown) => void
 }
+const getMoveTarget = (
+  board: BoardState['board'],
+  draggedCardId: string | undefined,
+  listName: string,
+):
+  | {
+      readonly board: TrelloBoard
+      readonly card: TrelloCard
+      readonly destination: TrelloList
+    }
+  | undefined => {
+  if (!board || !draggedCardId) return undefined
+  const destinationId = listName.startsWith('board-list:')
+    ? listName.slice('board-list:'.length)
+    : ''
+  const card = board.cards.find(({ id }) => id === draggedCardId)
+  const destination = board.lists.find(({ id }) => id === destinationId)
+  if (!card || !destination || card.idList === destination.id) return undefined
+  return { board, card, destination }
+}
+const isReauthorizationRequired = (error: unknown): boolean =>
+  error instanceof TrelloError &&
+  error.details.code === 'TRELLO_REAUTHORIZE_REQUIRED'
 const defaultHost: BoardHost = {
   authorize: trelloClient.authorize,
   boards: trelloClient.boards,
+  createCard: trelloClient.createCard,
   execute: executeCommand,
   load: trelloClient.load,
+  moveCard: trelloClient.moveCard,
   read: getPreference,
   revoke: trelloClient.disconnect,
   session: createSession(),
@@ -96,6 +132,7 @@ export const createInstance = async (
   }
   let generation = 0
   let controller: AbortController | undefined
+  let moveController: AbortController | undefined
   let disposed = false
   const syncTitle = async (title: string): Promise<void> => {
     await host.execute('WindowTitle.set', title)
@@ -109,13 +146,21 @@ export const createInstance = async (
   const notify = async (): Promise<void> => {
     if (!disposed) await context?.requestRerender()
   }
+  const clearDrag = async (): Promise<void> => {
+    const { draggedCardId, dropTargetId } = state
+    if (!draggedCardId && !dropTargetId) return
+    state = { ...state, draggedCardId: undefined, dropTargetId: undefined }
+    await notify()
+  }
   const cancel = (): void => {
     generation++
     controller?.abort()
+    moveController?.abort()
     state = {
       ...state,
       authorizationUrl: undefined,
       authorizing: false,
+      cardDraft: undefined,
       loading: false,
       savingCard: false,
     }
@@ -129,7 +174,10 @@ export const createInstance = async (
     state = { ...state, editError: undefined, editingCard: undefined }
   }
   const connect = async (): Promise<void> => {
+    const { board, cardDraft } = state
+    const draft = board && !cardDraft?.saving ? cardDraft : undefined
     cancel()
+    state = { ...state, cardDraft: draft }
     const requestGeneration = generation
     controller = new AbortController()
     const signal = AbortSignal.any([
@@ -237,6 +285,62 @@ export const createInstance = async (
         savingCard: false,
       }
     }
+    await notify()
+  }
+  const moveCard = async (listName: string): Promise<void> => {
+    const { board: currentBoard, draggedCardId } = state
+    const target = getMoveTarget(currentBoard, draggedCardId, listName)
+    if (!target) {
+      await clearDrag()
+      return
+    }
+    const { board, card, destination } = target
+    const { accountConnected, boardId } = state
+    const nextBoard = {
+      ...board,
+      cards: board.cards.map((item) =>
+        item.id === card.id ? { ...item, idList: destination.id } : item,
+      ),
+    }
+    const requestGeneration = generation
+    const requestController = new AbortController()
+    moveController = requestController
+    state = {
+      ...state,
+      board: nextBoard,
+      draggedCardId: undefined,
+      dropTargetId: undefined,
+      error: undefined,
+      loading: true,
+    }
+    await notify()
+    try {
+      await host.moveCard(card.id, destination.id, requestController.signal)
+      if (!disposed && generation === requestGeneration) {
+        host.session.set(boardId, { board: nextBoard })
+        state = { ...state, loading: false }
+      }
+    } catch (error) {
+      if (!disposed && generation === requestGeneration) {
+        state = {
+          ...state,
+          accountConnected: isReauthorizationRequired(error)
+            ? false
+            : Boolean(accountConnected),
+          board,
+          error:
+            error instanceof TrelloError
+              ? error.details
+              : {
+                  code: 'TRELLO_MOVE_FAILED',
+                  message:
+                    'This card could not be moved. Your board is unchanged; try again.',
+                },
+          loading: false,
+        }
+      }
+    }
+    if (moveController === requestController) moveController = undefined
     await notify()
   }
   const disconnect = async (): Promise<void> => {
@@ -417,6 +521,87 @@ export const createInstance = async (
     }
     await notify()
   }
+  const createCard = async (): Promise<void> => {
+    const { board, boardId, cardDraft, editingCard, loading } = state
+    if (
+      !board ||
+      editingCard ||
+      !cardDraft ||
+      cardDraft.saving ||
+      loading ||
+      !cardDraft.title.trim() ||
+      cardDraft.title.trim().length > 16_384 ||
+      board.lists.every((list) => list.id !== cardDraft.listId)
+    )
+      return
+    const requestGeneration = generation
+    controller = new AbortController()
+    state = {
+      ...state,
+      cardDraft: { ...cardDraft, error: undefined, saving: true },
+    }
+    try {
+      const card = await host.createCard(
+        cardDraft.listId,
+        cardDraft.title.trim(),
+        AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)]),
+      )
+      if (disposed || generation !== requestGeneration) return
+      const updated = {
+        ...board,
+        cards: [...board.cards, card].toSorted((a, b) => a.pos - b.pos),
+      }
+      host.session.set(boardId, { board: updated })
+      state = { ...state, board: updated, cardDraft: undefined }
+    } catch (error) {
+      if (disposed || generation !== requestGeneration) return
+      state = {
+        ...state,
+        cardDraft: {
+          ...cardDraft,
+          error:
+            error instanceof TrelloError
+              ? error.details.message
+              : 'The card could not be confirmed. Refresh the board before trying again. Your title has been kept.',
+          saving: false,
+        },
+      }
+    }
+    await notify()
+  }
+  const openNewCard = (listId: string): void => {
+    const { board, cardDraft, editingCard, loading } = state
+    if (
+      !editingCard &&
+      !loading &&
+      !cardDraft?.saving &&
+      board?.lists.some((list) => list.id === listId)
+    )
+      state = { ...state, cardDraft: { listId, saving: false, title: '' } }
+  }
+  const cancelCard = (): void => {
+    const { cardDraft } = state
+    if (!cardDraft?.saving) state = { ...state, cardDraft: undefined }
+  }
+  const handleInput = (name: string | undefined, value: string): void => {
+    const { cardDraft } = state
+    switch (name) {
+      case 'board-card-title':
+        if (cardDraft && !cardDraft.saving)
+          state = { ...state, cardDraft: { ...cardDraft, title: value } }
+        break
+      case 'board-id':
+        cancel()
+        state = { ...state, boardId: value, error: undefined, loading: false }
+        break
+      case 'edit-card-desc':
+        state = { ...state, editDesc: value, editError: undefined }
+        break
+      case 'edit-card-name':
+        state = { ...state, editError: undefined, editName: value }
+        break
+    }
+  }
   const openCard = (name: string | undefined): void => {
     if (!name?.startsWith('board-card:')) return
     const { board } = state
@@ -496,6 +681,42 @@ export const createInstance = async (
       })()
     },
     getContext: () => ({ focusRestore }),
+    handleBoardDragEnd(): Promise<void> {
+      return clearDrag()
+    },
+    handleBoardDragOver(name: string): void {
+      const { board, draggedCardId, dropTargetId, editingCard, loading } = state
+      const listId = name.startsWith('board-list:')
+        ? name.slice('board-list:'.length)
+        : ''
+      if (
+        loading ||
+        editingCard ||
+        !draggedCardId ||
+        !board?.lists.some(({ id }) => id === listId) ||
+        dropTargetId === listId
+      )
+        return
+      state = { ...state, dropTargetId: listId }
+      void notify()
+    },
+    handleBoardDragStart(name: string): void {
+      const { board, editingCard, loading } = state
+      const cardId = name.startsWith('board-card:')
+        ? name.slice('board-card:'.length)
+        : ''
+      if (
+        loading ||
+        editingCard ||
+        !board?.cards.some((card) => card.id === cardId)
+      )
+        return
+      state = { ...state, draggedCardId: cardId, dropTargetId: undefined }
+      void notify()
+    },
+    handleBoardDrop(name: string): Promise<void> {
+      return moveCard(name)
+    },
     handleDialogKeyDown(key: unknown): void {
       const { editingCard, savingCard } = state
       if (key !== 'Escape' || !editingCard || savingCard) return
@@ -504,23 +725,11 @@ export const createInstance = async (
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (event.type === 'input' && typeof event.value === 'string') {
-        switch (event.name) {
-          case 'board-id':
-            cancel()
-            state = {
-              ...state,
-              boardId: event.value,
-              error: undefined,
-              loading: false,
-            }
-            break
-          case 'edit-card-desc':
-            state = { ...state, editDesc: event.value, editError: undefined }
-            break
-          case 'edit-card-name':
-            state = { ...state, editError: undefined, editName: event.value }
-            break
-        }
+        handleInput(event.name, event.value)
+        return
+      }
+      if (event.type === 'submit' && event.name === 'board-create-card') {
+        void createCard()
         return
       }
       if (
@@ -538,9 +747,14 @@ export const createInstance = async (
         return
       }
       if (event.type === 'click') {
+        if (event.name?.startsWith('board-add:')) {
+          openNewCard(event.name.slice('board-add:'.length))
+          return
+        }
         const actions: Readonly<Record<string, () => void | Promise<void>>> = {
           'board-authorize': authorize,
           'board-cancel-authorization': cancel,
+          'board-cancel-card': cancelCard,
           'board-check-account': checkAccount,
           'board-disconnect-account': revoke,
         }
@@ -576,6 +790,24 @@ export const view: View<VirtualDomViewInstance> = {
   create: createInstance,
   displayName: 'Boards',
   eventListeners: [
+    {
+      name: 'handleBoardDragStart',
+      params: ['handleBoardDragStart', 'event.currentTarget.name'],
+    },
+    {
+      name: 'handleBoardDragOver',
+      params: ['handleBoardDragOver', 'event.currentTarget.name'],
+      preventDefault: true,
+    },
+    {
+      name: 'handleBoardDrop',
+      params: ['handleBoardDrop', 'event.currentTarget.name'],
+      preventDefault: true,
+    },
+    {
+      name: 'handleBoardDragEnd',
+      params: ['handleBoardDragEnd'],
+    },
     {
       name: 'handleDialogKeyDown',
       params: ['handleDialogKeyDown', 'event.key'],
