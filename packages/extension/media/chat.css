@@ -184,7 +184,7 @@
   outline-offset: -2px;
 }
 
-.ChatTaskList:focus-visible .ChatTaskFocused {
+.ChatTaskFocused {
   background: var(--ChatHoverBackground);
 }
 
