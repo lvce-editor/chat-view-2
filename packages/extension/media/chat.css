@@ -179,6 +179,15 @@
   padding: 0 6px 8px;
 }
 
+.ChatTaskList:focus-visible {
+  outline: 2px solid var(--ChatFocusBorder, var(--ChatForeground));
+  outline-offset: -2px;
+}
+
+.ChatTaskList:focus-visible .ChatTaskFocused {
+  background: var(--ChatHoverBackground);
+}
+
 .ChatTaskItem {
   display: flex;
   flex: 0 0 auto;

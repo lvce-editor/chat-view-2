@@ -147,6 +147,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
     ctrlKey?: unknown,
     metaKey?: unknown,
     shiftKey?: unknown,
+    targetName?: unknown,
   ) => void
   readonly handleModelPickerOutsideClick: (
     name: unknown,
@@ -721,6 +722,7 @@ export const createInstance = async (
     copiedMessageId: '',
     draft: storedDraft ?? (typeof saved.draft === 'string' ? saved.draft : ''),
     errorMessage,
+    focusedTaskId: resolvedTasks[0]?.id,
     focusMode: chatRoute || (focusModeEnabled && (await getFocusMode())),
     focusModeEnabled,
     followUpBehavior,
@@ -750,6 +752,8 @@ export const createInstance = async (
     writeDraft(draftWorkspace, state.selectedTask?.id, state.draft)
   let selectedTaskRequest = 0
   let focusComposerRequest = false
+  let focusArchiveRequest = false
+  let focusTaskListRequest = false
   let preserveComposerValue = false
   let windowTitleQueue = Promise.resolve()
   let windowTitleActive = false
@@ -1436,8 +1440,10 @@ export const createInstance = async (
     getContext(): Readonly<Record<string, boolean>> {
       return {
         'chat2.composerFocus': state.composerFocused,
+        'chat2.focusArchiveRequest': focusArchiveRequest,
         'chat2.focusComposerRequest': focusComposerRequest,
         'chat2.focusMode': state.focusMode,
+        'chat2.focusTaskListRequest': focusTaskListRequest,
         'chat2.taskRunning': state.selectedTask?.status === 'running',
       }
     },
@@ -1733,6 +1739,9 @@ export const createInstance = async (
           taskRefreshRequest++
           archivedTaskIds.add(id)
           state.tasks = state.tasks.filter((task) => task.id !== id)
+          if (state.focusedTaskId === id) {
+            state.focusedTaskId = state.tasks[0]?.id
+          }
           state.errorMessage = ''
         } catch (error) {
           state.errorMessage =
@@ -1832,7 +1841,54 @@ export const createInstance = async (
       ctrlKey?: unknown,
       metaKey?: unknown,
       shiftKey?: unknown,
+      targetName?: unknown,
     ): void {
+      if (targetName === 'task-list' && key === 'Tab' && !shiftKey) {
+        focusArchiveRequest = !focusArchiveRequest
+        void context?.requestRerender()
+        return
+      }
+      if (
+        typeof targetName === 'string' &&
+        targetName.startsWith('archive-task:') &&
+        key === 'Tab'
+      ) {
+        if (shiftKey) {
+          focusTaskListRequest = !focusTaskListRequest
+        } else {
+          focusComposerRequest = !focusComposerRequest
+        }
+        void context?.requestRerender()
+        return
+      }
+      if (
+        targetName === 'task-list' &&
+        (key === 'ArrowDown' || key === 'ArrowUp')
+      ) {
+        if (state.tasks.length === 0) {
+          return
+        }
+        const currentIndex = state.tasks.findIndex(
+          (task) => task.id === state.focusedTaskId,
+        )
+        const startIndex = currentIndex === -1 ? 0 : currentIndex
+        const nextIndex =
+          key === 'ArrowDown'
+            ? Math.min(state.tasks.length - 1, startIndex + 1)
+            : Math.max(0, startIndex - 1)
+        state.focusedTaskId = state.tasks[nextIndex].id
+        void context?.requestRerender()
+        return
+      }
+      if (targetName === 'task-list' && (key === 'Enter' || key === ' ')) {
+        const focusedTask = state.tasks.find(
+          (task) => task.id === state.focusedTaskId,
+        )
+        if (focusedTask) {
+          void openTask(focusedTask.id)
+        }
+        return
+      }
       const zoomCommand = getZoomCommand(key, ctrlKey, metaKey, shiftKey)
       if (zoomCommand) {
         // The host's Ctrl/Cmd minus binding already handles zoom out. Route
@@ -2027,6 +2083,23 @@ export const createInstance = async (
       oldContext: Readonly<Record<string, boolean>>,
       newContext: Readonly<Record<string, boolean>>,
     ): string {
+      if (
+        (oldContext['chat2.focusTaskListRequest'] ?? false) !==
+        (newContext['chat2.focusTaskListRequest'] ?? false)
+      ) {
+        return '.ChatTaskList'
+      }
+      if (
+        (oldContext['chat2.focusArchiveRequest'] ?? false) !==
+        (newContext['chat2.focusArchiveRequest'] ?? false)
+      ) {
+        const taskId = state.tasks.some(
+          (task) => task.id === state.focusedTaskId,
+        )
+          ? state.focusedTaskId
+          : state.tasks[0]?.id
+        return taskId ? `button[name="archive-task:${taskId}"]` : ''
+      }
       return (oldContext['chat2.focusComposerRequest'] ?? false) ===
         (newContext['chat2.focusComposerRequest'] ?? false)
         ? ''

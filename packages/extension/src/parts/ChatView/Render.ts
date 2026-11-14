@@ -61,28 +61,53 @@ const getStatusLabel = (task: ChatTask): string => {
 const renderTask = (
   task: ChatTask,
   taskOpenMode: ChatViewState['taskOpenMode'],
+  focusedTaskId: ChatViewState['focusedTaskId'],
 ): Dom.Node => {
   const status = getStatusLabel(task)
-  return Dom.div('ChatTaskItem', [
-    Dom.button(
-      `task:${task.id}`,
-      status ? `${task.title} · ${status}` : task.title,
-      `ChatTaskButton ChatTaskStatus-${task.status}`,
-      {
-        onClick: 'handleTaskClick',
-        ...(taskOpenMode === 'mousedown' && {
-          onMouseDown: 'handleTaskMouseDown',
-        }),
-      },
-    ),
-    Dom.iconButton(
-      `archive-task:${task.id}`,
-      'ChatTaskArchiveButton',
-      'ChatTaskArchiveIcon',
-      `Archive ${task.title}`,
-      'Archive',
-    ),
-  ])
+  const focused = task.id === focusedTaskId
+  return Dom.node(
+    VirtualDomElements.Div,
+    {
+      className: mergeClassNames(
+        'ChatTaskItem',
+        focused ? 'ChatTaskFocused' : '',
+      ),
+      role: 'treeitem',
+    },
+    [
+      Dom.node(
+        VirtualDomElements.Button,
+        {
+          buttonType: 'button',
+          className: mergeClassNames(
+            'ChatTaskButton',
+            `ChatTaskStatus-${task.status}`,
+          ),
+          id: `chat-task-${task.id}`,
+          name: `task:${task.id}`,
+          onClick: 'handleTaskClick',
+          ...(taskOpenMode === 'mousedown' && {
+            onMouseDown: 'handleTaskMouseDown',
+          }),
+          tabIndex: -1,
+        },
+        [Dom.textNode(status ? `${task.title} · ${status}` : task.title)],
+      ),
+      Dom.node(
+        VirtualDomElements.Button,
+        {
+          ariaLabel: `Archive ${task.title}`,
+          buttonType: 'button',
+          className: 'ChatTaskArchiveButton',
+          name: `archive-task:${task.id}`,
+          onClick: 'handleClick',
+          tabIndex: focused ? 0 : -1,
+          title: 'Archive',
+        },
+        [Dom.div('ChatTaskArchiveIcon', [])],
+      ),
+    ],
+  )
 }
 
 const renderTaskList = (
@@ -90,6 +115,8 @@ const renderTaskList = (
   fontFamily: string,
   fontSize: string,
   taskOpenMode: ChatViewState['taskOpenMode'],
+  focusedTaskId: ChatViewState['focusedTaskId'],
+  ariaLabel: string,
 ): Dom.Node => {
   if (tasks.length === 0) {
     return Dom.div('ChatEmptyState', [
@@ -101,9 +128,22 @@ const renderTaskList = (
       ]),
     ])
   }
-  return Dom.div(
-    `ChatTaskList ${getTaskListStyleClass(fontFamily, fontSize)}`,
-    tasks.map((task) => renderTask(task, taskOpenMode)),
+  const activeTaskId =
+    tasks.find((task) => task.id === focusedTaskId)?.id || tasks[0].id
+  return Dom.node(
+    VirtualDomElements.Div,
+    {
+      'aria-activedescendant': `chat-task-${activeTaskId}`,
+      ariaLabel,
+      className: mergeClassNames(
+        'ChatTaskList',
+        getTaskListStyleClass(fontFamily, fontSize),
+      ),
+      name: 'task-list',
+      role: 'tree',
+      tabIndex: 0,
+    },
+    tasks.map((task) => renderTask(task, taskOpenMode, activeTaskId)),
   )
 }
 
@@ -1297,7 +1337,14 @@ const getAiNativeThemeClassName = (
 }
 
 const renderListView = (state: Readonly<ChatViewState>): Dom.Node => {
-  const { errorMessage, fontFamily, fontSize, taskOpenMode, tasks } = state
+  const {
+    errorMessage,
+    focusedTaskId,
+    fontFamily,
+    fontSize,
+    taskOpenMode,
+    tasks,
+  } = state
   return Dom.div(
     getRootClassName(state, 'ChatListView'),
     [
@@ -1314,7 +1361,14 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.Node => {
       ...(errorMessage
         ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
         : []),
-      renderTaskList(tasks, fontFamily, fontSize, taskOpenMode),
+      renderTaskList(
+        tasks,
+        fontFamily,
+        fontSize,
+        taskOpenMode,
+        focusedTaskId,
+        'Tasks',
+      ),
       renderComposer(state),
     ],
     {
@@ -1585,6 +1639,7 @@ const renderAiNativeSessions = (
   state: Readonly<ChatViewState>,
 ): readonly Dom.Node[] => {
   const {
+    focusedTaskId,
     fontFamily,
     fontSize,
     sessionsListVisible,
@@ -1605,7 +1660,14 @@ const renderAiNativeSessions = (
         Dom.heading(1, 'ChatTitle', 'Sessions'),
         Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
       ]),
-      renderTaskList(tasks, fontFamily, fontSize, taskOpenMode),
+      renderTaskList(
+        tasks,
+        fontFamily,
+        fontSize,
+        taskOpenMode,
+        focusedTaskId,
+        'Chat sessions',
+      ),
     ]),
     Dom.node(VirtualDomElements.Div, {
       ariaLabel: 'Resize sessions panel',
