@@ -33,6 +33,7 @@ export interface ChatViewState {
   readonly copiedMessageId: string
   readonly draft: string
   readonly errorMessage: string
+  readonly focusedTaskId?: string
   readonly focusMode: boolean
   readonly focusModeEnabled: boolean
   readonly followUpBehavior?: 'queue' | 'steer'

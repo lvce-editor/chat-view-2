@@ -86,6 +86,7 @@ export const view: View<ActiveChatViewInstance, ChatViewState> = {
         'event.ctrlKey',
         'event.metaKey',
         'event.shiftKey',
+        'event.target.name',
       ],
     },
     {

@@ -484,6 +484,20 @@ test('renders a focused task list, model control, and composer', async () => {
 
   expect(getNodesByClass(dom, 'ChatTaskButton')).toHaveLength(20)
   expect(getNodesByClass(dom, 'ChatTaskArchiveButton')).toHaveLength(20)
+  expect(getNodesByClass(dom, 'ChatTaskList')[0]).toEqual(
+    expect.objectContaining({
+      'aria-activedescendant': 'chat-task-mock-task-1',
+      ariaLabel: 'Tasks',
+      name: 'task-list',
+      role: 'tree',
+      tabIndex: 0,
+    }),
+  )
+  expect(getNodesByClass(dom, 'ChatTaskButton')[0]).toEqual(
+    expect.objectContaining({ id: 'chat-task-mock-task-1', tabIndex: -1 }),
+  )
+  expect(getNodesByClass(dom, 'ChatTaskArchiveButton')[0].tabIndex).toBe(0)
+  expect(getNodesByClass(dom, 'ChatTaskArchiveButton')[1].tabIndex).toBe(-1)
   expect(dom).toContainEqual(
     expect.objectContaining({
       ariaLabel: 'Archive Add worker memory usage',
@@ -535,6 +549,27 @@ test('renders a focused task list, model control, and composer', async () => {
   const submitIndex = dom.findIndex((node) => node.name === 'submit')
   expect(spacerIndex).toBeLessThan(modelIndex)
   expect(modelIndex).toBeLessThan(submitIndex)
+})
+
+test('moves the active task through the task list with arrow keys', async () => {
+  const instance = await createTestInstance()
+
+  instance.handleKeyDown('ArrowDown', false, false, false, 'task-list')
+  expect(instance.getState().focusedTaskId).toBe('mock-task-2')
+  expect(getNodesByClass(instance.render(), 'ChatTaskList')[0]).toEqual(
+    expect.objectContaining({
+      'aria-activedescendant': 'chat-task-mock-task-2',
+    }),
+  )
+  expect(
+    getNodesByClass(instance.render(), 'ChatTaskArchiveButton')[0].tabIndex,
+  ).toBe(-1)
+  expect(
+    getNodesByClass(instance.render(), 'ChatTaskArchiveButton')[1].tabIndex,
+  ).toBe(0)
+
+  instance.handleKeyDown('ArrowUp', false, false, false, 'task-list')
+  expect(instance.getState().focusedTaskId).toBe('mock-task-1')
 })
 
 test('opens a task on primary mousedown by default', async () => {
@@ -2627,6 +2662,7 @@ test('registers model picker keydown handling on the view root', async () => {
       'event.ctrlKey',
       'event.metaKey',
       'event.shiftKey',
+      'event.target.name',
     ],
   })
   expect(instance.render()[0]).toEqual(
