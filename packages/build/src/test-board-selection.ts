@@ -58,23 +58,24 @@ export const testBoardSelection = async (
       json: {
         id: '22222222',
         name: 'Engineering',
-        lists: [{ id: 'todo', name: 'Todo', pos: 1 }],
+        lists: [{ id: 'list-1', name: 'Todo', pos: 1 }],
         cards: [
           {
-            id: 'one',
-            idList: 'todo',
-            name: 'Discuss design',
+            coverDataUrl:
+              'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
+            id: 'card-1',
+            idList: 'list-1',
+            name: 'Card with cover',
             pos: 1,
             badges: { comments: 3, attachments: 1 },
           },
           {
-            id: 'two',
-            idList: 'todo',
+            id: 'card-2',
+            idList: 'list-1',
             name: 'No activity',
             pos: 2,
             badges: { comments: 0, attachments: 0 },
           },
-          { id: 'three', idList: 'todo', name: 'Older response', pos: 3 },
         ],
       },
     })
@@ -173,16 +174,12 @@ export const testBoardSelection = async (
       '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name&list_fields=name%2Cpos&lists=open',
     ])
     assert.deepEqual(proxiedLoads, [])
-    const refresh = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'GET' &&
-        response.url().startsWith('https://api.trello.com/1/boards/22222222?'),
-    )
-    await page
-      .getByRole('button', { name: 'Refresh board', exact: true })
-      .click()
-    await refresh
-    assert.equal(directLoads.length, 2)
+    const cover = page.locator('.BoardCardCover')
+    await cover.waitFor({ state: 'visible' })
+    const coverSrc = await cover.getAttribute('src')
+    assert.ok(coverSrc)
+    assert.match(coverSrc, /^data:image\/png;base64,/u)
+    await page.getByText('Card with cover', { exact: true }).waitFor()
     const badges = page.locator('.BoardCardBadges')
     await badges.waitFor()
     assert.equal(await badges.count(), 1)
@@ -199,6 +196,16 @@ export const testBoardSelection = async (
       '1',
     )
     assert.equal(await page.locator('.BoardCardBadgeIcon').count(), 2)
+    const refresh = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        response.url().startsWith('https://api.trello.com/1/boards/22222222?'),
+    )
+    await page
+      .getByRole('button', { name: 'Refresh board', exact: true })
+      .click()
+    await refresh
+    assert.equal(directLoads.length, 2)
     assert.deepEqual(proxiedLoads, [])
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })

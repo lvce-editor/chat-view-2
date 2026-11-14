@@ -6,7 +6,7 @@ import {
 export interface TrelloCard {
   readonly attachmentCount?: number
   readonly commentCount?: number
-  readonly coverUrl?: string
+  readonly coverDataUrl?: string
   readonly desc: string
   readonly id: string
   readonly idList: string
@@ -123,18 +123,9 @@ const isList = (value: unknown): value is TrelloList =>
 const isCard = (
   value: unknown,
 ): value is TrelloCard & {
-  readonly cover?: unknown
   readonly badges?: unknown
+  readonly coverDataUrl?: unknown
 } => isList(value) && 'idList' in value && typeof value.idList === 'string'
-
-const isTrelloCoverUrl = (value: unknown): value is string => {
-  return (
-    typeof value === 'string' &&
-    URL.canParse(value) &&
-    new URL(value).protocol === 'https:' &&
-    new URL(value).hostname === 'trello.com'
-  )
-}
 
 const normalizeCount = (value: unknown): number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0
@@ -143,8 +134,7 @@ const normalizeCount = (value: unknown): number =>
 
 const normalizeCard = (value: unknown): TrelloCard | undefined => {
   if (!isCard(value)) return undefined
-  const cover = isRecord(value.cover) ? value.cover : undefined
-  const coverUrl = cover?.url
+  const { coverDataUrl } = value
   const badges = isRecord(value.badges) ? value.badges : undefined
   return {
     attachmentCount: normalizeCount(badges?.attachments),
@@ -154,7 +144,8 @@ const normalizeCard = (value: unknown): TrelloCard | undefined => {
     idList: value.idList,
     name: value.name,
     pos: value.pos,
-    ...(isTrelloCoverUrl(coverUrl) && { coverUrl }),
+    ...(typeof coverDataUrl === 'string' &&
+      coverDataUrl.startsWith('data:image/') && { coverDataUrl }),
   }
 }
 

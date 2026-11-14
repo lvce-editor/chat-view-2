@@ -63,14 +63,13 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
       cards: [
         ...board.cards,
         {
-          cover: { url: 'https://trello.com/1/cards/card/cover' },
+          coverDataUrl: 'data:image/webp;base64,dGVzdA==',
           id: 'covered',
           idList: 'now',
           name: 'Cover',
           pos: 3,
         },
         {
-          cover: { url: 'https://evil.test/image.png' },
           id: 'unsafe',
           idList: 'now',
           name: 'No cover',
@@ -91,11 +90,11 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
     'Cover',
     'No cover',
   ])
-  expect(result.cards.find((card) => card.name === 'Cover')?.coverUrl).toBe(
-    'https://trello.com/1/cards/card/cover',
+  expect(result.cards.find((card) => card.name === 'Cover')?.coverDataUrl).toBe(
+    'data:image/webp;base64,dGVzdA==',
   )
   expect(
-    result.cards.find((card) => card.name === 'No cover')?.coverUrl,
+    result.cards.find((card) => card.name === 'No cover')?.coverDataUrl,
   ).toBeUndefined()
   expect(request).toHaveBeenNthCalledWith(
     1,

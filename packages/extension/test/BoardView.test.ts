@@ -192,7 +192,7 @@ test('groups cards without dropping empty columns', () => {
     cards: [
       ...board.cards,
       {
-        coverUrl: 'https://trello.com/1/cards/card/cover',
+        coverDataUrl: 'data:image/webp;base64,dGVzdA==',
         desc: '',
         id: 'covered',
         idList: 'todo',
@@ -216,7 +216,7 @@ test('groups cards without dropping empty columns', () => {
     dom.filter((node) => String(node.className).includes('BoardCardButton')),
   ).toHaveLength(2)
   expect(JSON.stringify(dom)).toContain('BoardCardCover')
-  expect(JSON.stringify(dom)).toContain('https://trello.com/1/cards/card/cover')
+  expect(JSON.stringify(dom)).toContain('data:image/webp;base64,dGVzdA==')
   expect(JSON.stringify(dom)).toContain('A task')
 })
 

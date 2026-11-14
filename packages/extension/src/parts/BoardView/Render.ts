@@ -373,13 +373,13 @@ export const render = (state: BoardState): Dom.Node => {
           onClick: 'handleClick',
         },
         [
-          ...(card.coverUrl
+          ...(card.coverDataUrl
             ? [
                 Dom.node(VirtualDomElements.Img, {
                   alt: '',
                   className: 'BoardCardCover',
                   loading: 'lazy',
-                  src: card.coverUrl,
+                  src: card.coverDataUrl,
                 }),
               ]
             : []),
