@@ -218,6 +218,8 @@ test('groups cards without dropping empty columns', () => {
   expect(JSON.stringify(dom)).toContain('BoardCardCover')
   expect(JSON.stringify(dom)).toContain('data:image/webp;base64,dGVzdA==')
   expect(JSON.stringify(dom)).toContain('A task')
+  expect(JSON.stringify(dom)).toContain('Todo (2)')
+  expect(JSON.stringify(dom)).toContain('Empty (0)')
 })
 
 test('opens a card editor and updates the board only after Trello confirms the save', async () => {

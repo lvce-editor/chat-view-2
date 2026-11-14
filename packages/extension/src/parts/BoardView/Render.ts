@@ -444,7 +444,11 @@ export const render = (state: BoardState): Dom.Node => {
                 VirtualDomElements.Section,
                 { ariaLabel: list.name, className: 'BoardColumn' },
                 [
-                  Dom.heading(2, 'BoardColumnTitle', list.name),
+                  Dom.heading(
+                    2,
+                    'BoardColumnTitle',
+                    `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
+                  ),
                   Dom.div('BoardCards', [
                     ...(cardsByList.get(list.id) || [
                       Dom.div('BoardEmptyList', [Dom.textNode('No cards')]),
