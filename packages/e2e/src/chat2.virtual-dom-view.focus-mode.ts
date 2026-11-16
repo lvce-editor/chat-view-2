@@ -36,6 +36,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   const sessions = Locator('.ChatSessions')
   await expect(sessions).toBeVisible()
   const newChatButton = Locator('.ChatSessions .ChatNewTaskButton')
+  const detailHeader = Locator('.ChatDetailHeader')
   const headerFocusButton = Locator('.ChatDetailHeader .ChatFocusModeButton')
   const headerNewChatButton = Locator('.ChatDetailHeader .ChatNewTaskButton')
   await expect(newChatButton).toHaveText('New chat')
@@ -48,6 +49,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   const emptyTitle = Locator('.ChatDetailView .ChatEmptyTitle')
   const newConversationMessages = Locator('.ChatConversationBody .ChatMessages')
   await expect(emptyTitle).toBeVisible()
+  await expect(detailHeader).toHaveCount(0)
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
   await expect(newConversationMessages).toHaveCSS('flex', '0 0 auto')
   await expect(newConversationMessages).toHaveCSS('overflow-y', 'visible')
@@ -63,6 +65,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   const userMessage = Locator('.ChatMessageUser')
   await expect(userMessage).toContainText('Center the new chat composer')
   await expect(emptyTitle).toHaveCount(0)
+  await expect(detailHeader).toBeVisible()
   const detailComposer = Locator('.ChatDetailView .ChatComposer')
   const composerAreaInConversation = Locator(
     '.ChatConversationBody > .ChatComposerArea',
@@ -89,6 +92,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   // eslint-disable-next-line e2e/no-direct-click
   await newChatButton.click()
   await expect(browserTabTitle).toHaveText('Chat 2 - Lvce Editor')
+  await expect(detailHeader).toHaveCount(0)
   await expect(emptyTitle).toBeVisible()
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
   await expect(composerInput).toBeFocused()

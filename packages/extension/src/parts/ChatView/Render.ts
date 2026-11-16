@@ -1757,18 +1757,12 @@ const renderDom = (
       : Dom.div(
           'ChatView ChatDetailView',
           [
-            Dom.div('ChatDetailHeader', [
-              Dom.heading(1, 'ChatTitle', 'Chat'),
-              Dom.button(
-                'toggle-sessions',
-                'Sessions',
-                'ChatSessionsToggleButton',
-                {
-                  ariaExpanded: sessionsVisible,
-                },
-              ),
-              ...renderFocusModeButton(state),
-            ]),
+            Dom.button(
+              'toggle-sessions',
+              'Sessions',
+              'ChatSessionsToggleButton ChatWelcomeSessionsToggleButton',
+              { ariaExpanded: sessionsVisible },
+            ),
             Dom.div('ChatConversationBody', [
               Dom.div('ChatMessages', [
                 Dom.div('ChatMessagesContent', [

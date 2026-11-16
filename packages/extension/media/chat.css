@@ -1519,6 +1519,10 @@
     display: inline-flex;
     flex: 0 0 auto;
   }
+  .ChatWelcomeSessionsToggleButton {
+    align-self: flex-start;
+    margin: 12px;
+  }
   .ChatDetailHeaderFocus {
     padding-inline: 12px;
   }
