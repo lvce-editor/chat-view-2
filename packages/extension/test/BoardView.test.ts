@@ -646,8 +646,9 @@ test('retains failed card titles, supports cancel and ignores invalid lists', as
   const host = createHost()
   jest.mocked(host.createCard).mockRejectedValue(
     new TrelloError({
-      code: 'WRITE',
-      message: 'Reconnect Trello to allow changes.',
+      code: 'TRELLO_WRITE_DENIED',
+      message:
+        'Trello rejected this card. Check that you can add cards to this board. If you can, disconnect and reconnect Trello to refresh its access. Your title is still here so you can retry.',
     }),
   )
   const view = await openBoard(host)
@@ -662,7 +663,12 @@ test('retains failed card titles, supports cancel and ignores invalid lists', as
   await view.handleEvent?.({ name: 'board-create-card', type: 'submit' })
   await flush()
   expect(JSON.stringify(await view.render())).toContain('Keep this title')
-  expect(JSON.stringify(await view.render())).toContain('Reconnect Trello')
+  expect(JSON.stringify(await view.render())).toContain(
+    'Check that you can add cards to this board. If you can, disconnect and reconnect Trello to refresh its access.',
+  )
+  expect(JSON.stringify(await view.render())).toContain(
+    'Your title is still here so you can retry.',
+  )
   await view.handleEvent?.({ name: 'board-cancel-card', type: 'click' })
   expect(JSON.stringify(await view.render())).not.toContain('Keep this title')
 })
