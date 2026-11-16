@@ -29,6 +29,12 @@ const runImageGenerationStep: AgentBackend['runStep'] = async (options) => {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
+const failImageGenerationStep: AgentBackend['runStep'] = async (options) => {
+  await options.onImageGenerationStart?.()
+  throw new Error('Image generation failed')
+}
+
 test('runs a multi-step tool loop and records a compact event history', async () => {
   const trace: unknown[] = []
   const runStep = jest
@@ -516,6 +522,43 @@ test('shows and clears image generation activity during a response', async () =>
       (event) => event.type === 'assistant-message' && event.images?.length,
     ),
   ).toBe(true)
+})
+
+test('clears the image placeholder when image generation fails', async () => {
+  const backend: AgentBackend = {
+    async listModels() {
+      return []
+    },
+    runStep: failImageGenerationStep,
+  }
+  const toolHost: AgentToolHost = {
+    beginTurn() {},
+    async execute() {
+      return { content: '', isError: false }
+    },
+    getChangedFiles() {
+      return []
+    },
+    getDefinitions() {
+      return []
+    },
+    async getWorkspaceContext() {
+      return 'Workspace'
+    },
+    async revert() {
+      return []
+    },
+  }
+  const api = createAgentChatApi({
+    backend,
+    store: createMemoryTaskStore(),
+    toolHost,
+  })
+
+  const task = await api.createTask('Draw a cat', 'gpt-test')
+
+  expect(task.status).toBe('failed')
+  expect(task.imageGenerationActive).toBeUndefined()
 })
 
 test.each(['verification', 'completion notification'])(

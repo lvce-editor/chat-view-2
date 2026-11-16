@@ -19,16 +19,9 @@ export const test: Test = async (api) => {
   const timestamp = new Date().toISOString()
   const runningTask = {
     createdAt: timestamp,
-    events: [
-      {
-        id: 'image-generation-started',
-        label: 'Generating image',
-        status: 'running',
-        timestamp,
-        type: 'activity',
-      },
-    ],
+    events: [],
     id: 'image-generation-placeholder',
+    imageGenerationActive: true,
     modelId: 'gpt-test',
     status: 'running',
     title: 'Image generation',
