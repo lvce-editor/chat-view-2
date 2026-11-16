@@ -125,6 +125,17 @@ test('makes AI-native layout switching available by default', async () => {
   expect(manifest.activation).toContain('onCommand:chat2.toggleSessionsList')
 })
 
+test('contributes the Chat 2 component state copy command', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.commands).toContainEqual({
+    id: 'chat2.copyComponentState',
+    label: 'Chat 2: Copy Component State',
+  })
+  expect(manifest.activation).toContain('onCommand:chat2.copyComponentState')
+})
+
 test('contributes selectable AI-native theme presets', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))

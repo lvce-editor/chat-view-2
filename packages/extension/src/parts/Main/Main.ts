@@ -16,6 +16,7 @@ import {
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { view, viewId } from '../ChatView/ChatView.ts'
 import {
+  copyActiveChatViewComponentState,
   getActiveChatQuickPickItems,
   newChatInActiveChatViewInstance,
   openActiveChatQuickPickItem,
@@ -133,6 +134,12 @@ const activateMain = async (): Promise<void> => {
       return toggleActiveChatViewSessionsList()
     },
     id: 'chat2.toggleSessionsList',
+  })
+  registerCommand({
+    execute() {
+      return copyActiveChatViewComponentState()
+    },
+    id: 'chat2.copyComponentState',
   })
   registerCommand({
     execute() {
