@@ -1,4 +1,4 @@
-import { access, cp, mkdir, readFile } from 'node:fs/promises'
+import { access, cp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path, { join } from 'node:path'
 import './build.ts'
@@ -116,9 +116,25 @@ await cp(
 
 const boardPath = path.join(root, 'dist', 'board')
 await mkdir(boardPath, { recursive: true })
-await cp(
-  path.join(root, 'dist', 'index.html'),
-  path.join(boardPath, 'index.html'),
+const html = await readFile(path.join(root, 'dist', 'index.html'), 'utf8')
+// Select the board before view activation; the host otherwise restores Explorer.
+const configPattern =
+  /(<script id="Config" type="application\/json">)([\s\S]*?)(<\/script>)/
+const configMatch = configPattern.exec(html)
+if (!configMatch) {
+  throw new Error('Expected static HTML to contain the runtime Config script')
+}
+const config = JSON.parse(configMatch[2])
+config.initialLayout = {
+  ...config.initialLayout,
+  sideBarView: 'chat2.views.board',
+  sideBarVisible: true,
+}
+const boardHtml = html.replace(
+  configPattern,
+  (_, start: string, _content: string, end: string) =>
+    `${start}\n${JSON.stringify(config, null, 2)}\n${end}`,
 )
+await writeFile(path.join(boardPath, 'index.html'), boardHtml)
 
 await assertStaticChatExtension(commitHash)
