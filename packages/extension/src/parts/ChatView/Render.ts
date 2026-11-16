@@ -14,8 +14,7 @@ import type { ChatViewState } from './ChatViewState.ts'
 import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 import { applyLayoutClasses } from './ApplyLayoutClasses.ts'
-import { formatMessageDate } from './FormatMessageDate.ts'
-import { formatWorkDuration } from './FormatWorkDuration.ts'
+import { formatMessageDate, formatWorkDuration } from './FormatMessageDate.ts'
 import { getMathTokens } from './MathExpressions.ts'
 
 const fileUriPattern = /^(?:file|memfs|remote-ssh|html|opfs):\/\//u

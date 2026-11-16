@@ -71,7 +71,6 @@ import {
   userMessageFontFamilyPreference,
 } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
-import { getWorkDurationSeconds } from './FormatWorkDuration.ts'
 import { getMathExpressions, type MathExpression } from './MathExpressions.ts'
 import { getCodeBlockText, render, renderCss } from './Render.ts'
 import { readTaskOpenMode } from './TaskOpenMode.ts'
@@ -298,6 +297,30 @@ const toImageFile = async (value: unknown): Promise<File | undefined> => {
 
 const isWorking = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'
+}
+
+export const getWorkDurationSeconds = (
+  task: ChatTask,
+  now = Date.now(),
+): number => {
+  const { events } = task
+  const startEvent =
+    events.findLast(
+      (event) => event.type === 'status' && event.status === 'running',
+    ) ?? events.findLast((event) => event.type === 'user-message')
+  const startAt = Date.parse(startEvent?.timestamp ?? task.createdAt)
+  const endEvent = events.findLast(
+    (event) =>
+      event.type === 'status' &&
+      event.status !== 'running' &&
+      event.status !== 'stopping',
+  )
+  const endedAt = isWorking(task)
+    ? now
+    : Date.parse(endEvent?.timestamp ?? startEvent?.timestamp ?? task.createdAt)
+  return Number.isFinite(startAt) && Number.isFinite(endedAt)
+    ? Math.max(0, Math.floor((endedAt - startAt) / 1000))
+    : 0
 }
 
 const getEventString = (event: Readonly<ViewEvent>): string => {

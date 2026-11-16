@@ -1,9 +1,7 @@
 import { expect, test } from '@jest/globals'
 import type { ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
-import {
-  formatWorkDuration,
-  getWorkDurationSeconds,
-} from '../src/parts/ChatView/FormatWorkDuration.ts'
+import { getWorkDurationSeconds } from '../src/parts/ChatView/CreateInstance.ts'
+import { formatWorkDuration } from '../src/parts/ChatView/FormatMessageDate.ts'
 
 const baseTask: ChatTask = {
   createdAt: '2026-07-15T12:00:00.000Z',

@@ -4,9 +4,9 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  // Current-main baseline: 375,775 bytes; account storage: 384,123 (+8,348).
-  // Allow the observed 1,414-byte CI variance and 1,463 bytes of headroom.
-  ['chatMain.js', 387_000],
+  // Current main: 386,864 bytes; work-duration display: 387,134 (+270).
+  // Keep the size gate with 166 bytes of headroom for this measured increase.
+  ['chatMain.js', 387_300],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],
