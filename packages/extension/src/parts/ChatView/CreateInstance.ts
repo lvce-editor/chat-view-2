@@ -529,8 +529,8 @@ export const openActiveChatQuickPickItem = async (
 }
 
 const activeRuns = new Map<string, AbortController>()
-const pendingRuns = new Map<string, Set<AbortController>>()
 const runCompletions = new Map<string, Promise<void>>()
+const stoppedRuns = new Set<string>()
 
 interface MathRenderCache {
   readonly pending: Map<string, Promise<void>>
@@ -1227,9 +1227,6 @@ export const createInstance = async (
       state.queuedMessages = [...(state.queuedMessages || []), queuedMessage]
       // Each follow-up owns a place in the chain before persistence yields.
       runningTaskId = queuedMessage.taskId
-      const pending = pendingRuns.get(runningTaskId) || new Set()
-      pending.add(controller)
-      pendingRuns.set(runningTaskId, pending)
       runCompletions.set(runningTaskId, completion.promise)
       if (followUpBehavior === 'steer') activeRuns.get(runningTaskId)?.abort()
     }
@@ -1250,6 +1247,7 @@ export const createInstance = async (
       if (
         disposed ||
         controller.signal.aborted ||
+        (initialTask && stoppedRuns.has(initialTask.id)) ||
         (initialTask && archivedTaskIds.has(initialTask.id))
       )
         return
@@ -1264,11 +1262,6 @@ export const createInstance = async (
       }
       runningTaskId = selectedTask?.id
       if (runningTaskId) {
-        const pending = pendingRuns.get(runningTaskId)
-        pending?.delete(controller)
-        if (pending?.size === 0) {
-          pendingRuns.delete(runningTaskId)
-        }
         activeRuns.set(runningTaskId, controller)
         if (!runCompletions.has(runningTaskId))
           runCompletions.set(runningTaskId, completion.promise)
@@ -1311,11 +1304,6 @@ export const createInstance = async (
           (item) => item !== queuedMessage,
         )
       if (queuedMessage) {
-        const pending = pendingRuns.get(queuedMessage.taskId)
-        pending?.delete(controller)
-        if (pending?.size === 0) {
-          pendingRuns.delete(queuedMessage.taskId)
-        }
         await context?.requestRerender()
       }
       releaseReservation()
@@ -1327,6 +1315,7 @@ export const createInstance = async (
         runCompletions.get(runningTaskId) === completion.promise
       ) {
         runCompletions.delete(runningTaskId)
+        stoppedRuns.delete(runningTaskId)
       }
       completion.resolve()
     }
@@ -1657,22 +1646,23 @@ export const createInstance = async (
       }
       if (event.name === 'stop') {
         const taskId = state.selectedTask?.id
-        const pending = taskId ? pendingRuns.get(taskId) : undefined
         const activeRun = taskId ? activeRuns.get(taskId) : undefined
-        if (state.selectedTask && !activeRun && !pending?.size) {
+        if (
+          state.selectedTask &&
+          !activeRun &&
+          !(taskId && runCompletions.has(taskId))
+        ) {
           state.errorMessage =
             'Stop this conversation in the window where it is running.'
           return
+        }
+        if (taskId) {
+          stoppedRuns.add(taskId)
         }
         if (state.selectedTask?.status === 'running') {
           await setTask(setStatus(state.selectedTask, 'stopping'))
         }
         activeRun?.abort()
-        if (pending) {
-          for (const controller of pending) {
-            controller.abort()
-          }
-        }
         return
       }
       if (event.name === 'back' || event.name === 'new-task') {
