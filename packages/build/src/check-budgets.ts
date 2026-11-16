@@ -4,9 +4,9 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  // Account storage measures 381,605 bytes locally (+8,348 vs baseline), and
-  // 383,019 on Ubuntu/macOS CI with Node 26.12.1. Keep 1,481 bytes of headroom.
-  ['chatMain.js', 384_500],
+  // Current-main baseline: 375,775 bytes; account storage: 384,123 (+8,348).
+  // Allow the observed 1,414-byte CI variance and 1,463 bytes of headroom.
+  ['chatMain.js', 387_000],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],

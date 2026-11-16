@@ -1562,6 +1562,54 @@ test('returns generated images from completed WebSocket Responses', async () => 
   expect(JSON.parse(socket.sent[0])).not.toHaveProperty('reasoning')
 })
 
+test('reports the start of streamed image generation once', async () => {
+  const socket = new MockResponsesWebSocket()
+  const onImageGenerationStart = jest.fn<() => void>()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    supportsStreaming: true,
+  })
+  const pending = backend.runStep({
+    input: [{ content: 'Draw a cat', role: 'user' }],
+    modelId: 'gpt-5-test',
+    onImageGenerationStart,
+    onTextDelta() {},
+    tools: [],
+  })
+  socket.open()
+  socket.receive({
+    item: { type: 'image_generation_call' },
+    type: 'response.output_item.added',
+  })
+  socket.receive({
+    response: { id: 'response-image' },
+    type: 'response.completed',
+  })
+  await pending
+
+  expect(onImageGenerationStart).toHaveBeenCalledTimes(1)
+})
+
+test('reports a bounded image generation fallback for non-streaming responses', async () => {
+  const onImageGenerationStart = jest.fn<() => void>()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: jest
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ id: 'response-image', output: [] })),
+  })
+  await backend.runStep({
+    input: [{ content: 'Draw a cat', role: 'user' }],
+    modelId: 'gpt-5-test',
+    onImageGenerationStart,
+    onTextDelta() {},
+    tools: [],
+  })
+
+  expect(onImageGenerationStart).toHaveBeenCalledTimes(1)
+})
+
 test('reports image generation calls that are still running when WebSocket Responses complete', async () => {
   const socket = new MockResponsesWebSocket()
   const backend = createResponsesBackend({

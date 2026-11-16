@@ -152,6 +152,7 @@ export interface ChatTask {
   readonly createdAt: string
   readonly events: readonly ChatTaskEvent[]
   readonly id: string
+  readonly imageGenerationActive?: boolean
   readonly modelId: string
   readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly responseId?: string
