@@ -605,6 +605,33 @@ const openBoard = async (host: BoardHost): Promise<VirtualDomViewInstance> => {
   return createInstance(createContext(), host)
 }
 
+test('requests title focus only when opening a valid card composer', async () => {
+  const view = await openBoard(createHost())
+  let previous = view.getContext?.() || {}
+  await view.handleEvent?.({ name: 'board-add:missing', type: 'click' })
+  expect(view.renderFocus?.(previous, view.getContext?.() || {})).toBe('')
+  for (const list of ['todo', 'empty', 'todo']) {
+    await view.handleEvent?.({ name: `board-add:${list}`, type: 'click' })
+    const current = view.getContext?.() || {}
+    expect(view.renderFocus?.(previous, current)).toBe(
+      '[name="board-card-title"]',
+    )
+    await view.handleEvent?.({
+      name: 'board-card-title',
+      type: 'input',
+      value: 'Draft',
+    })
+    expect(view.renderFocus?.(current, view.getContext?.() || {})).toBe('')
+    previous = current
+  }
+  await view.handleEvent?.({ name: 'board-cancel-card', type: 'click' })
+  expect(view.renderFocus?.(previous, view.getContext?.() || {})).toBe('')
+  await view.handleEvent?.({ name: 'board-add:todo', type: 'click' })
+  expect(view.renderFocus?.(previous, view.getContext?.() || {})).toBe(
+    '[name="board-card-title"]',
+  )
+})
+
 test('adds a card to its list, prevents duplicate submissions and updates the cached board', async () => {
   const host = createHost()
   const pending =

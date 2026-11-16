@@ -141,6 +141,7 @@ export const createInstance = async (
     syncTitle(await getWorkspaceTitle(host.execute))
   const { board: initialBoard } = state
   await syncTitle(initialBoard?.name || 'Boards')
+  let focusNewCard = false
   let focusRestore = false
   let focusCardId = ''
   const notify = async (): Promise<void> => {
@@ -576,8 +577,10 @@ export const createInstance = async (
       !loading &&
       !cardDraft?.saving &&
       board?.lists.some((list) => list.id === listId)
-    )
+    ) {
       state = { ...state, cardDraft: { listId, saving: false, title: '' } }
+      focusNewCard = !focusNewCard
+    }
   }
   const cancelCard = (): void => {
     const { cardDraft } = state
@@ -680,7 +683,7 @@ export const createInstance = async (
         }
       })()
     },
-    getContext: () => ({ focusRestore }),
+    getContext: () => ({ focusNewCard, focusRestore }),
     handleBoardDragEnd(): Promise<void> {
       return clearDrag()
     },
@@ -770,10 +773,14 @@ export const createInstance = async (
     renderFocus: (
       oldContext: Readonly<Record<string, boolean>>,
       newContext: Readonly<Record<string, boolean>>,
-    ): string =>
-      oldContext.focusRestore === newContext.focusRestore || !focusCardId
+    ): string => {
+      const { cardDraft } = state
+      if (oldContext.focusNewCard !== newContext.focusNewCard && cardDraft)
+        return '[name="board-card-title"]'
+      return oldContext.focusRestore === newContext.focusRestore || !focusCardId
         ? ''
-        : `[name="board-card:${focusCardId}"]`,
+        : `[name="board-card:${focusCardId}"]`
+    },
     renderTitle: (): string => {
       const { board } = state
       return board?.name || 'Boards'
