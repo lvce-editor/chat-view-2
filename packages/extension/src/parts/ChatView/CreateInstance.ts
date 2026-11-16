@@ -498,6 +498,20 @@ export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
   await getActiveInstance()?.toggleSessionsList(true)
 }
 
+export const copyChatViewComponentState = async (
+  instance: Pick<ActiveChatViewInstance, 'getState'> | undefined,
+  writeClipboardText: (text: string) => Promise<void> = writeClipboardTextApi,
+): Promise<void> => {
+  if (!instance) {
+    throw new Error('Chat 2 is not open')
+  }
+  await writeClipboardText(`${JSON.stringify(instance.getState(), null, 2)}\n`)
+}
+
+export const copyActiveChatViewComponentState = async (): Promise<void> => {
+  await copyChatViewComponentState(getActiveInstance())
+}
+
 export const getActiveChatQuickPickItems = (): readonly {
   readonly id: string
   readonly title: string

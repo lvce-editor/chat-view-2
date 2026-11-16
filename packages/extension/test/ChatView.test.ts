@@ -9,6 +9,7 @@ import type { ChatRunOptions, ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createEvent } from '../src/parts/ChatTask/ChatTask.ts'
 import { view } from '../src/parts/ChatView/ChatView.ts'
 import {
+  copyChatViewComponentState,
   createInstance,
   newChatInActiveChatViewInstance,
   submitActiveChatViewInstance,
@@ -1638,6 +1639,50 @@ test('exposes and applies live component state without replacing the chat instan
       className: 'ChatComposerInput',
       value: 'Edit the live state',
     }),
+  )
+})
+
+test('copies the current component state as readable JSON without changing it', async () => {
+  const instance = await createTestInstance()
+  const writeClipboardText = jest.fn(async (_text: string) => undefined)
+  instance.setState({ ...instance.getState(), draft: 'First draft' })
+
+  await copyChatViewComponentState(instance, writeClipboardText)
+
+  expect(writeClipboardText).toHaveBeenLastCalledWith(
+    `${JSON.stringify(instance.getState(), null, 2)}\n`,
+  )
+  expect(JSON.parse(writeClipboardText.mock.calls[0][0])).toEqual(
+    instance.getState(),
+  )
+  expect(instance.getState().draft).toBe('First draft')
+
+  instance.setState({ ...instance.getState(), draft: 'Updated draft' })
+  await copyChatViewComponentState(instance, writeClipboardText)
+  expect(JSON.parse(writeClipboardText.mock.calls[1][0]).draft).toBe(
+    'Updated draft',
+  )
+  instance.dispose?.()
+})
+
+test('surfaces component state clipboard failures', async () => {
+  const instance = await createTestInstance()
+  const writeClipboardText = jest.fn(async (_text: string) => {
+    throw new Error('Clipboard unavailable')
+  })
+
+  await expect(
+    copyChatViewComponentState(instance, writeClipboardText),
+  ).rejects.toThrow('Clipboard unavailable')
+  instance.dispose?.()
+})
+
+test('reports when Chat 2 has no instance to copy', async () => {
+  const instance = await createTestInstance()
+  instance.dispose?.()
+
+  await expect(copyChatViewComponentState(undefined)).rejects.toThrow(
+    'Chat 2 is not open',
   )
 })
 
