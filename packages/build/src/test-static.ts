@@ -181,6 +181,28 @@ try {
       await page.goto(`${baseUrl}chat/`)
       await page.locator('.Workbench.AiNativeLayout').waitFor()
       await page.locator('.ChatLoggedOut').waitFor()
+      const activityBar = page.locator('.ActivityBarLayout')
+      const toggleActivityBar = async (): Promise<void> => {
+        await page.keyboard.press('F1')
+        await page
+          .locator('.QuickPick input')
+          .fill('>Layout: Toggle Activity Bar')
+        await page
+          .locator('.QuickPickItem')
+          .filter({ hasText: 'Layout: Toggle Activity Bar' })
+          .click()
+      }
+      for (let index = 0; index < 2; index++) {
+        await toggleActivityBar()
+        await activityBar.waitFor({ state: 'hidden' })
+        await toggleActivityBar()
+        await activityBar.waitFor()
+        await activityBar
+          .getByRole('button', { name: 'Settings', exact: true })
+          .waitFor()
+        assert.equal(await activityBar.getByRole('tab').count(), 0)
+        await page.locator('.Workbench.AiNativeLayout').waitFor()
+      }
       assert.deepEqual(
         directErrors,
         [],
