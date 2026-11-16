@@ -74,16 +74,15 @@ async function serve(
       file === resolve(root) ||
         file.startsWith(root.endsWith(sep) ? root : root + sep),
     )
-    let target = extname(file) ? file : join(file, 'index.html')
-    let content: Buffer
-    try {
-      content = await readFile(target)
-    } catch (error) {
-      if (extname(file)) {
-        throw error
-      }
-      target = join(root, 'index.html')
-      content = await readFile(target)
+    const target = extname(file) ? file : join(file, 'index.html')
+    const content = await readFile(target)
+    const parsedUrl = new URL(url, 'http://localhost')
+    if (!extname(file) && !pathname.endsWith('/')) {
+      response.writeHead(301, {
+        Location: `${pathname}/${parsedUrl.search}`,
+      })
+      response.end()
+      return
     }
     response.writeHead(200, {
       'Content-Type': mimeTypes[extname(target)] || 'application/octet-stream',
@@ -234,6 +233,39 @@ try {
       throw error
     } finally {
       await savedIdeLayout.close()
+    }
+    const board = await browser.newContext()
+    const boardPage = await board.newPage()
+    const boardErrors: string[] = []
+    boardPage.on('pageerror', (error) => boardErrors.push(error.message))
+    try {
+      const response = await boardPage.goto(`${baseUrl}board`)
+      assert.equal(response?.status(), 200)
+      await boardPage.locator('.Workbench').waitFor()
+      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
+      const reloadResponse = await boardPage.reload()
+      assert.equal(reloadResponse?.status(), 200)
+      await boardPage.locator('.Workbench').waitFor()
+      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
+      await boardPage.goto(`${baseUrl}board/`)
+      await boardPage.locator('.Workbench').waitFor()
+      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
+      assert.deepEqual(
+        boardErrors,
+        [],
+        'Direct board load or reload raised an exception',
+      )
+      process.stdout.write('fresh direct board route and reload: pass\n')
+    } catch (error) {
+      console.error(
+        'Direct board route state:',
+        boardPage.url(),
+        (await boardPage.locator('body').innerText()).slice(0, 5000),
+        boardErrors,
+      )
+      throw error
+    } finally {
+      await board.close()
     }
     for (const preserveStartupFocus of [false, true]) {
       const context = await browser.newContext()

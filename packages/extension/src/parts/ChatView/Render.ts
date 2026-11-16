@@ -1026,6 +1026,20 @@ const renderStreamingMessage = (
   ])
 }
 
+const renderImageGenerationPlaceholder = (
+  state: Readonly<ChatViewState>,
+): Dom.Node | undefined => {
+  const { selectedTask: task } = state
+  if (!task || !isRunning(task) || !task.imageGenerationActive) {
+    return undefined
+  }
+  return Dom.node(VirtualDomElements.Div, {
+    ariaLabel: 'Generating image',
+    className: 'ChatImageGenerationPlaceholder',
+    role: 'status',
+  })
+}
+
 const renderModel = (model: ChatModel): Dom.Node => {
   const unavailable = !model.available || !model.planEligible
   const suffix = unavailable ? ' · unavailable on this plan' : ''
@@ -1561,6 +1575,7 @@ const renderDetailView = (
   )
   const currentTurnStart = Math.max(0, lastUserMessageIndex)
   const previousMessages = renderedMessages.slice(0, currentTurnStart)
+  const imageGenerationPlaceholder = renderImageGenerationPlaceholder(state)
   const latestTurnContent = [
     ...renderedMessages.slice(currentTurnStart, currentTurnStart + 1),
     renderActivity(state),
@@ -1575,6 +1590,7 @@ const renderDetailView = (
           ),
         ]
       : []),
+    ...(imageGenerationPlaceholder ? [imageGenerationPlaceholder] : []),
     ...renderErrorBanners(summary.errorMessage, errorMessage),
   ]
   const messageContent =
@@ -1741,18 +1757,12 @@ const renderDom = (
       : Dom.div(
           'ChatView ChatDetailView',
           [
-            Dom.div('ChatDetailHeader', [
-              Dom.heading(1, 'ChatTitle', 'Chat'),
-              Dom.button(
-                'toggle-sessions',
-                'Sessions',
-                'ChatSessionsToggleButton',
-                {
-                  ariaExpanded: sessionsVisible,
-                },
-              ),
-              ...renderFocusModeButton(state),
-            ]),
+            Dom.button(
+              'toggle-sessions',
+              'Sessions',
+              'ChatSessionsToggleButton ChatWelcomeSessionsToggleButton',
+              { ariaExpanded: sessionsVisible },
+            ),
             Dom.div('ChatConversationBody', [
               Dom.div('ChatMessages', [
                 Dom.div('ChatMessagesContent', [

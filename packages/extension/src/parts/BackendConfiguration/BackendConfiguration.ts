@@ -2,6 +2,7 @@ import { executeCommand, getAccessToken, getPreference } from '@lvce-editor/api'
 
 export interface BackendConfiguration {
   readonly accessToken: string
+  readonly accountStorage?: boolean
   readonly baseUrl: string
   readonly loginRequired?: boolean
   readonly openAiWebSearch?: boolean
@@ -152,6 +153,7 @@ export const resolveBackendConfiguration = async (
     supportsStreaming,
     titleModelId: getTitleModelId(titleModelId),
     ...(usesEditorBackend && {
+      accountStorage: true,
       refreshAccessToken: async (): Promise<string> =>
         getString(await host.getAccessToken({ refresh: 'always' })),
     }),

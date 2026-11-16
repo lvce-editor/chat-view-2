@@ -257,7 +257,7 @@ const messagesSelector = '.ChatMessages'
 const maxScrollTop = 9_999_999
 const workingTimerInterval = 1000
 const defaultWindowTitle = 'Lvce Editor'
-const defaultChatTitle = 'Chat 2'
+const defaultChatTitle = 'New Chat'
 const titleMenuId = 'chat2.title'
 const maxTaskTitleLength = 80
 const fileLineHash = /^#L(\d+)$/u
@@ -498,6 +498,20 @@ export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
   await getActiveInstance()?.toggleSessionsList(true)
 }
 
+export const copyChatViewComponentState = async (
+  instance: Pick<ActiveChatViewInstance, 'getState'> | undefined,
+  writeClipboardText: (text: string) => Promise<void> = writeClipboardTextApi,
+): Promise<void> => {
+  if (!instance) {
+    throw new Error('Chat 2 is not open')
+  }
+  await writeClipboardText(`${JSON.stringify(instance.getState(), null, 2)}\n`)
+}
+
+export const copyActiveChatViewComponentState = async (): Promise<void> => {
+  await copyChatViewComponentState(getActiveInstance())
+}
+
 export const getActiveChatQuickPickItems = (): readonly {
   readonly id: string
   readonly title: string
@@ -516,6 +530,7 @@ export const openActiveChatQuickPickItem = async (
 
 const activeRuns = new Map<string, AbortController>()
 const runCompletions = new Map<string, Promise<void>>()
+const stoppedRuns = new Set<string>()
 
 interface MathRenderCache {
   readonly pending: Map<string, Promise<void>>
@@ -1229,7 +1244,12 @@ export const createInstance = async (
         await context?.requestRerender()
       }
       if (previousCompletion) await previousCompletion
-      if (disposed || (initialTask && archivedTaskIds.has(initialTask.id)))
+      if (
+        disposed ||
+        controller.signal.aborted ||
+        (initialTask && stoppedRuns.has(initialTask.id)) ||
+        (initialTask && archivedTaskIds.has(initialTask.id))
+      )
         return
       const latestTask =
         initialTask &&
@@ -1283,6 +1303,9 @@ export const createInstance = async (
         state.queuedMessages = (state.queuedMessages || []).filter(
           (item) => item !== queuedMessage,
         )
+      if (queuedMessage) {
+        await context?.requestRerender()
+      }
       releaseReservation()
       if (runningTaskId && activeRuns.get(runningTaskId) === controller) {
         activeRuns.delete(runningTaskId)
@@ -1292,6 +1315,7 @@ export const createInstance = async (
         runCompletions.get(runningTaskId) === completion.promise
       ) {
         runCompletions.delete(runningTaskId)
+        stoppedRuns.delete(runningTaskId)
       }
       completion.resolve()
     }
@@ -1621,17 +1645,24 @@ export const createInstance = async (
         return
       }
       if (event.name === 'stop') {
-        if (state.selectedTask && !activeRuns.has(state.selectedTask.id)) {
+        const taskId = state.selectedTask?.id
+        const activeRun = taskId ? activeRuns.get(taskId) : undefined
+        if (
+          state.selectedTask &&
+          !activeRun &&
+          !(taskId && runCompletions.has(taskId))
+        ) {
           state.errorMessage =
             'Stop this conversation in the window where it is running.'
           return
         }
+        if (taskId) {
+          stoppedRuns.add(taskId)
+        }
         if (state.selectedTask?.status === 'running') {
           await setTask(setStatus(state.selectedTask, 'stopping'))
         }
-        if (state.selectedTask) {
-          activeRuns.get(state.selectedTask.id)?.abort()
-        }
+        activeRun?.abort()
         return
       }
       if (event.name === 'back' || event.name === 'new-task') {

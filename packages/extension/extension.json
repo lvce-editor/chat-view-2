@@ -119,6 +119,7 @@
     "onCommand:chat2.toggleFocusMode",
     "onCommand:chat2.toggleAiNativeLayout",
     "onCommand:chat2.toggleSessionsList",
+    "onCommand:chat2.copyComponentState",
     "onCommand:chat2.showBoardLayout",
     "onCommand:chat2.showAiNativeLayout",
     "onView:chat2.views.board",
@@ -207,6 +208,10 @@
     {
       "id": "chat2.toggleSessionsList",
       "label": "Chat 2: Toggle Sessions List"
+    },
+    {
+      "id": "chat2.copyComponentState",
+      "label": "Chat 2: Copy Component State"
     },
     {
       "id": "chat2.showBoardLayout",

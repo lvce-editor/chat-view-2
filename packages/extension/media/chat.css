@@ -381,6 +381,34 @@
   cursor: zoom-in;
 }
 
+.ChatImageGenerationPlaceholder {
+  width: min(100%, 320px);
+  aspect-ratio: 4 / 3;
+  margin: 8px;
+  border: 1px solid var(--ChatBorder);
+  border-radius: 8px;
+  background: linear-gradient(
+    110deg,
+    var(--ChatInputBackground) 8%,
+    var(--ChatBorder) 18%,
+    var(--ChatInputBackground) 33%
+  );
+  background-size: 200% 100%;
+  animation: ChatImageGenerationShimmer 1.5s linear infinite;
+}
+
+@keyframes ChatImageGenerationShimmer {
+  to {
+    background-position-x: -200%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ChatImageGenerationPlaceholder {
+    animation: none;
+  }
+}
+
 .ChatImagePreviewOverlay {
   position: fixed;
   z-index: 1000;
@@ -1490,6 +1518,10 @@
   .ChatSessionsToggleButtonFocus {
     display: inline-flex;
     flex: 0 0 auto;
+  }
+  .ChatWelcomeSessionsToggleButton {
+    align-self: flex-start;
+    margin: 12px;
   }
   .ChatDetailHeaderFocus {
     padding-inline: 12px;

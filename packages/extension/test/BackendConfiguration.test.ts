@@ -53,6 +53,7 @@ test('uses the editor backend and authentication by default', async () => {
 
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
+    accountStorage: true,
     baseUrl: 'https://lvce-editor.dev',
     openAiWebSearch: true,
     refreshAccessToken: expect.any(Function),
@@ -74,6 +75,7 @@ test('uses editor authentication for an equivalent configured backend URL', asyn
 
   await expect(resolveBackendConfiguration(host)).resolves.toEqual({
     accessToken: 'editor-token',
+    accountStorage: true,
     baseUrl: 'https://lvce-editor.dev',
     openAiWebSearch: true,
     refreshAccessToken: expect.any(Function),
@@ -89,6 +91,7 @@ test('prefers prompt authentication for the editor backend', async () => {
     resolveBackendConfiguration(host, 'prompt-access-token'),
   ).resolves.toEqual({
     accessToken: 'prompt-access-token',
+    accountStorage: true,
     baseUrl: 'https://lvce-editor.dev',
     openAiWebSearch: true,
     refreshAccessToken: expect.any(Function),
@@ -173,6 +176,7 @@ test('requires login only for the editor backend without an access token', async
     resolveBackendConfiguration(createHost({ accessToken: '' })),
   ).resolves.toEqual({
     accessToken: '',
+    accountStorage: true,
     baseUrl: 'https://lvce-editor.dev',
     loginRequired: true,
     openAiWebSearch: true,

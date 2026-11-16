@@ -65,15 +65,19 @@ const flush = async (): Promise<void> => {
   await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
-const selectedControl = async (
+const boardTile = async (
   view: VirtualDomViewInstance,
+  id: string,
 ): Promise<unknown> => {
   const dom = await view.render()
-  return dom.find((node) => node.name === 'board-id')
+  return dom.find((node) => node.name === `board-select:${id}`)
 }
 
 test('shows setup, renders empty lists and saves only board IDs', async () => {
   const host = createHost()
+  jest
+    .mocked(host.status)
+    .mockResolvedValueOnce({ configured: true, connected: false })
   const context = createContext()
   const view = await createInstance(context, host)
   expect(JSON.stringify(await view.render())).toContain('Connect Trello')
@@ -199,6 +203,9 @@ test('shows readable failure and recovers on retry', async () => {
 test('restores remembered IDs, never credentials, and disconnects', async () => {
   const host = createHost()
   jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
+  jest
+    .mocked(host.status)
+    .mockResolvedValueOnce({ configured: true, connected: false })
   const view = await createInstance(createContext(), host)
   expect(JSON.stringify(await view.render())).toContain('Connect Trello')
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
@@ -490,6 +497,7 @@ test('updates automatically when browser consent completes', async () => {
   jest
     .mocked(host.status)
     .mockResolvedValueOnce({ configured: true, connected: false })
+    .mockResolvedValueOnce({ configured: true, connected: false })
   const view = await createInstance(createContext(), host)
   try {
     await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
@@ -520,26 +528,76 @@ test('opens remembered boards after reload without requesting Trello credentials
   expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.anything())
 })
 
-test('discovers named boards and opens the selected option without typing an ID', async () => {
+test('discovers named boards and opens a board tile directly', async () => {
   const host = createHost()
   const view = await createInstance(createContext(), host)
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
   const dom = await view.render()
-  const select = dom.find((node) => node.name === 'board-id')
-  expect(select).toMatchObject({ ariaLabel: 'Trello board', disabled: false })
-  expect(JSON.stringify(dom)).toContain('Select a board')
-  expect(dom.some((node) => node.value === '5k8NLHLh')).toBe(true)
-  expect(host.load).not.toHaveBeenCalled()
-  await view.handleEvent?.({
-    name: 'board-id',
-    type: 'input',
-    value: '5k8NLHLh',
+  expect(
+    dom.find((node) => node.name === 'board-select:5k8NLHLh'),
+  ).toMatchObject({
+    ariaLabel: 'Open Work',
+    className: 'BoardTile',
+    disabled: false,
   })
-  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  expect(JSON.stringify(dom)).toContain('BoardTileGrid')
+  expect(host.load).not.toHaveBeenCalled()
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
   await flush()
   expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.anything())
   expect(JSON.stringify(await view.render())).toContain('A task')
+})
+
+test('discovers Trello boards automatically on entry and reload', async () => {
+  const host = createHost()
+
+  const firstView = await createInstance(createContext(), host)
+  await flush()
+  expect(host.status).toHaveBeenCalledTimes(1)
+  expect(host.boards).toHaveBeenCalledTimes(1)
+  expect(await boardTile(firstView, '5k8NLHLh')).toMatchObject({
+    ariaLabel: 'Open Work',
+    disabled: false,
+  })
+
+  firstView.dispose?.()
+  const reloadedView = await createInstance(createContext(), host)
+  await flush()
+  expect(host.status).toHaveBeenCalledTimes(2)
+  expect(host.boards).toHaveBeenCalledTimes(2)
+  expect(await boardTile(reloadedView, '5k8NLHLh')).toMatchObject({
+    ariaLabel: 'Open Work',
+    disabled: false,
+  })
+  reloadedView.dispose?.()
+})
+
+test('shows the existing empty state for an automatically discovered empty account', async () => {
+  const host = createHost()
+  jest.mocked(host.boards).mockResolvedValue([])
+  const view = await createInstance(createContext(), host)
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('No open boards found')
+  expect(host.status).toHaveBeenCalledTimes(1)
+  expect(host.boards).toHaveBeenCalledTimes(1)
+  view.dispose?.()
+})
+
+test('keeps the Trello connection flow for disconnected accounts on entry', async () => {
+  const host = createHost()
+  jest
+    .mocked(host.status)
+    .mockResolvedValue({ configured: true, connected: false })
+  const view = await createInstance(createContext(), host)
+  await flush()
+  expect(host.status).toHaveBeenCalledTimes(1)
+  expect(host.boards).not.toHaveBeenCalled()
+  expect(JSON.stringify(await view.render())).toContain('Connect Trello')
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('Authorize Trello')
+  view.dispose?.()
 })
 
 test('empty discovery disables selection and can be refreshed', async () => {
@@ -549,10 +607,12 @@ test('empty discovery disables selection and can be refreshed', async () => {
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
   expect(JSON.stringify(await view.render())).toContain('No open boards found')
-  expect(await selectedControl(view)).toMatchObject({ disabled: true })
+  expect(await boardTile(view, '5k8NLHLh')).toBeUndefined()
   await view.handleEvent?.({ name: 'board-check-account', type: 'click' })
   await flush()
-  expect(await selectedControl(view)).toMatchObject({ disabled: false })
+  expect(await boardTile(view, '5k8NLHLh')).toMatchObject({
+    disabled: false,
+  })
 })
 
 test('failed discovery retries the board list instead of loading an empty ID', async () => {
@@ -568,7 +628,9 @@ test('failed discovery retries the board list instead of loading an empty ID', a
   await flush()
   expect(host.boards).toHaveBeenCalledTimes(2)
   expect(host.load).not.toHaveBeenCalled()
-  expect(await selectedControl(view)).toMatchObject({ disabled: false })
+  expect(await boardTile(view, '5k8NLHLh')).toMatchObject({
+    disabled: false,
+  })
 })
 
 test.each(['navigate', 'disconnect', 'dispose'])(
@@ -581,7 +643,9 @@ test.each(['navigate', 'disconnect', 'dispose'])(
     const view = await createInstance(createContext(), host)
     await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
     await flush()
-    expect(JSON.stringify(await view.render())).toContain('Loading boards')
+    expect(JSON.stringify(await view.render())).toContain(
+      'Loading your Trello boards',
+    )
     if (action === 'dispose') view.dispose?.()
     else
       await view.handleEvent?.({
@@ -604,6 +668,33 @@ const openBoard = async (host: BoardHost): Promise<VirtualDomViewInstance> => {
   jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
   return createInstance(createContext(), host)
 }
+
+test('requests title focus only when opening a valid card composer', async () => {
+  const view = await openBoard(createHost())
+  let previous = view.getContext?.() || {}
+  await view.handleEvent?.({ name: 'board-add:missing', type: 'click' })
+  expect(view.renderFocus?.(previous, view.getContext?.() || {})).toBe('')
+  for (const list of ['todo', 'empty', 'todo']) {
+    await view.handleEvent?.({ name: `board-add:${list}`, type: 'click' })
+    const current = view.getContext?.() || {}
+    expect(view.renderFocus?.(previous, current)).toBe(
+      '[name="board-card-title"]',
+    )
+    await view.handleEvent?.({
+      name: 'board-card-title',
+      type: 'input',
+      value: 'Draft',
+    })
+    expect(view.renderFocus?.(current, view.getContext?.() || {})).toBe('')
+    previous = current
+  }
+  await view.handleEvent?.({ name: 'board-cancel-card', type: 'click' })
+  expect(view.renderFocus?.(previous, view.getContext?.() || {})).toBe('')
+  await view.handleEvent?.({ name: 'board-add:todo', type: 'click' })
+  expect(view.renderFocus?.(previous, view.getContext?.() || {})).toBe(
+    '[name="board-card-title"]',
+  )
+})
 
 test('adds a card to its list, prevents duplicate submissions and updates the cached board', async () => {
   const host = createHost()
@@ -646,8 +737,9 @@ test('retains failed card titles, supports cancel and ignores invalid lists', as
   const host = createHost()
   jest.mocked(host.createCard).mockRejectedValue(
     new TrelloError({
-      code: 'WRITE',
-      message: 'Reconnect Trello to allow changes.',
+      code: 'TRELLO_WRITE_DENIED',
+      message:
+        'Trello rejected this card. Check that you can add cards to this board. If you can, disconnect and reconnect Trello to refresh its access. Your title is still here so you can retry.',
     }),
   )
   const view = await openBoard(host)
@@ -662,7 +754,12 @@ test('retains failed card titles, supports cancel and ignores invalid lists', as
   await view.handleEvent?.({ name: 'board-create-card', type: 'submit' })
   await flush()
   expect(JSON.stringify(await view.render())).toContain('Keep this title')
-  expect(JSON.stringify(await view.render())).toContain('Reconnect Trello')
+  expect(JSON.stringify(await view.render())).toContain(
+    'Check that you can add cards to this board. If you can, disconnect and reconnect Trello to refresh its access.',
+  )
+  expect(JSON.stringify(await view.render())).toContain(
+    'Your title is still here so you can retry.',
+  )
   await view.handleEvent?.({ name: 'board-cancel-card', type: 'click' })
   expect(JSON.stringify(await view.render())).not.toContain('Keep this title')
 })

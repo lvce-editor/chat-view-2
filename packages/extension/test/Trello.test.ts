@@ -1,3 +1,5 @@
+// cspell:words prefs
+
 import { expect, jest, test } from '@jest/globals'
 import type { BackendConfiguration } from '../src/parts/BackendConfiguration/BackendConfiguration.ts'
 import type { TrelloBoard } from '../src/parts/BoardView/Trello.ts'
@@ -40,6 +42,11 @@ const requestSequence = (
   for (const response of responses) request.mockResolvedValueOnce(response)
   return request
 }
+const boardListRequest = (data: unknown): typeof fetch =>
+  requestSequence([
+    Response.json({ accessToken: 'trello-token' }),
+    Response.json(data),
+  ])
 const trelloBoardUrlPattern =
   /^https:\/\/api\.trello\.com\/1\/boards\/5k8NLHLh\?/u
 
@@ -280,37 +287,87 @@ test('supports status, launching consent, and disconnect without Trello credenti
   expect(request.mock.calls[2]?.[1]?.method).toBe('POST')
 })
 
-test('discovers and sorts named boards through the authenticated backend', async () => {
-  const request = requestWith([
-    { id: '22222222', name: 'Zebra' },
-    { extra: 'discard', id: '11111111', name: 'Alpha' },
+test('discovers board names and background preferences directly from Trello', async () => {
+  const request = requestSequence([
+    Response.json({ accessToken: 'trello-token' }),
+    Response.json([
+      {
+        id: '22222222',
+        name: 'Zebra',
+        prefs: {
+          backgroundImageScaled: [
+            {
+              url: 'https://trello-backgrounds.s3.amazonaws.com/zebra-small.jpg',
+            },
+            {
+              url: 'https://trello-backgrounds.s3.amazonaws.com/zebra-large.jpg',
+            },
+          ],
+        },
+      },
+      {
+        extra: 'discard',
+        id: '11111111',
+        name: 'Alpha',
+        prefs: { backgroundColor: '#22a06b' },
+      },
+      {
+        id: '33333333',
+        name: 'Gradient',
+        prefs: {
+          backgroundBottomColor: '#8b4dc8',
+          backgroundTopColor: '#0c66e4',
+        },
+      },
+    ]),
   ])
   const client = createTrelloClient(configuration, request)
   expect(await client.boards(new AbortController().signal)).toEqual([
-    { id: '11111111', name: 'Alpha' },
-    { id: '22222222', name: 'Zebra' },
+    { backgroundColor: '#22a06b', id: '11111111', name: 'Alpha' },
+    {
+      backgroundColor: '#8b4dc8',
+      backgroundGradient: 'linear-gradient(135deg, #0c66e4, #8b4dc8)',
+      id: '33333333',
+      name: 'Gradient',
+    },
+    {
+      backgroundImage:
+        'https://trello-backgrounds.s3.amazonaws.com/zebra-large.jpg',
+      id: '22222222',
+      name: 'Zebra',
+    },
   ])
   expect(request).toHaveBeenCalledWith(
-    'https://backend.test/api/integrations/trello/boards',
+    'https://backend.test/api/integrations/trello/token',
     expect.objectContaining({
       credentials: 'omit',
       headers: { Authorization: 'Bearer lvce-token' },
+    }),
+  )
+  expect(request).toHaveBeenNthCalledWith(
+    2,
+    'https://api.trello.com/1/members/me/boards?fields=id%2Cname%2Cprefs&filter=open',
+    expect.objectContaining({
+      credentials: 'omit',
+      headers: { Authorization: 'Bearer trello-token' },
     }),
   )
 })
 
 test('accepts empty discovery and rejects malformed board lists', async () => {
   const { signal } = new AbortController()
-  expect(
-    await createTrelloClient(configuration, requestWith([])).boards(signal),
-  ).toEqual([])
+  const emptyBoards = await createTrelloClient(
+    configuration,
+    boardListRequest([]),
+  ).boards(signal)
+  expect(emptyBoards).toEqual([])
   for (const data of [
     {},
     [{ id: '../bad', name: 'Work' }],
     [{ id: '11111111', name: null }],
   ]) {
     await expect(
-      createTrelloClient(configuration, requestWith(data)).boards(signal),
+      createTrelloClient(configuration, boardListRequest(data)).boards(signal),
     ).rejects.toMatchObject({ details: { code: 'TRELLO_INVALID_RESPONSE' } })
   }
 })
@@ -431,16 +488,29 @@ test('creates cards through the backend without provider credentials', async () 
 })
 
 test('write denial explains reconnecting and unconfirmed writes are never retried', async () => {
-  for (const status of [403, 500]) {
-    const request = requestWith({ secret: 'private' }, status)
-    const client = createTrelloClient(configuration, request)
-    await expect(
-      client.createCard('todo', 'Task', new AbortController().signal),
-    ).rejects.toMatchObject({
-      details: {
-        code: status === 403 ? 'TRELLO_WRITE_DENIED' : 'TRELLO_CREATE_FAILED',
-      },
-    })
-    expect(request).toHaveBeenCalledTimes(1)
-  }
+  const deniedRequest = requestWith({ secret: 'private' }, 403)
+  const client = createTrelloClient(configuration, deniedRequest)
+  await expect(
+    client.createCard('todo', 'Task', new AbortController().signal),
+  ).rejects.toMatchObject({
+    details: {
+      code: 'TRELLO_WRITE_DENIED',
+      message:
+        'Trello rejected this card. Check that you can add cards to this board. If you can, disconnect and reconnect Trello to refresh its access. Your title is still here so you can retry.',
+    },
+  })
+  expect(deniedRequest).toHaveBeenCalledTimes(1)
+
+  const failedRequest = requestWith({ secret: 'private' }, 500)
+  const failedClient = createTrelloClient(configuration, failedRequest)
+  await expect(
+    failedClient.createCard('todo', 'Task', new AbortController().signal),
+  ).rejects.toMatchObject({
+    details: {
+      code: 'TRELLO_CREATE_FAILED',
+      message:
+        'The card could not be confirmed. Refresh the board before trying again to avoid duplicates. Your title has been kept.',
+    },
+  })
+  expect(failedRequest).toHaveBeenCalledTimes(1)
 })

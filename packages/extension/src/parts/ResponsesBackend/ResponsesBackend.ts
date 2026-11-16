@@ -188,6 +188,18 @@ const getRecord = (
     ? (value as Readonly<Record<string, unknown>>)
     : undefined
 
+const isImageGenerationStartEvent = (event: ResponseEvent): boolean =>
+  event.type === 'response.output_item.added' &&
+  event.item?.type === 'image_generation_call'
+
+const notifyImageGenerationStart = async (
+  options: AgentStepOptions,
+): Promise<void> => {
+  if (usesImageGeneration(options)) {
+    await options.onImageGenerationStart?.()
+  }
+}
+
 const getResponseImages = (response: {
   readonly output?: readonly unknown[]
 }): readonly ChatImageAttachment[] => {
@@ -421,7 +433,6 @@ const runWebSocketRequest = (
   let usage: ChatTokenUsage | undefined
   let settled = false
   let text = ''
-
   const cleanup = (): void => {
     socket.onclose = null
     socket.onerror = null
@@ -487,6 +498,10 @@ const runWebSocketRequest = (
       return
     }
     const { item } = event
+    if (isImageGenerationStartEvent(event)) {
+      await options.onImageGenerationStart?.()
+      return
+    }
     if (
       event.type === 'response.output_item.done' &&
       item?.type === 'function_call' &&
@@ -1053,6 +1068,7 @@ export const createResponsesBackend = ({
       if (supportsStreaming && !isOpenRouter) {
         return runAuthenticatedWebSocket(options)
       }
+      await notifyImageGenerationStart(options)
       const response = await authenticatedFetch(
         getApiUrl(root, '/v1/responses'),
         {
