@@ -24,7 +24,7 @@ const board = {
 const configuration = async (): Promise<BackendConfiguration> => ({
   accessToken: 'lvce-token',
   baseUrl: 'https://backend.test',
-  supportsStreaming: true,
+  responseMethod: 'websocket',
 })
 const loadBoard = (
   id: string,
@@ -188,7 +188,7 @@ test('requires LVCE login and never forwards its token to an unrelated backend',
     async () => ({
       accessToken: '',
       baseUrl: 'https://other.test',
-      supportsStreaming: false,
+      responseMethod: 'http',
     }),
     request,
   )

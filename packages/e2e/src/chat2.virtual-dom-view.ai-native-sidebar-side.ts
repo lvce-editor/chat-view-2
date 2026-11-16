@@ -98,6 +98,7 @@ export const test: Test = async ({
       )
       await ComponentState.setState(component.uid, { ...state, draft: message })
       await expect(composer).toHaveValue(message)
+
       await KeyBoard.press('Control+B')
       await expect(sessions).toHaveCount(0)
       await expect(sash).toHaveCount(0)

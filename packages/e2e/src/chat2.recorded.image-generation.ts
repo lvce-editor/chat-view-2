@@ -16,8 +16,8 @@ export const test: Test = async (api) => {
   await api.Command.execute('Preferences.update', {
     'chat2.backendUrl': 'http://127.0.0.1:8787',
     'chat2.computerUseEnabled': false,
+    'chat2.responseMethod': 'websocket',
     'chat2.selectedModelId': 'gpt-5.4-mini',
-    'chat2.supportsStreaming': true,
     'chat2.useMockBackend': false,
   })
   await api.ChatView2.show()

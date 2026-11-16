@@ -31,7 +31,7 @@ export const createDefaultChatApi = async ({
     baseUrl,
     openAiWebSearch = true,
     refreshAccessToken,
-    supportsStreaming,
+    responseMethod,
     titleModelId = 'gpt-6-luna',
     useMockBackend = false,
   } = providedConfiguration ||
@@ -46,7 +46,7 @@ export const createDefaultChatApi = async ({
       openAiWebSearch,
       ...(onLoginRequired && { onLoginRequired }),
       ...(refreshAccessToken && { refreshAccessToken }),
-      supportsStreaming,
+      responseMethod,
     }),
     createToolHost: (task) =>
       createRemoteAgentToolHost(fileSystemAccess, task.workspaceUri || ''),
