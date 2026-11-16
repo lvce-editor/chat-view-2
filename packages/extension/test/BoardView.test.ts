@@ -160,6 +160,42 @@ test('searches connected boards by name and opens the selected result', async ()
   view.dispose?.()
 })
 
+test('renders each selected board background and clears it when switching boards', async () => {
+  const host = createHost()
+  jest.mocked(host.load).mockImplementation(async (id) => ({
+    ...board,
+    backgroundColor: id === '5k8NLHLh' ? '#ff58b0' : '#9b42c8',
+    backgroundGradient:
+      id === '5k8NLHLh'
+        ? 'linear-gradient(135deg, #a82be0, #ff58b0)'
+        : 'linear-gradient(135deg, #5b2ca0, #9b42c8)',
+    id,
+  }))
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '5k8NLHLh',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain(
+    'linear-gradient(135deg, #a82be0, #ff58b0)',
+  )
+  await view.handleEvent?.({ name: 'board-change', type: 'click' })
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '12345678',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+  const dom = JSON.stringify(await view.render())
+  expect(dom).toContain('linear-gradient(135deg, #5b2ca0, #9b42c8)')
+  expect(dom).not.toContain('linear-gradient(135deg, #a82be0, #ff58b0)')
+  view.dispose?.()
+})
+
 test('stale completion and disposed requests cannot replace current state', async () => {
   const host = createHost()
   const first = Promise.withResolvers<TrelloBoard>()

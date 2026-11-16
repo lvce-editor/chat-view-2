@@ -612,6 +612,19 @@ const renderToolbar = (state: BoardState): Dom.Node => {
   ])
 }
 
+const getBoardStyle = (board: TrelloBoard | undefined): string | undefined => {
+  if (!board) return undefined
+  const backgroundImage = board.backgroundImage
+    ? `url("${board.backgroundImage}")`
+    : board.backgroundGradient
+  return [
+    board.backgroundColor && `background-color:${board.backgroundColor}`,
+    backgroundImage && `background-image:${backgroundImage}`,
+  ]
+    .filter(Boolean)
+    .join(';')
+}
+
 export const render = (state: BoardState): Dom.Node => {
   const {
     authorizing,
@@ -661,47 +674,60 @@ export const render = (state: BoardState): Dom.Node => {
   }
   const cardDialog = renderCardDialog(state)
   const errorNode = renderError(state)
-  return Dom.div(mergeClassNames('BoardView', board ? 'BoardViewTrello' : ''), [
-    renderToolbar(state),
-    ...(errorNode ? [errorNode] : []),
-    ...(board
-      ? [
-          Dom.div('BoardActions', [
-            Dom.button('board-refresh', 'Refresh board', 'BoardButton', {
-              disabled: loading || Boolean(cardDraft?.saving),
-            }),
-            Dom.button('board-change', 'Connect another board', 'BoardButton'),
-            Dom.button('board-disconnect', 'Forget board', 'BoardButton'),
-            Dom.button(
-              'board-disconnect-account',
-              'Disconnect Trello',
-              'BoardButton',
-              { disabled: loading },
-            ),
-          ]),
-          renderColumns(state, board, cardsByList, dropTargetId),
-          ...(board.lists.length === 0
-            ? [
-                Dom.div('BoardEmpty', [
-                  Dom.textNode('This board has no open lists yet.'),
-                ]),
-              ]
-            : []),
-        ]
-      : [renderSetup(state)]),
-    ...(loading || authorizing
-      ? [
-          Dom.node(
-            VirtualDomElements.Div,
-            { className: 'BoardStatus', role: 'status' },
-            [
-              Dom.textNode(
-                authorizing ? 'Waiting for Trello authorization…' : 'Loading…',
+  return Dom.node(
+    VirtualDomElements.Div,
+    {
+      className: mergeClassNames('BoardView', board ? 'BoardViewTrello' : ''),
+      style: getBoardStyle(board),
+    },
+    [
+      renderToolbar(state),
+      ...(errorNode ? [errorNode] : []),
+      ...(board
+        ? [
+            Dom.div('BoardActions', [
+              Dom.button('board-refresh', 'Refresh board', 'BoardButton', {
+                disabled: loading || Boolean(cardDraft?.saving),
+              }),
+              Dom.button(
+                'board-change',
+                'Connect another board',
+                'BoardButton',
               ),
-            ],
-          ),
-        ]
-      : []),
-    ...(cardDialog ? [cardDialog] : []),
-  ])
+              Dom.button('board-disconnect', 'Forget board', 'BoardButton'),
+              Dom.button(
+                'board-disconnect-account',
+                'Disconnect Trello',
+                'BoardButton',
+                { disabled: loading },
+              ),
+            ]),
+            renderColumns(state, board, cardsByList, dropTargetId),
+            ...(board.lists.length === 0
+              ? [
+                  Dom.div('BoardEmpty', [
+                    Dom.textNode('This board has no open lists yet.'),
+                  ]),
+                ]
+              : []),
+          ]
+        : [renderSetup(state)]),
+      ...(loading || authorizing
+        ? [
+            Dom.node(
+              VirtualDomElements.Div,
+              { className: 'BoardStatus', role: 'status' },
+              [
+                Dom.textNode(
+                  authorizing
+                    ? 'Waiting for Trello authorization…'
+                    : 'Loading…',
+                ),
+              ],
+            ),
+          ]
+        : []),
+      ...(cardDialog ? [cardDialog] : []),
+    ],
+  )
 }
