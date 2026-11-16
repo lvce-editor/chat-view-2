@@ -246,6 +246,91 @@ test.each(['queue', 'steer', 'invalid'])(
   },
 )
 
+test('stopping a turn cancels its queued follow-up before it starts', async () => {
+  const firstStarted = Promise.withResolvers<void>()
+  const finishFirst = Promise.withResolvers<void>()
+  const api = {
+    ...createMockChatApi(),
+    async createTask(
+      message: string,
+      modelId: string,
+      options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+    ) {
+      const task: ChatTask = {
+        createdAt: new Date().toISOString(),
+        events: [createEvent({ text: message, type: 'user-message' })],
+        id: 'image-task',
+        modelId,
+        status: 'running',
+        title: 'Image task',
+        updatedAt: new Date().toISOString(),
+      }
+      await options?.onUpdate?.(task)
+      firstStarted.resolve()
+      await finishFirst.promise
+      const stopped = {
+        ...task,
+        events: [
+          ...task.events,
+          createEvent({ text: 'Stopped.', type: 'assistant-message' }),
+        ],
+        status: 'stopped' as const,
+      }
+      await options?.onUpdate?.(stopped)
+      return stopped
+    },
+    async sendMessage(
+      task: ChatTask,
+      message: string,
+      options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+    ) {
+      const completed = {
+        ...task,
+        events: [
+          ...task.events,
+          createEvent({ text: message, type: 'user-message' }),
+          createEvent({
+            text: 'Follow-up response',
+            type: 'assistant-message',
+          }),
+        ],
+        status: 'completed' as const,
+      }
+      await options?.onUpdate?.(completed)
+      return completed
+    },
+  }
+  const sendMessage = jest.spyOn(api, 'sendMessage')
+  const instance = await createInstance(undefined, api)
+  try {
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Generate an image of Switzerland',
+    })
+    const first = instance.submit()
+    await firstStarted.promise
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Update the image for year 2200',
+    })
+    const followUp = instance.submit()
+    await flushPromises()
+
+    await dispatch(instance, { name: 'stop', type: 'click' })
+    finishFirst.resolve()
+    await Promise.all([first, followUp])
+
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(instance.getState().selectedTask?.status).toBe('stopped')
+    expect(instance.getState().queuedMessages).toHaveLength(0)
+  } finally {
+    finishFirst.resolve()
+    instance.dispose?.()
+  }
+})
+
 test('a follow-up waits for its own completed turn to release execution', async () => {
   const terminalShown = Promise.withResolvers<void>()
   const release = Promise.withResolvers<void>()
