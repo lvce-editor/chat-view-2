@@ -1569,7 +1569,7 @@ test('AI-native browser title includes the editor name and restores the workspac
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(execute).toHaveBeenCalledWith(
       'WindowTitle.set',
-      'Chat 2 - Lvce Editor',
+      'New Chat - Lvce Editor',
     )
 
     await instance.toggleFocusMode()

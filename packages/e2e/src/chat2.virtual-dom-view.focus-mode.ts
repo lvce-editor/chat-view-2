@@ -30,7 +30,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await Command.executeExtensionCommand('chat2.toggleFocusMode')
   await expect(toggle).toHaveCount(0)
   await expect(focusMode).toBeVisible()
-  await expect(browserTabTitle).toHaveText('Chat 2 - Lvce Editor')
+  await expect(browserTabTitle).toHaveText('New Chat - Lvce Editor')
   const activityBar = Locator('.ActivityBar')
   await expect(activityBar).toBeVisible()
   const sessions = Locator('.ChatSessions')
@@ -91,7 +91,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(tasks).toHaveCount(20)
   // eslint-disable-next-line e2e/no-direct-click
   await newChatButton.click()
-  await expect(browserTabTitle).toHaveText('Chat 2 - Lvce Editor')
+  await expect(browserTabTitle).toHaveText('New Chat - Lvce Editor')
   await expect(detailHeader).toHaveCount(0)
   await expect(emptyTitle).toBeVisible()
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
