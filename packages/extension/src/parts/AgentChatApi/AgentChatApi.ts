@@ -215,6 +215,7 @@ export const createAgentChatApi = ({
       task = setStatus(task, 'running')
       let turnHost: AgentToolHost | undefined
       let streamedText = ''
+      let imageGenerationStarted = false
       try {
         const toolHost = createToolHost
           ? await createToolHost(task)
@@ -282,6 +283,22 @@ export const createAgentChatApi = ({
             ...(options?.thinkingMode && {
               thinkingMode: options.thinkingMode,
             }),
+            onImageGenerationStart: async () => {
+              if (imageGenerationStarted) {
+                return
+              }
+              imageGenerationStarted = true
+              task = await withEvent(
+                task,
+                createEvent({
+                  label: 'Generating image',
+                  status: 'running',
+                  type: 'activity',
+                }),
+                store,
+                options,
+              )
+            },
             onTextDelta: async (delta) => {
               streamedText += delta
               const now = performance.now()
@@ -296,6 +313,19 @@ export const createAgentChatApi = ({
             ...(options?.signal && { signal: options.signal }),
             tools: await toolHost.getDefinitions(),
           })
+          if (imageGenerationStarted) {
+            imageGenerationStarted = false
+            task = await withEvent(
+              task,
+              createEvent({
+                label: 'Generating image',
+                status: 'completed',
+                type: 'activity',
+              }),
+              store,
+              options,
+            )
+          }
           await trace(
             {
               content: [
@@ -519,6 +549,20 @@ export const createAgentChatApi = ({
         }
         throw new Error(`Agent stopped after ${maxSteps} steps`)
       } catch (error) {
+        if (imageGenerationStarted) {
+          imageGenerationStarted = false
+          task = await withEvent(
+            task,
+            createEvent({
+              detail: error instanceof Error ? error.message : String(error),
+              label: 'Generating image',
+              status: 'failed',
+              type: 'activity',
+            }),
+            store,
+            options,
+          )
+        }
         const { streamingText: _partial, ...withoutStreaming } = task
         task = withoutStreaming
         if (streamedText) {
