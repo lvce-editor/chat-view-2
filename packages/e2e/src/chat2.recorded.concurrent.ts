@@ -45,8 +45,8 @@ const prepareChat = async (
   await api.Command.execute('Preferences.update', {
     'chat2.backendUrl': replayUrl,
     'chat2.computerUseEnabled': false,
+    'chat2.responseMethod': 'websocket',
     'chat2.selectedModelId': 'gpt-5.4-mini',
-    'chat2.supportsStreaming': true,
     'chat2.useMockBackend': false,
   })
 }
