@@ -58,7 +58,10 @@ export const testBoardSelection = async (
       json: {
         id: '22222222',
         name: 'Engineering',
-        lists: [{ id: 'list-1', name: 'Todo', pos: 1 }],
+        lists: [
+          { id: 'list-1', name: 'Todo', pos: 1 },
+          { id: 'list-2', name: 'Doing', pos: 2 },
+        ],
         cards: [
           {
             coverDataUrl:
@@ -196,6 +199,52 @@ export const testBoardSelection = async (
       '1',
     )
     assert.equal(await page.locator('.BoardCardBadgeIcon').count(), 2)
+    const title = page.getByRole('textbox', { name: 'Card title', exact: true })
+    for (const list of ['Todo', 'Doing', 'Todo']) {
+      await page.getByRole('button', { name: `Add a card to ${list}` }).click()
+      await title.waitFor()
+      await page.waitForFunction(
+        () =>
+          globalThis.document.activeElement?.getAttribute('name') ===
+          'board-card-title',
+        undefined,
+        { timeout: 3000 },
+      )
+      await page.keyboard.press('N')
+      await page.waitForFunction(
+        (value) =>
+          globalThis.document.querySelector('input[name="board-card-title"]')
+            ?.value === value,
+        'N',
+      )
+      assert.equal(await title.inputValue(), 'N')
+      // An ordinary rerender must not take focus back from another control.
+      const refreshButton = page.getByRole('button', {
+        name: 'Refresh board',
+        exact: true,
+      })
+      const refreshed = page.waitForResponse((response) =>
+        response.url().startsWith('https://api.trello.com/1/boards/22222222?'),
+      )
+      await refreshButton.click()
+      await refreshed
+      await page.waitForFunction(() => {
+        const button = globalThis.document.querySelector(
+          'button[name="board-refresh"]',
+        )
+        return button && !button.disabled
+      })
+      assert.equal(
+        await title.evaluate(
+          (element) => globalThis.document.activeElement === element,
+        ),
+        false,
+      )
+      assert.equal(await title.inputValue(), 'N')
+      await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+      await title.waitFor({ state: 'detached' })
+    }
+    process.stdout.write('Add card focuses title on open and reopen: pass\n')
     const refresh = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
@@ -205,7 +254,7 @@ export const testBoardSelection = async (
       .getByRole('button', { name: 'Refresh board', exact: true })
       .click()
     await refresh
-    assert.equal(directLoads.length, 2)
+    assert.equal(directLoads.length, 5)
     assert.deepEqual(proxiedLoads, [])
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })
