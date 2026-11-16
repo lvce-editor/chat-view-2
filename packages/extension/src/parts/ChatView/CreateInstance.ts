@@ -498,6 +498,20 @@ export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
   await getActiveInstance()?.toggleSessionsList(true)
 }
 
+export const copyChatViewComponentState = async (
+  instance: Pick<ActiveChatViewInstance, 'getState'> | undefined,
+  writeClipboardText: (text: string) => Promise<void> = writeClipboardTextApi,
+): Promise<void> => {
+  if (!instance) {
+    throw new Error('Chat 2 is not open')
+  }
+  await writeClipboardText(`${JSON.stringify(instance.getState(), null, 2)}\n`)
+}
+
+export const copyActiveChatViewComponentState = async (): Promise<void> => {
+  await copyChatViewComponentState(getActiveInstance())
+}
+
 export const getActiveChatQuickPickItems = (): readonly {
   readonly id: string
   readonly title: string
@@ -515,6 +529,7 @@ export const openActiveChatQuickPickItem = async (
 }
 
 const activeRuns = new Map<string, AbortController>()
+const pendingRuns = new Map<string, Set<AbortController>>()
 const runCompletions = new Map<string, Promise<void>>()
 
 interface MathRenderCache {
@@ -1212,6 +1227,9 @@ export const createInstance = async (
       state.queuedMessages = [...(state.queuedMessages || []), queuedMessage]
       // Each follow-up owns a place in the chain before persistence yields.
       runningTaskId = queuedMessage.taskId
+      const pending = pendingRuns.get(runningTaskId) || new Set()
+      pending.add(controller)
+      pendingRuns.set(runningTaskId, pending)
       runCompletions.set(runningTaskId, completion.promise)
       if (followUpBehavior === 'steer') activeRuns.get(runningTaskId)?.abort()
     }
@@ -1229,7 +1247,11 @@ export const createInstance = async (
         await context?.requestRerender()
       }
       if (previousCompletion) await previousCompletion
-      if (disposed || (initialTask && archivedTaskIds.has(initialTask.id)))
+      if (
+        disposed ||
+        controller.signal.aborted ||
+        (initialTask && archivedTaskIds.has(initialTask.id))
+      )
         return
       const latestTask =
         initialTask &&
@@ -1242,6 +1264,11 @@ export const createInstance = async (
       }
       runningTaskId = selectedTask?.id
       if (runningTaskId) {
+        const pending = pendingRuns.get(runningTaskId)
+        pending?.delete(controller)
+        if (pending?.size === 0) {
+          pendingRuns.delete(runningTaskId)
+        }
         activeRuns.set(runningTaskId, controller)
         if (!runCompletions.has(runningTaskId))
           runCompletions.set(runningTaskId, completion.promise)
@@ -1283,6 +1310,14 @@ export const createInstance = async (
         state.queuedMessages = (state.queuedMessages || []).filter(
           (item) => item !== queuedMessage,
         )
+      if (queuedMessage) {
+        const pending = pendingRuns.get(queuedMessage.taskId)
+        pending?.delete(controller)
+        if (pending?.size === 0) {
+          pendingRuns.delete(queuedMessage.taskId)
+        }
+        await context?.requestRerender()
+      }
       releaseReservation()
       if (runningTaskId && activeRuns.get(runningTaskId) === controller) {
         activeRuns.delete(runningTaskId)
@@ -1621,7 +1656,10 @@ export const createInstance = async (
         return
       }
       if (event.name === 'stop') {
-        if (state.selectedTask && !activeRuns.has(state.selectedTask.id)) {
+        const taskId = state.selectedTask?.id
+        const pending = taskId ? pendingRuns.get(taskId) : undefined
+        const activeRun = taskId ? activeRuns.get(taskId) : undefined
+        if (state.selectedTask && !activeRun && !pending?.size) {
           state.errorMessage =
             'Stop this conversation in the window where it is running.'
           return
@@ -1629,8 +1667,11 @@ export const createInstance = async (
         if (state.selectedTask?.status === 'running') {
           await setTask(setStatus(state.selectedTask, 'stopping'))
         }
-        if (state.selectedTask) {
-          activeRuns.get(state.selectedTask.id)?.abort()
+        activeRun?.abort()
+        if (pending) {
+          for (const controller of pending) {
+            controller.abort()
+          }
         }
         return
       }

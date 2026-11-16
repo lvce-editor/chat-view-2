@@ -9,6 +9,7 @@ import type { ChatRunOptions, ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createEvent } from '../src/parts/ChatTask/ChatTask.ts'
 import { view } from '../src/parts/ChatView/ChatView.ts'
 import {
+  copyChatViewComponentState,
   createInstance,
   newChatInActiveChatViewInstance,
   submitActiveChatViewInstance,
@@ -244,6 +245,91 @@ test.each(['queue', 'steer', 'invalid'])(
     }
   },
 )
+
+test('stopping a turn cancels its queued follow-up before it starts', async () => {
+  const firstStarted = Promise.withResolvers<void>()
+  const finishFirst = Promise.withResolvers<void>()
+  const api = {
+    ...createMockChatApi(),
+    async createTask(
+      message: string,
+      modelId: string,
+      options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+    ) {
+      const task: ChatTask = {
+        createdAt: new Date().toISOString(),
+        events: [createEvent({ text: message, type: 'user-message' })],
+        id: 'image-task',
+        modelId,
+        status: 'running',
+        title: 'Image task',
+        updatedAt: new Date().toISOString(),
+      }
+      await options?.onUpdate?.(task)
+      firstStarted.resolve()
+      await finishFirst.promise
+      const stopped = {
+        ...task,
+        events: [
+          ...task.events,
+          createEvent({ text: 'Stopped.', type: 'assistant-message' }),
+        ],
+        status: 'stopped' as const,
+      }
+      await options?.onUpdate?.(stopped)
+      return stopped
+    },
+    async sendMessage(
+      task: ChatTask,
+      message: string,
+      options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+    ) {
+      const completed = {
+        ...task,
+        events: [
+          ...task.events,
+          createEvent({ text: message, type: 'user-message' }),
+          createEvent({
+            text: 'Follow-up response',
+            type: 'assistant-message',
+          }),
+        ],
+        status: 'completed' as const,
+      }
+      await options?.onUpdate?.(completed)
+      return completed
+    },
+  }
+  const sendMessage = jest.spyOn(api, 'sendMessage')
+  const instance = await createInstance(undefined, api)
+  try {
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Generate an image of Switzerland',
+    })
+    const first = instance.submit()
+    await firstStarted.promise
+    await dispatch(instance, {
+      name: 'composer',
+      type: 'input',
+      value: 'Update the image for year 2200',
+    })
+    const followUp = instance.submit()
+    await flushPromises()
+
+    await dispatch(instance, { name: 'stop', type: 'click' })
+    finishFirst.resolve()
+    await Promise.all([first, followUp])
+
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(instance.getState().selectedTask?.status).toBe('stopped')
+    expect(instance.getState().queuedMessages).toHaveLength(0)
+  } finally {
+    finishFirst.resolve()
+    instance.dispose?.()
+  }
+})
 
 test('a follow-up waits for its own completed turn to release execution', async () => {
   const terminalShown = Promise.withResolvers<void>()
@@ -1674,6 +1760,50 @@ test('exposes and applies live component state without replacing the chat instan
       className: 'ChatComposerInput',
       value: 'Edit the live state',
     }),
+  )
+})
+
+test('copies the current component state as readable JSON without changing it', async () => {
+  const instance = await createTestInstance()
+  const writeClipboardText = jest.fn(async (_text: string) => undefined)
+  instance.setState({ ...instance.getState(), draft: 'First draft' })
+
+  await copyChatViewComponentState(instance, writeClipboardText)
+
+  expect(writeClipboardText).toHaveBeenLastCalledWith(
+    `${JSON.stringify(instance.getState(), null, 2)}\n`,
+  )
+  expect(JSON.parse(writeClipboardText.mock.calls[0][0])).toEqual(
+    instance.getState(),
+  )
+  expect(instance.getState().draft).toBe('First draft')
+
+  instance.setState({ ...instance.getState(), draft: 'Updated draft' })
+  await copyChatViewComponentState(instance, writeClipboardText)
+  expect(JSON.parse(writeClipboardText.mock.calls[1][0]).draft).toBe(
+    'Updated draft',
+  )
+  instance.dispose?.()
+})
+
+test('surfaces component state clipboard failures', async () => {
+  const instance = await createTestInstance()
+  const writeClipboardText = jest.fn(async (_text: string) => {
+    throw new Error('Clipboard unavailable')
+  })
+
+  await expect(
+    copyChatViewComponentState(instance, writeClipboardText),
+  ).rejects.toThrow('Clipboard unavailable')
+  instance.dispose?.()
+})
+
+test('reports when Chat 2 has no instance to copy', async () => {
+  const instance = await createTestInstance()
+  instance.dispose?.()
+
+  await expect(copyChatViewComponentState(undefined)).rejects.toThrow(
+    'Chat 2 is not open',
   )
 })
 
