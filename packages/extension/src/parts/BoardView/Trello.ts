@@ -31,6 +31,9 @@ export interface TrelloBoardSummary {
 }
 
 export interface TrelloBoard {
+  readonly backgroundColor?: string
+  readonly backgroundGradient?: string
+  readonly backgroundImage?: string
   readonly cards: readonly TrelloCard[]
   readonly id: string
   readonly lists: readonly TrelloList[]
@@ -139,16 +142,13 @@ const safeBackgroundGradient = (value: unknown): string | undefined =>
   !dangerousBackgroundGradientPattern.test(value)
     ? value
     : undefined
-const normalizeBoardSummary = (
+const normalizeBoardBackground = (
   value: unknown,
-): TrelloBoardSummary | undefined => {
-  if (
-    !isRecord(value) ||
-    typeof value.id !== 'string' ||
-    !boardIdPattern.test(value.id) ||
-    typeof value.name !== 'string'
-  )
-    return undefined
+): Pick<
+  TrelloBoardSummary,
+  'backgroundColor' | 'backgroundGradient' | 'backgroundImage'
+> => {
+  if (!isRecord(value)) return {}
   const prefs = isRecord(value.prefs) ? value.prefs : undefined
   const backgroundTopColor = safeBackgroundColor(prefs?.backgroundTopColor)
   const backgroundBottomColor = safeBackgroundColor(
@@ -170,11 +170,25 @@ const normalizeBoardSummary = (
       (isRecord(largestBackground) ? largestBackground.url : undefined),
   )
   return {
-    id: value.id,
-    name: value.name,
     ...(backgroundColor && { backgroundColor }),
     ...(backgroundGradient && { backgroundGradient }),
     ...(backgroundImage && { backgroundImage }),
+  }
+}
+const normalizeBoardSummary = (
+  value: unknown,
+): TrelloBoardSummary | undefined => {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    !boardIdPattern.test(value.id) ||
+    typeof value.name !== 'string'
+  )
+    return undefined
+  return {
+    ...normalizeBoardBackground(value),
+    id: value.id,
+    name: value.name,
   }
 }
 const getResponseError = async (
@@ -376,7 +390,7 @@ export const createTrelloClient = (
         `boards/${id}?${new URLSearchParams({
           card_fields: 'name,idList,pos,cover',
           cards: 'open',
-          fields: 'name',
+          fields: 'name,prefs',
           list_fields: 'name,pos',
           lists: 'open',
         })}`,
@@ -397,6 +411,7 @@ export const createTrelloClient = (
         })
       }
       return {
+        ...normalizeBoardBackground(data),
         cards: data.cards
           .map(normalizeCard)
           .filter((card): card is TrelloCard => Boolean(card))
