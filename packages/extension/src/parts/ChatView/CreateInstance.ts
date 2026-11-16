@@ -299,22 +299,28 @@ const isWorking = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'
 }
 
-const getWorkingStartedAt = (task: ChatTask): number => {
-  const runningEvent = task.events.findLast(
-    (event) => event.type === 'status' && event.status === 'running',
+export const getWorkDurationSeconds = (
+  task: ChatTask,
+  now = Date.now(),
+): number => {
+  const { events } = task
+  const startEvent =
+    events.findLast(
+      (event) => event.type === 'status' && event.status === 'running',
+    ) ?? events.findLast((event) => event.type === 'user-message')
+  const startAt = Date.parse(startEvent?.timestamp ?? task.createdAt)
+  const endEvent = events.findLast(
+    (event) =>
+      event.type === 'status' &&
+      event.status !== 'running' &&
+      event.status !== 'stopping',
   )
-  const userMessage = task.events.findLast(
-    (event) => event.type === 'user-message',
-  )
-  const timestamp =
-    runningEvent?.timestamp || userMessage?.timestamp || task.createdAt
-  const startedAt = Date.parse(timestamp)
-  return Number.isNaN(startedAt) ? Date.now() : startedAt
-}
-
-const getWorkingSeconds = (task: ChatTask): number => {
-  const endedAt = isWorking(task) ? Date.now() : Date.parse(task.updatedAt)
-  return Math.max(0, Math.floor((endedAt - getWorkingStartedAt(task)) / 1000))
+  const endedAt = isWorking(task)
+    ? now
+    : Date.parse(endEvent?.timestamp ?? startEvent?.timestamp ?? task.createdAt)
+  return Number.isFinite(startAt) && Number.isFinite(endedAt)
+    ? Math.max(0, Math.floor((endedAt - startAt) / 1000))
+    : 0
 }
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
@@ -760,7 +766,7 @@ export const createInstance = async (
     userMessageFontFamily,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
-        ? getWorkingSeconds(selectedTask)
+        ? getWorkDurationSeconds(selectedTask)
         : 0,
   }
   const saveDraft = (): Promise<void> =>
@@ -868,7 +874,7 @@ export const createInstance = async (
       state.workingSeconds = 0
       return
     }
-    state.workingSeconds = getWorkingSeconds(task)
+    state.workingSeconds = getWorkDurationSeconds(task)
     if (!isWorking(task)) {
       stopWorkingTimer()
       return
@@ -882,7 +888,7 @@ export const createInstance = async (
         stopWorkingTimer()
         return
       }
-      state.workingSeconds = getWorkingSeconds(selectedTask)
+      state.workingSeconds = getWorkDurationSeconds(selectedTask)
       void context?.requestRerender()
     }, workingTimerInterval)
   }

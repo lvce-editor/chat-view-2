@@ -4,9 +4,9 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  // Boards search adds 1,443 bytes to the 386,864-byte base bundle.
-  // Keep 193 bytes of headroom above the measured candidate (388,307 bytes).
-  ['chatMain.js', 388_500],
+  // Current main: 388,307 bytes; work-duration display adds 270 bytes.
+  // Keep 223 bytes of headroom above the measured candidate (388,577 bytes).
+  ['chatMain.js', 388_800],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],

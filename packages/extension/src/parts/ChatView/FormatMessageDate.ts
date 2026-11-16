@@ -8,6 +8,12 @@ const ranges = [
   [Infinity, 'year', 60 * 60 * 24 * 365],
 ] as const
 
+const formatDuration = (seconds: number): string => {
+  const [, unit, divisor] = ranges.find(([limit]) => seconds < limit)!
+  const value = Math.floor(seconds / divisor)
+  return `${value} ${unit}${value === 1 ? '' : 's'}`
+}
+
 export const formatMessageDate = (
   timestamp: string,
   now = Date.now(),
@@ -18,8 +24,12 @@ export const formatMessageDate = (
     return timestamp
   }
   const seconds = Math.floor(Math.abs(now - time) / 1000)
-  const [, unit, divisor] = ranges.find(([limit]) => seconds < limit)!
-  const value = Math.floor(seconds / divisor)
-  const relative = `${value} ${unit}${value === 1 ? '' : 's'}`
+  const relative = formatDuration(seconds)
   return now >= time ? `${relative} ago` : `in ${relative}`
+}
+
+export const formatWorkDuration = (seconds: number): string => {
+  return formatDuration(
+    Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0,
+  )
 }
