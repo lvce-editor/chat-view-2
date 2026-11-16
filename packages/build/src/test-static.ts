@@ -76,6 +76,14 @@ async function serve(
     )
     const target = extname(file) ? file : join(file, 'index.html')
     const content = await readFile(target)
+    const parsedUrl = new URL(url, 'http://localhost')
+    if (!extname(file) && !pathname.endsWith('/')) {
+      response.writeHead(301, {
+        Location: `${pathname}/${parsedUrl.search}`,
+      })
+      response.end()
+      return
+    }
     response.writeHead(200, {
       'Content-Type': mimeTypes[extname(target)] || 'application/octet-stream',
     })
@@ -197,11 +205,11 @@ try {
       const response = await boardPage.goto(`${baseUrl}board`)
       assert.equal(response?.status(), 200)
       await boardPage.locator('.Workbench').waitFor()
-      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board'))
+      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
       const reloadResponse = await boardPage.reload()
       assert.equal(reloadResponse?.status(), 200)
       await boardPage.locator('.Workbench').waitFor()
-      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board'))
+      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
       await boardPage.goto(`${baseUrl}board/`)
       await boardPage.locator('.Workbench').waitFor()
       assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
