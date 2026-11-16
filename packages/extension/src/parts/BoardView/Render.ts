@@ -1,8 +1,10 @@
 /* eslint-disable unicorn/max-nested-calls */
+
 import {
   mergeClassNames,
   VirtualDomElements,
 } from '@lvce-editor/virtual-dom-worker'
+import type { CardDetails } from './CardDetails.ts'
 import type {
   BoardError,
   TrelloBoard,
@@ -34,6 +36,9 @@ export interface BoardState {
   readonly boards: readonly TrelloBoardSummary[]
   readonly cardDraft?: CardDraft | undefined
   readonly connectedIds: readonly string[]
+  readonly details?: CardDetails | undefined
+  readonly detailsError?: string | undefined
+  readonly detailsLoading?: boolean
   readonly draggedCardId?: string | undefined
   readonly dropTargetId?: string | undefined
   readonly editDesc?: string
@@ -302,9 +307,93 @@ const renderBadges = (card: Readonly<TrelloCard>): readonly Dom.Node[] => {
   return badges.length > 0 ? [Dom.div('BoardCardBadges', badges)] : []
 }
 
+const detailEmptyText = (
+  loading: boolean | undefined,
+  error: string | undefined,
+): string => {
+  if (loading) return 'Loading attachments…'
+  return error ? 'Attachments unavailable' : 'No attachments'
+}
+
+const renderActivity = (state: BoardState): Dom.Node => {
+  const { details, detailsError, detailsLoading } = state
+  const emptyActivity =
+    !detailsLoading && !detailsError
+      ? [
+          Dom.div('BoardDetailEmpty', [
+            Dom.textNode('No comments or activity yet'),
+          ]),
+        ]
+      : []
+  return Dom.node(
+    VirtualDomElements.Section,
+    {
+      ariaLabel: 'Comments and activity',
+      className: 'BoardDialogActivity',
+    },
+    [
+      Dom.heading(3, 'BoardDetailHeading', 'Comments and activity'),
+      ...(detailsLoading
+        ? [
+            Dom.node(
+              VirtualDomElements.Div,
+              { className: 'BoardDetailEmpty', role: 'status' },
+              [Dom.textNode('Loading card details…')],
+            ),
+          ]
+        : []),
+      ...(detailsError
+        ? [
+            Dom.node(
+              VirtualDomElements.Div,
+              { className: 'BoardDetailsError', role: 'alert' },
+              [
+                Dom.textNode(detailsError),
+                Dom.button(
+                  'board-card-details-retry',
+                  'Try again',
+                  'BoardButton',
+                ),
+              ],
+            ),
+          ]
+        : []),
+      ...(details?.activities.length
+        ? details.activities.map((activity) =>
+            Dom.div('BoardActivity', [
+              Dom.div('BoardActivityAuthor', [Dom.textNode(activity.author)]),
+              Dom.div('BoardActivityText', [Dom.textNode(activity.text)]),
+              Dom.div('BoardActivityDate', [
+                Dom.textNode(
+                  Number.isNaN(Date.parse(activity.date))
+                    ? activity.date
+                    : new Date(activity.date).toLocaleString(),
+                ),
+              ]),
+            ]),
+          )
+        : emptyActivity),
+    ],
+  )
+}
+
 const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
-  const { editDesc, editError, editingCard, editName, savingCard } = state
+  const {
+    board,
+    details,
+    detailsError,
+    detailsLoading,
+    editDesc,
+    editError,
+    editingCard,
+    editName,
+    savingCard,
+  } = state
   if (!editingCard) return undefined
+  const disabled = Boolean(savingCard || detailsLoading || detailsError)
+  const status =
+    board?.lists.find((list) => list.id === editingCard.idList)?.name ||
+    'Unknown list'
   return Dom.node(
     VirtualDomElements.Div,
     {
@@ -316,42 +405,80 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
       tabIndex: -1,
     },
     [
-      Dom.form('board-card-edit', 'BoardDialog', [
-        Dom.heading(2, 'BoardDialogTitle', 'Edit card'),
-        input('edit-card-name', 'Title', editName, savingCard),
-        Dom.node(VirtualDomElements.Label, { className: 'BoardField' }, [
-          Dom.textNode('Description'),
-          Dom.node(VirtualDomElements.TextArea, {
-            ariaLabel: 'Description',
-            className: descriptionInputClass,
-            ...(savingCard && { disabled: true }),
-            name: 'edit-card-desc',
-            onInput: 'handleInput',
-            value: editDesc || '',
-          }),
-        ]),
-        ...(editError
-          ? [
-              Dom.node(
-                VirtualDomElements.Div,
-                { className: 'BoardDialogError', role: 'alert' },
-                [Dom.textNode(editError)],
-              ),
-            ]
-          : []),
-        Dom.div('BoardDialogActions', [
-          Dom.button('board-card-cancel', 'Cancel', 'BoardButton', {
+      Dom.div('BoardDialog', [
+        Dom.div('BoardDialogHeader', [
+          Dom.node(
+            VirtualDomElements.Span,
+            { ariaLabel: `Status: ${status}`, className: 'BoardCardStatus' },
+            [Dom.textNode(status)],
+          ),
+          Dom.button('board-card-cancel', '', 'BoardDialogClose', {
+            ariaLabel: 'Close card',
             disabled: Boolean(savingCard),
           }),
-          Dom.node(
-            VirtualDomElements.Button,
-            {
-              buttonType: 'submit',
-              className: primaryButtonClass,
-              disabled: savingCard || !(editName || '').trim(),
-            },
-            [Dom.textNode(savingCard ? 'Saving…' : 'Save changes')],
-          ),
+        ]),
+        Dom.div('BoardDialogBody', [
+          Dom.form('board-card-edit', 'BoardDialogMain', [
+            Dom.heading(2, 'BoardDialogTitle', 'Edit card'),
+            input('edit-card-name', 'Title', editName, Boolean(savingCard)),
+            Dom.node(VirtualDomElements.Label, { className: 'BoardField' }, [
+              Dom.textNode('Description'),
+              Dom.node(VirtualDomElements.TextArea, {
+                ariaLabel: 'Description',
+                className: descriptionInputClass,
+                ...(disabled && { disabled: true }),
+                name: 'edit-card-desc',
+                onInput: 'handleInput',
+                value: editDesc || '',
+              }),
+            ]),
+            Dom.node(
+              VirtualDomElements.Section,
+              { ariaLabel: 'Attachments', className: 'BoardAttachments' },
+              [
+                Dom.heading(3, 'BoardDetailHeading', 'Attachments'),
+                ...(details?.attachments.length
+                  ? details.attachments.map((attachment) =>
+                      Dom.link(
+                        attachment.url,
+                        attachment.name,
+                        'BoardAttachment',
+                      ),
+                    )
+                  : [
+                      Dom.div('BoardDetailEmpty', [
+                        Dom.textNode(
+                          detailEmptyText(detailsLoading, detailsError),
+                        ),
+                      ]),
+                    ]),
+              ],
+            ),
+            ...(editError
+              ? [
+                  Dom.node(
+                    VirtualDomElements.Div,
+                    { className: 'BoardDialogError', role: 'alert' },
+                    [Dom.textNode(editError)],
+                  ),
+                ]
+              : []),
+            Dom.div('BoardDialogActions', [
+              Dom.button('board-card-cancel', 'Cancel', 'BoardButton', {
+                disabled: Boolean(savingCard),
+              }),
+              Dom.node(
+                VirtualDomElements.Button,
+                {
+                  buttonType: 'submit',
+                  className: primaryButtonClass,
+                  disabled: disabled || !(editName || '').trim(),
+                },
+                [Dom.textNode(savingCard ? 'Saving…' : 'Save changes')],
+              ),
+            ]),
+          ]),
+          renderActivity(state),
         ]),
       ]),
     ],

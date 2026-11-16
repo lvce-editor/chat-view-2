@@ -80,6 +80,32 @@ export const testBoardSelection = async (
       })
       return
     }
+    if (url.pathname === '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa') {
+      await route.fulfill({
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        json: {
+          desc: 'A detailed description from Trello.',
+          attachments: [
+            { name: 'design.png', url: 'https://example.com/design.png' },
+          ],
+          actions: [
+            {
+              type: 'commentCard',
+              date: '2026-11-16T12:00:00.000Z',
+              memberCreator: { fullName: 'Board member' },
+              data: { text: 'Please review the attached design.' },
+            },
+            {
+              type: 'createCard',
+              date: '2026-11-15T12:00:00.000Z',
+              memberCreator: { fullName: 'Board member' },
+              data: {},
+            },
+          ],
+        },
+      })
+      return
+    }
     directLoads.push(`${url.pathname}${url.search}`)
     await route.fulfill({
       headers: { 'Access-Control-Allow-Origin': '*' },
@@ -94,7 +120,7 @@ export const testBoardSelection = async (
           {
             coverDataUrl:
               'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
-            id: 'card-1',
+            id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
             idList: 'list-1',
             name: 'Card with cover',
             pos: 1,
@@ -166,7 +192,11 @@ export const testBoardSelection = async (
     }, backend)
     await page.goto(baseUrl)
     await page.locator('.Workbench').waitFor()
-    await page.getByRole('tab', { name: 'Boards', exact: true }).click()
+    await page.keyboard.press('Control+Shift+P')
+    await page.getByRole('combobox').fill('>Open Board Layout')
+    await page
+      .getByRole('option', { name: 'View: Open Board Layout', exact: true })
+      .click()
     const tiles = page.locator('.BoardTile')
     await page.getByRole('button', { name: 'Open Engineering' }).waitFor()
     assert.equal(
@@ -228,6 +258,85 @@ export const testBoardSelection = async (
       '1',
     )
     assert.equal(await page.locator('.BoardCardBadgeIcon').count(), 2)
+    await page
+      .getByRole('button', { name: 'Card with cover', exact: false })
+      .click()
+    const dialog = page.getByRole('dialog', { name: 'Edit Trello card' })
+    await dialog
+      .getByText('Please review the attached design.', { exact: true })
+      .waitFor()
+    assert.equal(await dialog.getByLabel('Status: Todo').textContent(), 'Todo')
+    assert.equal(
+      await dialog
+        .getByRole('textbox', { name: 'Description', exact: true })
+        .inputValue(),
+      'A detailed description from Trello.',
+    )
+    assert.equal(
+      await dialog
+        .getByRole('link', { name: 'design.png' })
+        .getAttribute('href'),
+      'https://example.com/design.png',
+    )
+    await dialog.getByText('Created this card', { exact: true }).waitFor()
+    const dialogBox = await page.locator('.BoardDialog').boundingBox()
+    assert.ok(
+      dialogBox && dialogBox.width > 900,
+      'Card detail uses the full board layout',
+    )
+    const main = await page.locator('.BoardDialogMain').boundingBox()
+    const activity = await page.locator('.BoardDialogActivity').boundingBox()
+    assert.ok(
+      main && activity && activity.x >= main.x + main.width - 1,
+      'Activity is right of description and attachments',
+    )
+    assert.equal(
+      await dialog.evaluate(
+        (element) => globalThis.getComputedStyle(element).backgroundColor,
+      ),
+      'rgba(0, 0, 0, 0.45)',
+    )
+    if (process.env.BOARD_DETAIL_SCREENSHOT)
+      await page.screenshot({ path: process.env.BOARD_DETAIL_SCREENSHOT })
+    await page.setViewportSize({ width: 390, height: 844 })
+    const narrowMain = await page.locator('.BoardDialogMain').boundingBox()
+    const narrowActivity = await page
+      .locator('.BoardDialogActivity')
+      .boundingBox()
+    assert.ok(
+      narrowMain &&
+        narrowActivity &&
+        narrowActivity.y >= narrowMain.y + narrowMain.height - 1,
+      'Activity stacks below details on mobile',
+    )
+    const panel = await page.locator('.BoardDialog').boundingBox()
+    assert.ok(
+      panel && panel.x >= 0 && panel.x + panel.width <= 390,
+      'Card detail fits mobile',
+    )
+    if (process.env.BOARD_DETAIL_MOBILE_SCREENSHOT)
+      await page.screenshot({
+        path: process.env.BOARD_DETAIL_MOBILE_SCREENSHOT,
+      })
+    await dialog
+      .getByRole('button', { name: 'Close card', exact: true })
+      .click()
+    await dialog.waitFor({ state: 'detached' })
+    await page.setViewportSize({ width: 1280, height: 720 })
+    await page
+      .getByRole('button', { name: 'Card with cover', exact: false })
+      .click()
+    await dialog.waitFor()
+    await page.waitForFunction(
+      () =>
+        globalThis.document.activeElement?.getAttribute('name') ===
+        'edit-card-name',
+    )
+    await page.keyboard.press('Escape')
+    await dialog.waitFor({ state: 'detached' })
+    process.stdout.write(
+      'Card details: status, attachments, comments/activity, desktop/mobile and dismissal: pass\n',
+    )
     const title = page.getByRole('textbox', { name: 'Card title', exact: true })
     for (const list of ['Todo', 'Doing', 'Todo']) {
       await page.getByRole('button', { name: `Add a card to ${list}` }).click()

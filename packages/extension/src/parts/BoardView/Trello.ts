@@ -4,6 +4,7 @@ import {
   resolveBackendConfiguration,
   type BackendConfiguration,
 } from '../BackendConfiguration/BackendConfiguration.ts'
+import { normalizeDetails, type CardDetails } from './CardDetails.ts'
 
 export interface TrelloCard {
   readonly attachmentCount?: number
@@ -250,6 +251,10 @@ export interface TrelloClient {
     input: string,
     signal: Readonly<AbortSignal>,
   ) => Promise<TrelloBoard>
+  readonly loadCard: (
+    id: string,
+    signal: Readonly<AbortSignal>,
+  ) => Promise<CardDetails>
   readonly moveCard: (
     cardId: string,
     listId: string,
@@ -411,6 +416,31 @@ export const createTrelloClient = (
       throw new TrelloError(boardError(0))
     }
   }
+  const loadCard = async (
+    id: string,
+    signal: Readonly<AbortSignal>,
+  ): Promise<CardDetails> => {
+    if (!cardIdPattern.test(id)) throw new TrelloError(boardError(404))
+    try {
+      const data = await trelloRequest(
+        `cards/${id}?${new URLSearchParams({
+          actions: 'commentCard,createCard,updateCard:idList',
+          actions_limit: '100',
+          attachment_fields: 'name,url',
+          attachments: 'true',
+          fields: 'desc',
+        })}`,
+        signal,
+      )
+      return normalizeDetails(data)
+    } catch (error) {
+      if (signal.aborted || error instanceof TrelloError) throw error
+      throw new TrelloError({
+        code: 'TRELLO_CARD_DETAILS_FAILED',
+        message: 'Unable to load card details. Try again.',
+      })
+    }
+  }
   const updateCard = async (
     id: string,
     name: string,
@@ -539,6 +569,7 @@ export const createTrelloClient = (
     createCard,
     disconnect,
     load,
+    loadCard,
     moveCard,
     status,
     updateCard,

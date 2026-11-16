@@ -514,3 +514,77 @@ test('write denial explains reconnecting and unconfirmed writes are never retrie
   })
   expect(failedRequest).toHaveBeenCalledTimes(1)
 })
+
+test('loads card attachments and comments directly, discarding unsafe links and unknown activities', async () => {
+  const request = requestSequence([
+    Response.json({ accessToken: 'trello-token' }),
+    Response.json({
+      actions: [
+        {
+          data: { text: '<script>plain text</script>' },
+          date: '2026-11-16',
+          memberCreator: { fullName: 'A member' },
+          type: 'commentCard',
+        },
+        { data: {}, date: '2026-11-15', type: 'createCard' },
+        {
+          data: { listAfter: { name: 'Doing' } },
+          date: '2026-11-14',
+          type: 'updateCard',
+        },
+        { data: {}, date: '2026-11-13', type: 'unknown' },
+      ],
+      attachments: [
+        { name: 'design.png', url: 'https://example.com/design.png' },
+        { name: 'Unsafe', url: 'javascript:alert(1)' },
+      ],
+      desc: 'Full description',
+    }),
+  ])
+  const details = await createTrelloClient(configuration, request).loadCard(
+    'aaaaaaaaaaaaaaaaaaaaaaaa',
+    new AbortController().signal,
+  )
+  expect(details).toEqual({
+    activities: [
+      {
+        author: 'A member',
+        date: '2026-11-16',
+        text: '<script>plain text</script>',
+      },
+      {
+        author: 'Trello member',
+        date: '2026-11-15',
+        text: 'Created this card',
+      },
+      {
+        author: 'Trello member',
+        date: '2026-11-14',
+        text: 'Moved this card to Doing',
+      },
+    ],
+    attachments: [
+      { name: 'design.png', url: 'https://example.com/design.png' },
+    ],
+    desc: 'Full description',
+  })
+  const url = new URL(request.mock.calls[1]?.[0] as string)
+  expect(url.origin).toBe('https://api.trello.com')
+  expect(url.searchParams.get('attachments')).toBe('true')
+  expect(url.searchParams.get('actions')).toBe(
+    'commentCard,createCard,updateCard:idList',
+  )
+})
+
+test('rejects incomplete card detail responses instead of presenting missing data as empty', async () => {
+  const request = requestSequence([
+    Response.json({ accessToken: 'trello-token' }),
+    Response.json({ desc: 'Details' }),
+  ])
+  await expect(
+    createTrelloClient(configuration, request).loadCard(
+      'aaaaaaaaaaaaaaaaaaaaaaaa',
+      new AbortController().signal,
+    ),
+  ).rejects.toThrow('Unable to load card details')
+})
