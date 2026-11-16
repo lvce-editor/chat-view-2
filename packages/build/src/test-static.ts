@@ -198,6 +198,43 @@ try {
     } finally {
       await direct.close()
     }
+    const savedIdeLayout = await browser.newContext()
+    await savedIdeLayout.addInitScript(`
+      localStorage.setItem('Layout', JSON.stringify({ aiNativeLayout: false }))
+      const root = document.documentElement
+      const observer = new MutationObserver(() => {
+        if (!root.classList.contains('AiNativeLayoutStartup')) return
+        window.chatStartupBackground = getComputedStyle(root).backgroundColor
+      })
+      observer.observe(root, { attributeFilter: ['class'], attributes: true })
+    `)
+    const savedIdePage = await savedIdeLayout.newPage()
+    try {
+      await savedIdePage.goto(`${baseUrl}chat/`, {
+        waitUntil: 'domcontentloaded',
+      })
+      const startupBackground = await savedIdePage.evaluate(
+        'window.chatStartupBackground',
+      )
+      assert.equal(
+        startupBackground,
+        'rgb(255, 255, 255)',
+        'direct chat with a saved IDE layout used the dark startup surface',
+      )
+      await savedIdePage.locator('.Workbench.AiNativeLayout').waitFor()
+      await savedIdePage.locator('.ChatLoggedOut').waitFor()
+      process.stdout.write(
+        'direct chat uses a light startup surface with saved IDE layout: pass\n',
+      )
+    } catch (error) {
+      console.error(
+        'Saved IDE layout startup state:',
+        await savedIdePage.locator('body').innerText(),
+      )
+      throw error
+    } finally {
+      await savedIdeLayout.close()
+    }
     for (const preserveStartupFocus of [false, true]) {
       const context = await browser.newContext()
       await context.addInitScript((preserveFocus) => {
