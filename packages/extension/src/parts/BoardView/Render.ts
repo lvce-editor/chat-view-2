@@ -17,6 +17,7 @@ const descriptionInputClass = mergeClassNames(
   'BoardInput',
   'BoardDescriptionInput',
 )
+const searchInputClass = mergeClassNames('BoardInput', 'BoardSearchInput')
 
 export interface CardDraft {
   readonly error?: string | undefined
@@ -44,6 +45,7 @@ export interface BoardState {
   readonly loading: boolean
   readonly providerSelected: boolean
   readonly savingCard?: boolean
+  readonly searchQuery?: string
 }
 
 const input = (
@@ -116,10 +118,14 @@ const renderComposer = (
 }
 
 const renderBoardTiles = (state: BoardState): Dom.Node => {
-  const { boards, loading } = state
+  const { boards, loading, searchQuery = '' } = state
+  const query = searchQuery.trim().toLocaleLowerCase()
+  const matchingBoards = query
+    ? boards.filter((board) => board.name.toLocaleLowerCase().includes(query))
+    : boards
   return Dom.div(
     'BoardTileGrid',
-    boards.map((board) =>
+    matchingBoards.map((board) =>
       Dom.node(
         VirtualDomElements.Button,
         {
@@ -167,6 +173,39 @@ const renderBoardTiles = (state: BoardState): Dom.Node => {
   )
 }
 
+const renderBoardSearch = (state: BoardState): Dom.Node => {
+  const { boards, searchQuery = '' } = state
+  const query = searchQuery.trim().toLocaleLowerCase()
+  return Dom.div('BoardSearch', [
+    Dom.node(VirtualDomElements.Input, {
+      ariaLabel: 'Search boards',
+      autoComplete: 'off',
+      className: searchInputClass,
+      inputType: 'search',
+      name: 'board-search',
+      onInput: 'handleInput',
+      placeholder: 'Search boards',
+      spellcheck: false,
+      value: searchQuery,
+    }),
+    ...(query
+      ? [
+          Dom.div('BoardSearchResults', [
+            ...(boards.some((board) =>
+              board.name.toLocaleLowerCase().includes(query),
+            )
+              ? [renderBoardTiles(state)]
+              : [
+                  Dom.div('BoardSearchEmpty', [
+                    Dom.textNode('No boards found'),
+                  ]),
+                ]),
+          ]),
+        ]
+      : []),
+  ])
+}
+
 const connectionHelp = (state: BoardState): string => {
   const { boards, error, loading } = state
   if (loading) return 'Loading your Trello boards…'
@@ -176,11 +215,18 @@ const connectionHelp = (state: BoardState): string => {
 }
 
 const renderConnection = (state: BoardState): readonly Dom.Node[] => {
-  const { accountConnected, authorizationUrl, authorizing, loading } = state
+  const {
+    accountConnected,
+    authorizationUrl,
+    authorizing,
+    loading,
+    searchQuery,
+  } = state
   return accountConnected
     ? [
         Dom.div('BoardCredentialsHelp', [Dom.textNode(connectionHelp(state))]),
-        renderBoardTiles(state),
+        renderBoardSearch(state),
+        ...(searchQuery ? [] : [renderBoardTiles(state)]),
         Dom.button('board-check-account', 'Refresh boards', 'BoardButton', {
           disabled: loading,
         }),
@@ -229,7 +275,7 @@ const renderConnection = (state: BoardState): readonly Dom.Node[] => {
       ]
 }
 const renderSetup = (state: BoardState): Dom.Node => {
-  const { connectedIds, providerSelected } = state
+  const { connectedIds, providerSelected, searchQuery } = state
   const showProviderGrid = !providerSelected
   return Dom.div('BoardSetup', [
     Dom.heading(2, 'BoardSetupTitle', 'Connect a board'),
@@ -255,7 +301,7 @@ const renderSetup = (state: BoardState): Dom.Node => {
             ),
           ]),
           ...renderConnection(state),
-          ...(connectedIds.length > 0
+          ...(connectedIds.length > 0 && !searchQuery
             ? [
                 Dom.div('BoardRemembered', [
                   Dom.heading(3, 'BoardRememberedTitle', 'Remembered boards'),
@@ -429,6 +475,16 @@ const renderColumns = (
     ),
   )
 
+const renderToolbar = (state: BoardState): Dom.Node => {
+  const { board } = state
+  return Dom.div('BoardToolbar', [
+    Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
+    ...(board ? [renderBoardSearch(state)] : []),
+    Dom.button('board-chat', 'Chat', 'BoardButton'),
+    Dom.button('board-ide', 'IDE layout', 'BoardButton'),
+  ])
+}
+
 export const render = (state: BoardState): Dom.Node => {
   const {
     authorizing,
@@ -479,11 +535,7 @@ export const render = (state: BoardState): Dom.Node => {
   const cardDialog = renderCardDialog(state)
   const errorNode = renderError(state)
   return Dom.div(mergeClassNames('BoardView', board ? 'BoardViewTrello' : ''), [
-    Dom.div('BoardToolbar', [
-      Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
-      Dom.button('board-chat', 'Chat', 'BoardButton'),
-      Dom.button('board-ide', 'IDE layout', 'BoardButton'),
-    ]),
+    renderToolbar(state),
     ...(errorNode ? [errorNode] : []),
     ...(board
       ? [

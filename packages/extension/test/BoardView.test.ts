@@ -117,6 +117,44 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   )
 })
 
+test('searches connected boards by name and opens the selected result', async () => {
+  const host = createHost()
+  jest.mocked(host.boards).mockResolvedValue([
+    { id: '5k8NLHLh', name: 'Lvce Editor' },
+    { id: '12345678', name: 'Personal Tasks' },
+  ])
+  const view = await createInstance(createContext(), host)
+  await flush()
+  await view.handleEvent?.({
+    name: 'board-search',
+    type: 'input',
+    value: 'missing',
+  })
+  expect(JSON.stringify(await view.render())).toContain('No boards found')
+  await view.handleEvent?.({
+    name: 'board-search',
+    type: 'input',
+    value: 'personal',
+  })
+  const dom = JSON.stringify(await view.render())
+  expect(dom).toContain('Personal Tasks')
+  expect(dom).not.toContain('Lvce Editor')
+  await view.handleEvent?.({ name: 'board-search', type: 'input', value: '' })
+  expect(JSON.stringify(await view.render())).not.toContain(
+    'BoardSearchResults',
+  )
+  await view.handleEvent?.({
+    name: 'board-search',
+    type: 'input',
+    value: 'personal',
+  })
+  await view.handleEvent?.({ name: 'board-select:12345678', type: 'click' })
+  await flush()
+  expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
+  expect(JSON.stringify(await view.render())).toContain('BoardViewTrello')
+  view.dispose?.()
+})
+
 test('stale completion and disposed requests cannot replace current state', async () => {
   const host = createHost()
   const first = Promise.withResolvers<TrelloBoard>()
