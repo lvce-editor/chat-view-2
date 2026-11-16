@@ -573,6 +573,17 @@ test('discovers Trello boards automatically on entry and reload', async () => {
   reloadedView.dispose?.()
 })
 
+test('shows the existing empty state for an automatically discovered empty account', async () => {
+  const host = createHost()
+  jest.mocked(host.boards).mockResolvedValue([])
+  const view = await createInstance(createContext(), host)
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('No open boards found')
+  expect(host.status).toHaveBeenCalledTimes(1)
+  expect(host.boards).toHaveBeenCalledTimes(1)
+  view.dispose?.()
+})
+
 test('keeps the Trello connection flow for disconnected accounts on entry', async () => {
   const host = createHost()
   jest
