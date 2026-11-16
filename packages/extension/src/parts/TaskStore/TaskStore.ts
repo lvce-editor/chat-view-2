@@ -5,6 +5,7 @@ export interface TaskStore {
   readonly archive: (id: string) => Promise<void>
   readonly get: (id: string) => Promise<ChatTask | undefined>
   readonly list: (limit: number) => Promise<readonly ChatTask[]>
+  readonly remove?: (id: string) => Promise<void>
   readonly rename: (
     id: string,
     title: string,
@@ -32,6 +33,9 @@ export const createMemoryTaskStore = (
         .filter((task) => !task.archived)
         .toSorted((a, b) => b.updatedAt.localeCompare(a.updatedAt))
         .slice(0, Math.max(0, limit))
+    },
+    async remove(id) {
+      tasks.delete(id)
     },
     async rename(id, title, onlyIfNotGenerated = false) {
       const task = tasks.get(id)
@@ -78,9 +82,9 @@ const publishTaskChange = (): void => {
   taskChangeChannel?.postMessage({ type: 'tasks-changed' })
 }
 
-const openDatabase = (): Promise<IDBDatabase> => {
+const openDatabase = (name = databaseName): Promise<IDBDatabase> => {
   const { promise, reject, resolve } = Promise.withResolvers<IDBDatabase>()
-  const request = indexedDB.open(databaseName, 2)
+  const request = indexedDB.open(name, 2)
   request.onerror = () => reject(request.error)
   request.onsuccess = () => resolve(request.result)
   request.onupgradeneeded = () => {
@@ -110,13 +114,13 @@ const transactionToPromise = (transaction: IDBTransaction): Promise<void> => {
   return promise
 }
 
-export const createIndexedDbTaskStore = (): TaskStore => {
+export const createIndexedDbTaskStore = (name = databaseName): TaskStore => {
   if (typeof indexedDB === 'undefined') {
     return createMemoryTaskStore()
   }
   return {
     async archive(id) {
-      const database = await openDatabase()
+      const database = await openDatabase(name)
       try {
         const transaction = database.transaction(storeName, 'readwrite')
         const transactionPromise = transactionToPromise(transaction)
@@ -145,7 +149,7 @@ export const createIndexedDbTaskStore = (): TaskStore => {
       }
     },
     async get(id) {
-      const database = await openDatabase()
+      const database = await openDatabase(name)
       try {
         const transaction = database.transaction(storeName, 'readonly')
         const result = await requestToPromise<ChatTask | undefined>(
@@ -157,7 +161,7 @@ export const createIndexedDbTaskStore = (): TaskStore => {
       }
     },
     async list(limit) {
-      const database = await openDatabase()
+      const database = await openDatabase(name)
       try {
         const transaction = database.transaction(storeName, 'readonly')
         const tasks = await requestToPromise<ChatTask[]>(
@@ -171,8 +175,20 @@ export const createIndexedDbTaskStore = (): TaskStore => {
         database.close()
       }
     },
+    async remove(id) {
+      const database = await openDatabase(name)
+      try {
+        const transaction = database.transaction(storeName, 'readwrite')
+        const committed = transactionToPromise(transaction)
+        transaction.objectStore(storeName).delete(id)
+        await committed
+        publishTaskChange()
+      } finally {
+        database.close()
+      }
+    },
     async rename(id, title, onlyIfNotGenerated = false) {
-      const database = await openDatabase()
+      const database = await openDatabase(name)
       try {
         const transaction = database.transaction(storeName, 'readwrite')
         const store = transaction.objectStore(storeName)
@@ -197,7 +213,7 @@ export const createIndexedDbTaskStore = (): TaskStore => {
       }
     },
     async save(task) {
-      const database = await openDatabase()
+      const database = await openDatabase(name)
       try {
         const transaction = database.transaction(storeName, 'readwrite')
         const transactionPromise = transactionToPromise(transaction)

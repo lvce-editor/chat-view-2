@@ -156,6 +156,7 @@ export interface ChatTask {
   readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly responseId?: string
   readonly status: ChatTaskStatus
+  readonly storageRevision?: number
   readonly streamingText?: string
   readonly title: string
   readonly titleGenerated?: boolean

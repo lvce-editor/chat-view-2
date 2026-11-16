@@ -4,9 +4,9 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  // Chat session keyboard navigation measures 373,257 bytes on Node 26.12.1.
-  // Keep 1,243 bytes of headroom.
-  ['chatMain.js', 374_500],
+  // Account storage measures 381,605 bytes on Node 26.12.1 (+8,348 vs baseline).
+  // Keep 1,395 bytes of headroom for the opt-in sync and recovery paths.
+  ['chatMain.js', 383_000],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],
