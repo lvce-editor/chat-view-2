@@ -87,6 +87,10 @@ export const test: Test = async ({
       await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
       const composer = Locator('textarea[name="composer"]')
       const message = `Long conversation ${side} `.repeat(100)
+      // eslint-disable-next-line e2e/no-direct-click -- focus the composer before clearing its prior draft
+      await composer.click()
+      await KeyBoard.press('Control+A')
+      await KeyBoard.press('Backspace')
       await composer.type(message)
       await KeyBoard.press('Control+B')
       await expect(sessions).toHaveCount(0)
