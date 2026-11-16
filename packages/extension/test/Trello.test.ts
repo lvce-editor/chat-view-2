@@ -431,16 +431,29 @@ test('creates cards through the backend without provider credentials', async () 
 })
 
 test('write denial explains reconnecting and unconfirmed writes are never retried', async () => {
-  for (const status of [403, 500]) {
-    const request = requestWith({ secret: 'private' }, status)
-    const client = createTrelloClient(configuration, request)
-    await expect(
-      client.createCard('todo', 'Task', new AbortController().signal),
-    ).rejects.toMatchObject({
-      details: {
-        code: status === 403 ? 'TRELLO_WRITE_DENIED' : 'TRELLO_CREATE_FAILED',
-      },
-    })
-    expect(request).toHaveBeenCalledTimes(1)
-  }
+  const deniedRequest = requestWith({ secret: 'private' }, 403)
+  const client = createTrelloClient(configuration, deniedRequest)
+  await expect(
+    client.createCard('todo', 'Task', new AbortController().signal),
+  ).rejects.toMatchObject({
+    details: {
+      code: 'TRELLO_WRITE_DENIED',
+      message:
+        'Trello rejected this card. Check that you can add cards to this board. If you can, disconnect and reconnect Trello to refresh its access. Your title is still here so you can retry.',
+    },
+  })
+  expect(deniedRequest).toHaveBeenCalledTimes(1)
+
+  const failedRequest = requestWith({ secret: 'private' }, 500)
+  const failedClient = createTrelloClient(configuration, failedRequest)
+  await expect(
+    failedClient.createCard('todo', 'Task', new AbortController().signal),
+  ).rejects.toMatchObject({
+    details: {
+      code: 'TRELLO_CREATE_FAILED',
+      message:
+        'The card could not be confirmed. Refresh the board before trying again to avoid duplicates. Your title has been kept.',
+    },
+  })
+  expect(failedRequest).toHaveBeenCalledTimes(1)
 })

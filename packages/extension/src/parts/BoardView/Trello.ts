@@ -446,7 +446,7 @@ export const createTrelloClient = (
         throw new TrelloError({
           code: 'TRELLO_WRITE_DENIED',
           message:
-            'Check that you can add cards to this board, or disconnect and reconnect Trello to allow changes.',
+            'Trello rejected this card. Check that you can add cards to this board. If you can, disconnect and reconnect Trello to refresh its access. Your title is still here so you can retry.',
         })
       throw new TrelloError({
         code: 'TRELLO_CREATE_FAILED',
