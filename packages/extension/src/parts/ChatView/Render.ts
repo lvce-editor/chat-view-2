@@ -1030,14 +1030,7 @@ const renderImageGenerationPlaceholder = (
   state: Readonly<ChatViewState>,
 ): Dom.Node | undefined => {
   const { selectedTask: task } = state
-  if (
-    !task ||
-    !isRunning(task) ||
-    getLatestActivities(summarizeTask(task).activities).every(
-      (activity) =>
-        activity.label !== 'Generating image' || activity.status !== 'running',
-    )
-  ) {
+  if (!task || !isRunning(task) || !task.imageGenerationActive) {
     return undefined
   }
   return Dom.node(VirtualDomElements.Div, {

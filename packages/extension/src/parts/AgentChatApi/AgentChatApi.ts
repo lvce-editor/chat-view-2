@@ -215,7 +215,6 @@ export const createAgentChatApi = ({
       task = setStatus(task, 'running')
       let turnHost: AgentToolHost | undefined
       let streamedText = ''
-      let imageGenerationStarted = false
       try {
         const toolHost = createToolHost
           ? await createToolHost(task)
@@ -284,20 +283,12 @@ export const createAgentChatApi = ({
               thinkingMode: options.thinkingMode,
             }),
             onImageGenerationStart: async () => {
-              if (imageGenerationStarted) {
+              if (task.imageGenerationActive) {
                 return
               }
-              imageGenerationStarted = true
-              task = await withEvent(
-                task,
-                createEvent({
-                  label: 'Generating image',
-                  status: 'running',
-                  type: 'activity',
-                }),
-                store,
-                options,
-              )
+              task = { ...task, imageGenerationActive: true }
+              await store.save(task)
+              await notify(task, options, store)
             },
             onTextDelta: async (delta) => {
               streamedText += delta
@@ -313,18 +304,14 @@ export const createAgentChatApi = ({
             ...(options?.signal && { signal: options.signal }),
             tools: await toolHost.getDefinitions(),
           })
-          if (imageGenerationStarted) {
-            imageGenerationStarted = false
-            task = await withEvent(
-              task,
-              createEvent({
-                label: 'Generating image',
-                status: 'completed',
-                type: 'activity',
-              }),
-              store,
-              options,
-            )
+          if (task.imageGenerationActive) {
+            const {
+              imageGenerationActive: _active,
+              ...withoutImageGeneration
+            } = task
+            task = withoutImageGeneration
+            await store.save(task)
+            await notify(task, options, store)
           }
           await trace(
             {
@@ -549,21 +536,11 @@ export const createAgentChatApi = ({
         }
         throw new Error(`Agent stopped after ${maxSteps} steps`)
       } catch (error) {
-        if (imageGenerationStarted) {
-          imageGenerationStarted = false
-          task = await withEvent(
-            task,
-            createEvent({
-              detail: error instanceof Error ? error.message : String(error),
-              label: 'Generating image',
-              status: 'failed',
-              type: 'activity',
-            }),
-            store,
-            options,
-          )
-        }
-        const { streamingText: _partial, ...withoutStreaming } = task
+        const {
+          imageGenerationActive: _imageGenerationActive,
+          streamingText: _partial,
+          ...withoutStreaming
+        } = task
         task = withoutStreaming
         if (streamedText) {
           task = appendEvent(
@@ -639,7 +616,11 @@ export const createAgentChatApi = ({
           }),
         )
       }
-      const { streamingText: _partial, ...withoutStreaming } = recovered
+      const {
+        imageGenerationActive: _imageGenerationActive,
+        streamingText: _partial,
+        ...withoutStreaming
+      } = recovered
       recovered = setStatus(
         appendEvent(
           withoutStreaming,

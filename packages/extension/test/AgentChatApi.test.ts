@@ -14,6 +14,7 @@ import { createMemoryTaskStore } from '../src/parts/TaskStore/TaskStore.ts'
 // eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
 const runImageGenerationStep: AgentBackend['runStep'] = async (options) => {
   await options.onImageGenerationStart?.()
+  await options.onImageGenerationStart?.()
   return {
     images: [
       {
@@ -506,20 +507,10 @@ test('shows and clears image generation activity during a response', async () =>
     },
   })
 
-  expect(
-    updates.some((update) =>
-      summarizeTask(update).activities.some(
-        (activity) =>
-          activity.label === 'Generating image' &&
-          activity.status === 'running',
-      ),
-    ),
-  ).toBe(true)
-  expect(
-    summarizeTask(task).activities.findLast(
-      (activity) => activity.label === 'Generating image',
-    )?.status,
-  ).toBe('completed')
+  expect(updates.filter((update) => update.imageGenerationActive)).toHaveLength(
+    1,
+  )
+  expect(task.imageGenerationActive).toBeUndefined()
   expect(
     task.events.some(
       (event) => event.type === 'assistant-message' && event.images?.length,

@@ -433,16 +433,6 @@ const runWebSocketRequest = (
   let usage: ChatTokenUsage | undefined
   let settled = false
   let text = ''
-  let imageGenerationStarted = false
-
-  const notifyImageGenerationStarted = async (): Promise<void> => {
-    if (imageGenerationStarted) {
-      return
-    }
-    imageGenerationStarted = true
-    await options.onImageGenerationStart?.()
-  }
-
   const cleanup = (): void => {
     socket.onclose = null
     socket.onerror = null
@@ -509,7 +499,7 @@ const runWebSocketRequest = (
     }
     const { item } = event
     if (isImageGenerationStartEvent(event)) {
-      await notifyImageGenerationStarted()
+      await options.onImageGenerationStart?.()
       return
     }
     if (

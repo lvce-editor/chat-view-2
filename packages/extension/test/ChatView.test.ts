@@ -1190,14 +1190,10 @@ test('renders generated assistant images and opens a dismissible image preview',
 
 test('renders an accessible image placeholder only while generation is running', async () => {
   const instance = await createTestInstance()
-  const runningActivity = createEvent({
-    label: 'Generating image',
-    status: 'running',
-    type: 'activity',
-  })
   const task: ChatTask = {
     createdAt: '2026-01-01T00:00:00.000Z',
-    events: [runningActivity],
+    events: [],
+    imageGenerationActive: true,
     id: 'task-generating-image',
     modelId: 'gpt-test',
     status: 'running',
@@ -1219,14 +1215,7 @@ test('renders an accessible image placeholder only while generation is running',
 
   const completedTask = {
     ...task,
-    events: [
-      runningActivity,
-      createEvent({
-        label: 'Generating image',
-        status: 'completed',
-        type: 'activity',
-      }),
-    ],
+    imageGenerationActive: false,
     status: 'completed' as const,
   }
   instance.setState({ ...instance.getState(), selectedTask: completedTask })

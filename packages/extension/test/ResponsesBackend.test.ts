@@ -1583,10 +1583,6 @@ test('reports the start of streamed image generation once', async () => {
     type: 'response.output_item.added',
   })
   socket.receive({
-    item: { type: 'image_generation_call' },
-    type: 'response.output_item.added',
-  })
-  socket.receive({
     response: { id: 'response-image' },
     type: 'response.completed',
   })
