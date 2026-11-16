@@ -14,7 +14,7 @@ import type { ChatViewState } from './ChatViewState.ts'
 import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 import { applyLayoutClasses } from './ApplyLayoutClasses.ts'
-import { formatMessageDate } from './FormatMessageDate.ts'
+import { formatMessageDate, formatWorkDuration } from './FormatMessageDate.ts'
 import { getMathTokens } from './MathExpressions.ts'
 
 const fileUriPattern = /^(?:file|memfs|remote-ssh|html|opfs):\/\//u
@@ -1414,11 +1414,11 @@ const renderActivity = (state: Readonly<ChatViewState>): Dom.Node => {
   if (activities.length === 0 && !isRunning(task) && !hasWorked) {
     return Dom.div('ChatActivityHidden', [])
   }
-  const unit = workingSeconds === 1 ? 'second' : 'seconds'
+  const duration = formatWorkDuration(workingSeconds)
   const label = isRunning(task)
-    ? `Working for ${workingSeconds} ${unit}`
+    ? `Working for ${duration}`
     : hasWorked
-      ? `Worked for ${workingSeconds} ${unit}`
+      ? `Worked for ${duration}`
       : `${activities.length} ${activities.length === 1 ? 'step' : 'steps'} completed`
   return Dom.div('ChatActivity', [
     Dom.button('toggle-activity', label, 'ChatActivityToggle', {

@@ -219,6 +219,48 @@ try {
     } finally {
       await direct.close()
     }
+    const savedIdeLayout = await browser.newContext()
+    const savedIdePage = await savedIdeLayout.newPage()
+    try {
+      await savedIdePage.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+      await savedIdePage.evaluate(
+        'localStorage.setItem("Layout", JSON.stringify({ aiNativeLayout: false }))',
+      )
+      await savedIdePage.goto(`${baseUrl}chat/`, {
+        waitUntil: 'domcontentloaded',
+      })
+      const startupClass = await savedIdePage.evaluate(
+        'document.documentElement.classList.contains("AiNativeLayoutStartup")',
+      )
+      const startupBackground = await savedIdePage.evaluate(
+        'getComputedStyle(document.documentElement).backgroundColor',
+      )
+      assert.equal(
+        startupClass,
+        true,
+        'direct chat with a saved IDE layout did not apply the startup surface',
+      )
+      assert.equal(
+        startupBackground,
+        'rgb(255, 255, 255)',
+        'direct chat with a saved IDE layout used the dark startup surface',
+      )
+      await savedIdePage.locator('.ChatLoggedOut').waitFor()
+      process.stdout.write(
+        'direct chat uses a light startup surface with saved IDE layout: pass\n',
+      )
+    } catch (error) {
+      console.error(
+        'Saved IDE layout startup state:',
+        await savedIdePage.locator('body').innerText(),
+        await savedIdePage.evaluate(
+          'JSON.stringify({pathname: location.pathname, layout: localStorage.getItem("Layout"), rootClass: document.documentElement.className, background: getComputedStyle(document.documentElement).backgroundColor})',
+        ),
+      )
+      throw error
+    } finally {
+      await savedIdeLayout.close()
+    }
     const board = await browser.newContext()
     const boardPage = await board.newPage()
     const boardErrors: string[] = []
