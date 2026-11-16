@@ -8,6 +8,7 @@ import {
 } from '../BackendConfiguration/BackendConfiguration.ts'
 import { createRemoteAgentToolHost } from '../ChatToolWorker/ChatToolWorker.ts'
 import { createMockChatApi } from '../MockChatApi/MockChatApi.ts'
+import { createAccountTaskStore } from '../RemoteTaskStore/RemoteTaskStore.ts'
 import { createResponsesBackend } from '../ResponsesBackend/ResponsesBackend.ts'
 import { createIndexedDbTaskStore } from '../TaskStore/TaskStore.ts'
 
@@ -26,6 +27,7 @@ export const createDefaultChatApi = async ({
 }: DefaultChatApiOptions = {}): Promise<ChatApi> => {
   const {
     accessToken,
+    accountStorage,
     baseUrl,
     openAiWebSearch = true,
     refreshAccessToken,
@@ -48,7 +50,13 @@ export const createDefaultChatApi = async ({
     }),
     createToolHost: (task) =>
       createRemoteAgentToolHost(fileSystemAccess, task.workspaceUri || ''),
-    store: createIndexedDbTaskStore(),
+    store: accountStorage
+      ? await createAccountTaskStore({
+          accessToken,
+          baseUrl,
+          ...(refreshAccessToken && { refreshAccessToken }),
+        })
+      : createIndexedDbTaskStore(),
     titleModelId,
     workspaceUriProvider: async () => {
       try {
