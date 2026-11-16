@@ -65,11 +65,12 @@ const flush = async (): Promise<void> => {
   await new Promise<void>((resolve) => setImmediate(resolve))
 }
 
-const selectedControl = async (
+const boardTile = async (
   view: VirtualDomViewInstance,
+  id: string,
 ): Promise<unknown> => {
   const dom = await view.render()
-  return dom.find((node) => node.name === 'board-id')
+  return dom.find((node) => node.name === `board-select:${id}`)
 }
 
 test('shows setup, renders empty lists and saves only board IDs', async () => {
@@ -520,23 +521,22 @@ test('opens remembered boards after reload without requesting Trello credentials
   expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.anything())
 })
 
-test('discovers named boards and opens the selected option without typing an ID', async () => {
+test('discovers named boards and opens a board tile directly', async () => {
   const host = createHost()
   const view = await createInstance(createContext(), host)
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
   const dom = await view.render()
-  const select = dom.find((node) => node.name === 'board-id')
-  expect(select).toMatchObject({ ariaLabel: 'Trello board', disabled: false })
-  expect(JSON.stringify(dom)).toContain('Select a board')
-  expect(dom.some((node) => node.value === '5k8NLHLh')).toBe(true)
-  expect(host.load).not.toHaveBeenCalled()
-  await view.handleEvent?.({
-    name: 'board-id',
-    type: 'input',
-    value: '5k8NLHLh',
+  expect(
+    dom.find((node) => node.name === 'board-select:5k8NLHLh'),
+  ).toMatchObject({
+    ariaLabel: 'Open Work',
+    className: 'BoardTile',
+    disabled: false,
   })
-  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  expect(JSON.stringify(dom)).toContain('BoardTileGrid')
+  expect(host.load).not.toHaveBeenCalled()
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
   await flush()
   expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.anything())
   expect(JSON.stringify(await view.render())).toContain('A task')
@@ -549,10 +549,12 @@ test('empty discovery disables selection and can be refreshed', async () => {
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
   expect(JSON.stringify(await view.render())).toContain('No open boards found')
-  expect(await selectedControl(view)).toMatchObject({ disabled: true })
+  expect(await boardTile(view, '5k8NLHLh')).toBeUndefined()
   await view.handleEvent?.({ name: 'board-check-account', type: 'click' })
   await flush()
-  expect(await selectedControl(view)).toMatchObject({ disabled: false })
+  expect(await boardTile(view, '5k8NLHLh')).toMatchObject({
+    disabled: false,
+  })
 })
 
 test('failed discovery retries the board list instead of loading an empty ID', async () => {
@@ -568,7 +570,9 @@ test('failed discovery retries the board list instead of loading an empty ID', a
   await flush()
   expect(host.boards).toHaveBeenCalledTimes(2)
   expect(host.load).not.toHaveBeenCalled()
-  expect(await selectedControl(view)).toMatchObject({ disabled: false })
+  expect(await boardTile(view, '5k8NLHLh')).toMatchObject({
+    disabled: false,
+  })
 })
 
 test.each(['navigate', 'disconnect', 'dispose'])(
@@ -581,7 +585,9 @@ test.each(['navigate', 'disconnect', 'dispose'])(
     const view = await createInstance(createContext(), host)
     await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
     await flush()
-    expect(JSON.stringify(await view.render())).toContain('Loading boards')
+    expect(JSON.stringify(await view.render())).toContain(
+      'Loading your Trello boards',
+    )
     if (action === 'dispose') view.dispose?.()
     else
       await view.handleEvent?.({
