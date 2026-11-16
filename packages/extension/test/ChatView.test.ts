@@ -1857,7 +1857,7 @@ test('keeps failed token refreshes in the login state without unauthenticated re
     accessToken: '',
     baseUrl: 'https://backend.example.com',
     loginRequired: true,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const listModels = jest.fn(createMockChatApi().listModels)
   const listTasks = jest.fn(createMockChatApi().listTasks)
@@ -1909,7 +1909,7 @@ test('reloads models when authentication changes after the view loads', async ()
   let configuration: BackendConfiguration = {
     accessToken: '',
     baseUrl: 'https://backend.example.com',
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const loggedOutApi = {
     ...createMockChatApi(),
@@ -3159,7 +3159,7 @@ test('renders only the login screen and replaces it after login, then hides chat
     accessToken: '',
     baseUrl: 'https://backend.example.com',
     loginRequired: true,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const execute = jest.fn(async (id: string) => {
     expect(id).toBe('Layout.signIn')
@@ -3232,7 +3232,7 @@ test('keeps login available after a failed or cancelled login', async () => {
     accessToken: '',
     baseUrl: 'https://backend.example.com',
     loginRequired: true,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const execute = jest.fn(async () => {
     throw new Error('Login cancelled')
@@ -3279,7 +3279,7 @@ test('starts login without awaiting a rerender queued behind the click event', a
     accessToken: '',
     baseUrl: 'https://backend.example.com',
     loginRequired: true,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const signInGate = Promise.withResolvers<void>()
   const rerenderGate = Promise.withResolvers<void>()
@@ -3431,7 +3431,7 @@ test.each(['models', 'request'])(
     const configuration: BackendConfiguration = {
       accessToken: 'rejected-token',
       baseUrl: 'https://backend.example.com',
-      supportsStreaming: true,
+      responseMethod: 'websocket',
     }
     const resolveConfiguration = jest.fn(async () => configuration)
     const api = createMockChatApi(0)

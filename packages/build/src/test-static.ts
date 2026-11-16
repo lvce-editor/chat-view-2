@@ -480,7 +480,7 @@ try {
                 'chat2.backendUrl': backendUrl,
                 'chat2.computerUseEnabled': false,
                 'chat2.selectedModelId': 'gpt-5.4-mini',
-                'chat2.supportsStreaming': true,
+                'chat2.responseMethod': 'websocket',
                 'chat2.useMockBackend': false,
               }),
             )

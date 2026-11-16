@@ -23,7 +23,7 @@ void test('generates a real UI browser evaluation', () => {
   )
   strictEqual(source.includes("'chat2.toggleAiNativeLayout'"), true)
   strictEqual(source.includes("KeyBoard.press('Enter')"), true)
-  strictEqual(source.includes("'chat2.supportsStreaming': true"), true)
+  strictEqual(source.includes("'chat2.responseMethod': 'websocket'"), true)
   strictEqual(
     source.includes('Create \\"index.html\\".\\nThen verify it.'),
     true,
