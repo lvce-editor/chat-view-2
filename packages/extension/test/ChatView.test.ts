@@ -1274,6 +1274,42 @@ test('renders generated assistant images and opens a dismissible image preview',
   ).toHaveLength(0)
 })
 
+test('renders an accessible image placeholder only while generation is running', async () => {
+  const instance = await createTestInstance()
+  const task: ChatTask = {
+    createdAt: '2026-01-01T00:00:00.000Z',
+    events: [],
+    id: 'task-generating-image',
+    imageGenerationActive: true,
+    modelId: 'gpt-test',
+    status: 'running',
+    title: 'Image',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+  instance.setState({ ...instance.getState(), selectedTask: task })
+
+  expect(
+    getNodesByClass(instance.render(), 'ChatImageGenerationPlaceholder'),
+  ).toHaveLength(1)
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      ariaLabel: 'Generating image',
+      className: 'ChatImageGenerationPlaceholder',
+      role: 'status',
+    }),
+  )
+
+  const completedTask = {
+    ...task,
+    imageGenerationActive: false,
+    status: 'completed' as const,
+  }
+  instance.setState({ ...instance.getState(), selectedTask: completedTask })
+  expect(
+    getNodesByClass(instance.render(), 'ChatImageGenerationPlaceholder'),
+  ).toHaveLength(0)
+})
+
 test('loads pasted image files once and submits the decoded image bytes', async () => {
   const imageBytes = Promise.withResolvers<ArrayBuffer>()
   const file = {

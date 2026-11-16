@@ -282,6 +282,14 @@ export const createAgentChatApi = ({
             ...(options?.thinkingMode && {
               thinkingMode: options.thinkingMode,
             }),
+            onImageGenerationStart: async () => {
+              if (task.imageGenerationActive) {
+                return
+              }
+              task = { ...task, imageGenerationActive: true }
+              await store.save(task)
+              await notify(task, options, store)
+            },
             onTextDelta: async (delta) => {
               streamedText += delta
               const now = performance.now()
@@ -296,6 +304,15 @@ export const createAgentChatApi = ({
             ...(options?.signal && { signal: options.signal }),
             tools: await toolHost.getDefinitions(),
           })
+          if (task.imageGenerationActive) {
+            const {
+              imageGenerationActive: _active,
+              ...withoutImageGeneration
+            } = task
+            task = withoutImageGeneration
+            await store.save(task)
+            await notify(task, options, store)
+          }
           await trace(
             {
               content: [
@@ -519,7 +536,11 @@ export const createAgentChatApi = ({
         }
         throw new Error(`Agent stopped after ${maxSteps} steps`)
       } catch (error) {
-        const { streamingText: _partial, ...withoutStreaming } = task
+        const {
+          imageGenerationActive: _imageGenerationActive,
+          streamingText: _partial,
+          ...withoutStreaming
+        } = task
         task = withoutStreaming
         if (streamedText) {
           task = appendEvent(
@@ -595,7 +616,11 @@ export const createAgentChatApi = ({
           }),
         )
       }
-      const { streamingText: _partial, ...withoutStreaming } = recovered
+      const {
+        imageGenerationActive: _imageGenerationActive,
+        streamingText: _partial,
+        ...withoutStreaming
+      } = recovered
       recovered = setStatus(
         appendEvent(
           withoutStreaming,
