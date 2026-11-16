@@ -4,9 +4,9 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  // Baseline 5bf75e6b8ca7: 386,864 bytes; card details: 394,042 (+7,178).
-  // Allow 1,958 bytes of headroom while keeping the bundle gate active.
-  ['chatMain.js', 396_000],
+  // Board-search baseline: 388,307 bytes; card details: 395,485 (+7,178).
+  // Retain 2,015 bytes of headroom for the combined bundle.
+  ['chatMain.js', 397_500],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],

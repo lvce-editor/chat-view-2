@@ -42,6 +42,35 @@
   font-size: 20px;
   overflow-wrap: anywhere;
 }
+.BoardSearch {
+  position: relative;
+  min-width: min(100%, 260px);
+}
+.BoardSearchInput {
+  width: 100%;
+  box-sizing: border-box;
+}
+.BoardSearchResults {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(520px, 80vw);
+  max-height: 60vh;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--BoardBorder);
+  border-radius: 8px;
+  background: var(--BoardBackground);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
+}
+.BoardSearchResults .BoardTileGrid {
+  margin-top: 0;
+}
+.BoardSearchEmpty {
+  padding: 12px;
+  color: var(--BoardMutedForeground);
+}
 .BoardButton {
   border: 1px solid var(--BoardBorder);
   border-radius: 4px;
@@ -283,6 +312,7 @@
 }
 .BoardCardTitle {
   padding: 12px;
+  font-size: 14px;
 }
 .BoardCardButton:hover {
   background: var(--BoardHover);

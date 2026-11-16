@@ -362,6 +362,7 @@ export const createInstance = async (
       error: undefined,
       loading: false,
       providerSelected: false,
+      searchQuery: '',
     }
     try {
       await host.write(connectionsPreference, ids)
@@ -614,6 +615,9 @@ export const createInstance = async (
         cancel()
         state = { ...state, boardId: value, error: undefined, loading: false }
         break
+      case 'board-search':
+        state = { ...state, searchQuery: value }
+        break
       case 'edit-card-desc':
         state = { ...state, editDesc: value, editError: undefined }
         break
@@ -685,6 +689,7 @@ export const createInstance = async (
       loading: false,
       providerSelected: false,
       savingCard: false,
+      searchQuery: '',
     }
     const { boardId } = state
     await restoreConnection(boardId)
