@@ -1,3 +1,5 @@
+// cspell:words prefs
+
 import {
   resolveBackendConfiguration,
   type BackendConfiguration,
@@ -21,6 +23,9 @@ export interface TrelloList {
 }
 
 export interface TrelloBoardSummary {
+  readonly backgroundColor?: string
+  readonly backgroundGradient?: string
+  readonly backgroundImage?: string
   readonly id: string
   readonly name: string
 }
@@ -114,6 +119,64 @@ export const parseBoardId = (input: string): string => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
+const backgroundColorPattern =
+  /^(?:#[\da-f]{3,8}|(?:rgb|hsl)a?\([\d.,%\s]+\)|[a-z]{1,20})$/iu
+const backgroundGradientPattern = /^linear-gradient\([a-z\d#(),.%\s-]+\)$/iu
+const dangerousBackgroundGradientPattern = /\b(?:url|var|expression)\b/iu
+const safeBackgroundColor = (value: unknown): string | undefined =>
+  typeof value === 'string' && backgroundColorPattern.test(value)
+    ? value
+    : undefined
+const safeBackgroundImage = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || !URL.canParse(value)) return undefined
+  const url = new URL(value)
+  return url.protocol === 'https:' ? url.href : undefined
+}
+const safeBackgroundGradient = (value: unknown): string | undefined =>
+  typeof value === 'string' &&
+  backgroundGradientPattern.test(value) &&
+  value.includes(',') &&
+  !dangerousBackgroundGradientPattern.test(value)
+    ? value
+    : undefined
+const normalizeBoardSummary = (
+  value: unknown,
+): TrelloBoardSummary | undefined => {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== 'string' ||
+    !boardIdPattern.test(value.id) ||
+    typeof value.name !== 'string'
+  )
+    return undefined
+  const prefs = isRecord(value.prefs) ? value.prefs : undefined
+  const backgroundTopColor = safeBackgroundColor(prefs?.backgroundTopColor)
+  const backgroundBottomColor = safeBackgroundColor(
+    prefs?.backgroundBottomColor,
+  )
+  const backgroundColor = safeBackgroundColor(
+    prefs?.backgroundColor ?? backgroundBottomColor ?? backgroundTopColor,
+  )
+  const backgroundGradient =
+    backgroundTopColor && backgroundBottomColor
+      ? `linear-gradient(135deg, ${backgroundTopColor}, ${backgroundBottomColor})`
+      : safeBackgroundGradient(prefs?.backgroundGradient ?? prefs?.background)
+  const scaledBackgrounds = Array.isArray(prefs?.backgroundImageScaled)
+    ? prefs.backgroundImageScaled
+    : []
+  const largestBackground = scaledBackgrounds.at(-1)
+  const backgroundImage = safeBackgroundImage(
+    prefs?.backgroundImage ??
+      (isRecord(largestBackground) ? largestBackground.url : undefined),
+  )
+  return {
+    id: value.id,
+    name: value.name,
+    ...(backgroundColor && { backgroundColor }),
+    ...(backgroundGradient && { backgroundGradient }),
+    ...(backgroundImage && { backgroundImage }),
+  }
+}
 const getResponseError = async (
   response: Response,
   mapError: (status: number) => BoardError,
@@ -392,16 +455,16 @@ export const createTrelloClient = (
     signal: Readonly<AbortSignal>,
   ): Promise<readonly TrelloBoardSummary[]> => {
     try {
-      const { data } = await call('boards', signal)
+      const data = await trelloRequest(
+        `members/me/boards?${new URLSearchParams({
+          fields: 'id,name,prefs',
+          filter: 'open',
+        })}`,
+        signal,
+      )
       if (
         !Array.isArray(data) ||
-        !data.every(
-          (board): board is TrelloBoardSummary =>
-            isRecord(board) &&
-            typeof board.id === 'string' &&
-            boardIdPattern.test(board.id) &&
-            typeof board.name === 'string',
-        )
+        data.some((board) => !normalizeBoardSummary(board))
       )
         throw new TrelloError({
           code: 'TRELLO_INVALID_RESPONSE',
@@ -409,7 +472,8 @@ export const createTrelloClient = (
             'Trello returned an unreadable board list. Try again shortly.',
         })
       return data
-        .map(({ id, name }) => ({ id, name }))
+        .map(normalizeBoardSummary)
+        .filter((board): board is TrelloBoardSummary => Boolean(board))
         .toSorted(
           (a: Readonly<TrelloBoardSummary>, b: Readonly<TrelloBoardSummary>) =>
             a.name.localeCompare(b.name),

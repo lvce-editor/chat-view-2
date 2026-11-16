@@ -1,3 +1,5 @@
+// cspell:words prefs
+
 import assert from 'node:assert/strict'
 import type { Browser } from 'playwright'
 
@@ -11,6 +13,7 @@ export const testBoardSelection = async (
   const backend = 'https://trello-selection.test'
   let empty = false
   let fail = false
+  const discoveryLoads: string[] = []
   const directLoads: string[] = []
   const proxiedLoads: string[] = []
   await context.route(`${backend}/**`, async (route) => {
@@ -22,14 +25,6 @@ export const testBoardSelection = async (
       body = { configured: true, connected: true }
     } else if (path.endsWith('/token')) {
       body = { accessToken: 'trello-test' }
-    } else if (path.endsWith('/boards')) {
-      status = fail ? 503 : 200
-      body = empty
-        ? []
-        : [
-            { id: '11111111', name: 'Design & research' },
-            { id: '22222222', name: 'Engineering' },
-          ]
     } else {
       proxiedLoads.push(path)
       status = 500
@@ -52,6 +47,39 @@ export const testBoardSelection = async (
     }
     assert.equal(request.headers().authorization, 'Bearer trello-test')
     const url = new URL(request.url())
+    if (url.pathname === '/1/members/me/boards') {
+      discoveryLoads.push(`${url.pathname}${url.search}`)
+      await route.fulfill({
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        status: fail ? 503 : 200,
+        json: empty
+          ? []
+          : [
+              {
+                id: '11111111',
+                name: 'Design & research',
+                prefs: { backgroundColor: '#22a06b' },
+              },
+              {
+                id: '22222222',
+                name: 'Engineering',
+                prefs: {
+                  backgroundImage:
+                    'https://trello-backgrounds.s3.amazonaws.com/engineering.jpg',
+                },
+              },
+              {
+                id: '33333333',
+                name: 'Long board name with a gradient background',
+                prefs: {
+                  backgroundBottomColor: '#8b4dc8',
+                  backgroundTopColor: '#0c66e4',
+                },
+              },
+            ],
+      })
+      return
+    }
     directLoads.push(`${url.pathname}${url.search}`)
     await route.fulfill({
       headers: { 'Access-Control-Allow-Origin': '*' },
@@ -137,36 +165,34 @@ export const testBoardSelection = async (
     await page.locator('.Workbench').waitFor()
     await page.getByRole('tab', { name: 'Boards', exact: true }).click()
     await page.locator('button[name="board-provider:trello"]').click()
-    const select = page.getByRole('combobox', { name: 'Trello board' })
-    await select.waitFor()
-    await page.waitForFunction(
-      () =>
-        !globalThis.document.querySelector('select[name="board-id"]')?.disabled,
-    )
-    assert.deepEqual(await select.locator('option').allTextContents(), [
-      'Select a board',
+    const tiles = page.locator('.BoardTile')
+    await page.getByRole('button', { name: 'Open Engineering' }).waitFor()
+    assert.equal(await tiles.count(), 3)
+    assert.deepEqual(await page.locator('.BoardTileName').allTextContents(), [
       'Design & research',
       'Engineering',
+      'Long board name with a gradient background',
     ])
-    assert.equal(await page.locator('input[name="board-id"]').count(), 0)
-    const open = page.getByRole('button', { name: 'Open board', exact: true })
-    assert.equal(await open.isDisabled(), true)
-    // End selects the last option in Chromium on Linux/Windows. macOS uses
-    // different native menu shortcuts; exercise its select event bridge directly.
-    if (process.platform === 'darwin') {
-      await select.selectOption({ label: 'Engineering' })
-    } else {
-      await select.focus()
-      await page.keyboard.press('End')
-      await page.keyboard.press('Tab')
-    }
-    await page.waitForFunction(() => {
-      const button = globalThis.document.querySelector(
-        '.BoardConnect .BoardPrimaryButton',
-      )
-      return button && !button.disabled
-    })
-    await open.click()
+    assert.equal(
+      await page
+        .locator('.BoardTileBackground')
+        .nth(0)
+        .evaluate((element) => element.style.backgroundColor),
+      'rgb(34, 160, 107)',
+    )
+    assert.equal(
+      await page.locator('.BoardTileImage').getAttribute('src'),
+      'https://trello-backgrounds.s3.amazonaws.com/engineering.jpg',
+    )
+    assert.equal(
+      await page
+        .locator('.BoardTileBackground')
+        .nth(2)
+        .evaluate((element) => element.style.backgroundImage),
+      'linear-gradient(135deg, rgb(12, 102, 228), rgb(139, 77, 200))',
+    )
+    assert.equal(discoveryLoads.length, 1)
+    await page.getByRole('button', { name: 'Open Engineering' }).click()
     await page
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
@@ -215,7 +241,7 @@ export const testBoardSelection = async (
       .getByRole('button', { name: 'Connect Trello', exact: true })
       .click()
     await page.getByText('No open boards found.', { exact: false }).waitFor()
-    assert.equal(await select.isDisabled(), true)
+    assert.equal(await tiles.count(), 0)
     fail = true
     await page
       .getByRole('button', { name: 'Refresh boards', exact: true })
@@ -226,23 +252,20 @@ export const testBoardSelection = async (
     await page.getByRole('button', { name: 'Try again', exact: true }).click()
     await page.getByRole('alert').waitFor({ state: 'detached' })
     await page.waitForFunction(() => {
-      const control = globalThis.document.querySelector(
-        'select[name="board-id"]',
-      )
-      return control && !control.disabled && control.options.length === 3
+      return globalThis.document.querySelectorAll('.BoardTile').length === 3
     })
     assert.equal(await page.getByRole('alert').count(), 0)
-    assert.equal(await select.isEnabled(), true)
+    assert.equal(await page.locator('.BoardTile').count(), 3)
     await page.setViewportSize({ width: 390, height: 844 })
     if (process.env.BOARD_SELECTION_SCREENSHOT)
       await page.screenshot({ path: process.env.BOARD_SELECTION_SCREENSHOT })
-    const box = await select.boundingBox()
+    const box = await page.locator('.BoardTileGrid').boundingBox()
     assert.ok(
       box && box.x >= 0 && box.x + box.width <= 390,
       'Board selector fits a narrow viewport',
     )
     process.stdout.write(
-      'static Trello discovery, native selection, empty state and retry: pass\n',
+      'static Trello discovery, clickable board tiles, empty state and retry: pass\n',
     )
   } finally {
     await context.close()

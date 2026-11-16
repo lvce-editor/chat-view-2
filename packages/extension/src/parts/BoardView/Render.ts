@@ -115,38 +115,56 @@ const renderComposer = (
   ])
 }
 
-const boardSelect = (state: BoardState): Dom.Node => {
-  const { boardId, boards, loading } = state
-  return Dom.node(VirtualDomElements.Label, { className: 'BoardField' }, [
-    Dom.textNode('Trello board'),
-    Dom.node(
-      VirtualDomElements.Select,
-      {
-        ariaLabel: 'Trello board',
-        className: 'BoardInput',
-        disabled: loading || boards.length === 0,
-        name: 'board-id',
-        onInput: 'handleInput',
-      },
-      [
-        Dom.node(
-          VirtualDomElements.Option,
-          {
-            selected: boards.every((board) => board.id !== boardId),
-            value: '',
-          },
-          [Dom.textNode(loading ? 'Loading boards…' : 'Select a board')],
-        ),
-        ...boards.map((board) =>
+const renderBoardTiles = (state: BoardState): Dom.Node => {
+  const { boards, loading } = state
+  return Dom.div(
+    'BoardTileGrid',
+    boards.map((board) =>
+      Dom.node(
+        VirtualDomElements.Button,
+        {
+          ariaLabel: `Open ${board.name}`,
+          buttonType: 'button',
+          className: 'BoardTile',
+          disabled: loading,
+          name: `board-select:${board.id}`,
+          onClick: 'handleClick',
+        },
+        [
           Dom.node(
-            VirtualDomElements.Option,
-            { selected: board.id === boardId, value: board.id },
-            [Dom.textNode(board.name)],
+            VirtualDomElements.Span,
+            {
+              className: 'BoardTileBackground',
+              style: [
+                board.backgroundColor &&
+                  `background-color:${board.backgroundColor}`,
+                board.backgroundGradient &&
+                  `background-image:${board.backgroundGradient}`,
+                board.backgroundColor &&
+                  !board.backgroundGradient &&
+                  'background-image:none',
+              ]
+                .filter(Boolean)
+                .join(';'),
+            },
+            board.backgroundImage
+              ? [
+                  Dom.node(VirtualDomElements.Img, {
+                    alt: '',
+                    className: 'BoardTileImage',
+                    loading: 'lazy',
+                    src: board.backgroundImage,
+                  }),
+                ]
+              : [],
           ),
-        ),
-      ],
+          Dom.node(VirtualDomElements.Span, { className: 'BoardTileName' }, [
+            Dom.textNode(board.name),
+          ]),
+        ],
+      ),
     ),
-  ])
+  )
 }
 
 const connectionHelp = (state: BoardState): string => {
@@ -154,34 +172,15 @@ const connectionHelp = (state: BoardState): string => {
   if (loading) return 'Loading your Trello boards…'
   if (boards.length === 0 && !error)
     return 'No open boards found. Create a board in Trello, then refresh this list.'
-  return 'Trello is connected. Select a board to open it.'
+  return 'Trello is connected. Choose a board to open it.'
 }
 
 const renderConnection = (state: BoardState): readonly Dom.Node[] => {
-  const {
-    accountConnected,
-    authorizationUrl,
-    authorizing,
-    boardId,
-    boards,
-    loading,
-  } = state
+  const { accountConnected, authorizationUrl, authorizing, loading } = state
   return accountConnected
     ? [
         Dom.div('BoardCredentialsHelp', [Dom.textNode(connectionHelp(state))]),
-        Dom.form('board-connect', 'BoardConnect', [
-          boardSelect(state),
-          Dom.node(
-            VirtualDomElements.Button,
-            {
-              buttonType: 'submit',
-              className: primaryButtonClass,
-              disabled:
-                loading || boards.every((board) => board.id !== boardId),
-            },
-            [Dom.textNode('Open board')],
-          ),
-        ]),
+        renderBoardTiles(state),
         Dom.button('board-check-account', 'Refresh boards', 'BoardButton', {
           disabled: loading,
         }),
