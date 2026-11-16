@@ -315,6 +315,7 @@
 }
 .BoardCardTitle {
   padding: 12px;
+  font-size: 14px;
 }
 .BoardCardButton:hover {
   background: var(--BoardHover);
