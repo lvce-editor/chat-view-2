@@ -29,6 +29,7 @@ export interface BoardHost {
   readonly createCard: typeof trelloClient.createCard
   readonly execute: typeof executeCommand
   readonly load: typeof trelloClient.load
+  readonly loadCard: typeof trelloClient.loadCard
   readonly moveCard: typeof trelloClient.moveCard
   readonly read: typeof getPreference
   readonly revoke: typeof trelloClient.disconnect
@@ -75,6 +76,7 @@ const defaultHost: BoardHost = {
   createCard: trelloClient.createCard,
   execute: executeCommand,
   load: trelloClient.load,
+  loadCard: trelloClient.loadCard,
   moveCard: trelloClient.moveCard,
   read: getPreference,
   revoke: trelloClient.disconnect,
@@ -141,6 +143,7 @@ export const createInstance = async (
     syncTitle(await getWorkspaceTitle(host.execute))
   const { board: initialBoard } = state
   await syncTitle(initialBoard?.name || 'Boards')
+  let focusEditor = false
   let focusNewCard = false
   let focusRestore = false
   let focusCardId = ''
@@ -239,6 +242,8 @@ export const createInstance = async (
     await notify()
   }
   const saveCard = async (): Promise<void> => {
+    const { detailsError, detailsLoading } = state
+    if (detailsLoading || detailsError) return
     const {
       board,
       boardId,
@@ -621,6 +626,33 @@ export const createInstance = async (
         break
     }
   }
+  const loadCardDetails = async (): Promise<void> => {
+    const { editingCard, savingCard } = state
+    if (!editingCard || savingCard) return
+    controller?.abort()
+    controller = new AbortController()
+    const { signal } = controller
+    const requestGeneration = ++generation
+    state = { ...state, detailsError: undefined, detailsLoading: true }
+    try {
+      const details = await host.loadCard(editingCard.id, signal)
+      if (disposed || signal.aborted || generation !== requestGeneration) return
+      state = {
+        ...state,
+        details,
+        detailsLoading: false,
+        editDesc: details.desc,
+      }
+    } catch {
+      if (disposed || signal.aborted || generation !== requestGeneration) return
+      state = {
+        ...state,
+        detailsError: 'Unable to load card details. Try again.',
+        detailsLoading: false,
+      }
+    }
+    await notify()
+  }
   const openCard = (name: string | undefined): void => {
     if (!name?.startsWith('board-card:')) return
     const { board } = state
@@ -631,12 +663,16 @@ export const createInstance = async (
     cancel()
     state = {
       ...state,
+      details: undefined,
+      detailsError: undefined,
       editDesc: card.desc || '',
       editError: undefined,
       editingCard: card,
       editName: card.name,
       savingCard: false,
     }
+    focusEditor = !focusEditor
+    void loadCardDetails()
   }
   const changeBoard = async (name: string | undefined): Promise<void> => {
     if (name !== 'board-change' && !name?.startsWith('board-select:')) return
@@ -676,7 +712,13 @@ export const createInstance = async (
       openCard(event.name)
       return
     }
+    if (event.name === 'board-card-details-retry') {
+      void loadCardDetails()
+      return
+    }
     if (event.name === 'board-card-cancel') {
+      const { savingCard } = state
+      if (savingCard) return
       cancel()
       closeEditor()
       return
@@ -700,7 +742,7 @@ export const createInstance = async (
         }
       })()
     },
-    getContext: () => ({ focusNewCard, focusRestore }),
+    getContext: () => ({ focusEditor, focusNewCard, focusRestore }),
     handleBoardDragEnd(): Promise<void> {
       return clearDrag()
     },
@@ -791,7 +833,9 @@ export const createInstance = async (
       oldContext: Readonly<Record<string, boolean>>,
       newContext: Readonly<Record<string, boolean>>,
     ): string => {
-      const { cardDraft } = state
+      const { cardDraft, editingCard } = state
+      if (oldContext.focusEditor !== newContext.focusEditor && editingCard)
+        return '[name="edit-card-name"]'
       if (oldContext.focusNewCard !== newContext.focusNewCard && cardDraft)
         return '[name="board-card-title"]'
       return oldContext.focusRestore === newContext.focusRestore || !focusCardId

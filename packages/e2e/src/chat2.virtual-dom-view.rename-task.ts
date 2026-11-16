@@ -9,6 +9,7 @@ export const test: Test = async ({
   KeyBoard,
   Locator,
   Main,
+  QuickPick,
 }) => {
   await Main.closeAllEditors()
   await Command.execute('Preferences.update', {
@@ -32,8 +33,8 @@ export const test: Test = async ({
   await ContextMenu.selectItem('Rename')
   const input = Locator('input[name="QuickPickInput"]')
   await expect(input).toHaveValue('Add worker memory usage')
-  await KeyBoard.press('Control+A')
-  await input.type('Memory usage notes')
+  await QuickPick.setValue('Memory usage notes')
+  await expect(input).toHaveValue('Memory usage notes')
   await KeyBoard.press('Enter')
   await expect(title).toHaveText('Memory usage notes')
   await expect(firstTask).toHaveText('Memory usage notes')
