@@ -71,6 +71,7 @@ import {
   userMessageFontFamilyPreference,
 } from './FontFamily.ts'
 import { readFontSize } from './FontSize.ts'
+import { getWorkDurationSeconds } from './FormatWorkDuration.ts'
 import { getMathExpressions, type MathExpression } from './MathExpressions.ts'
 import { getCodeBlockText, render, renderCss } from './Render.ts'
 import { readTaskOpenMode } from './TaskOpenMode.ts'
@@ -297,24 +298,6 @@ const toImageFile = async (value: unknown): Promise<File | undefined> => {
 
 const isWorking = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'
-}
-
-const getWorkingStartedAt = (task: ChatTask): number => {
-  const runningEvent = task.events.findLast(
-    (event) => event.type === 'status' && event.status === 'running',
-  )
-  const userMessage = task.events.findLast(
-    (event) => event.type === 'user-message',
-  )
-  const timestamp =
-    runningEvent?.timestamp || userMessage?.timestamp || task.createdAt
-  const startedAt = Date.parse(timestamp)
-  return Number.isNaN(startedAt) ? Date.now() : startedAt
-}
-
-const getWorkingSeconds = (task: ChatTask): number => {
-  const endedAt = isWorking(task) ? Date.now() : Date.parse(task.updatedAt)
-  return Math.max(0, Math.floor((endedAt - getWorkingStartedAt(task)) / 1000))
 }
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
@@ -760,7 +743,7 @@ export const createInstance = async (
     userMessageFontFamily,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
-        ? getWorkingSeconds(selectedTask)
+        ? getWorkDurationSeconds(selectedTask)
         : 0,
   }
   const saveDraft = (): Promise<void> =>
@@ -868,7 +851,7 @@ export const createInstance = async (
       state.workingSeconds = 0
       return
     }
-    state.workingSeconds = getWorkingSeconds(task)
+    state.workingSeconds = getWorkDurationSeconds(task)
     if (!isWorking(task)) {
       stopWorkingTimer()
       return
@@ -882,7 +865,7 @@ export const createInstance = async (
         stopWorkingTimer()
         return
       }
-      state.workingSeconds = getWorkingSeconds(selectedTask)
+      state.workingSeconds = getWorkDurationSeconds(selectedTask)
       void context?.requestRerender()
     }, workingTimerInterval)
   }
