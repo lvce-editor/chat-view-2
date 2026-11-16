@@ -226,14 +226,23 @@ try {
     try {
       const response = await boardPage.goto(`${baseUrl}board`)
       assert.equal(response?.status(), 200)
-      await boardPage.locator('.Workbench').waitFor()
+      await boardPage.locator('.BoardView').waitFor()
+      await boardPage
+        .getByRole('heading', { name: 'Boards', exact: true })
+        .waitFor()
       assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
       const reloadResponse = await boardPage.reload()
       assert.equal(reloadResponse?.status(), 200)
-      await boardPage.locator('.Workbench').waitFor()
+      await boardPage.locator('.BoardView').waitFor()
+      await boardPage
+        .getByRole('heading', { name: 'Boards', exact: true })
+        .waitFor()
       assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
       await boardPage.goto(`${baseUrl}board/`)
-      await boardPage.locator('.Workbench').waitFor()
+      await boardPage.locator('.BoardView').waitFor()
+      await boardPage
+        .getByRole('heading', { name: 'Boards', exact: true })
+        .waitFor()
       assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
       assert.deepEqual(
         boardErrors,
