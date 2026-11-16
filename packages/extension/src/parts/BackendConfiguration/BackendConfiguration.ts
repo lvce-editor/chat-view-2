@@ -7,7 +7,7 @@ export interface BackendConfiguration {
   readonly loginRequired?: boolean
   readonly openAiWebSearch?: boolean
   readonly refreshAccessToken?: () => Promise<string>
-  readonly supportsStreaming: boolean
+  readonly responseMethod: 'http' | 'websocket'
   readonly titleModelId?: string
   readonly useMockBackend?: boolean
 }
@@ -114,14 +114,14 @@ export const resolveBackendConfiguration = async (
   const [
     configuredBaseUrl,
     editorBaseUrl,
-    configuredSupportsStreaming,
+    configuredResponseMethod,
     useMockBackend,
     openAiWebSearch,
     titleModelId,
   ] = await Promise.all([
     getPreferenceString(host, 'chat2.backendUrl'),
     executeStringCommand(host, 'Layout.getBackendUrl'),
-    getPreferenceBoolean(host, 'chat2.supportsStreaming'),
+    getPreferenceString(host, 'chat2.responseMethod'),
     getPreferenceBoolean(host, 'chat2.useMockBackend'),
     getPreferenceBoolean(host, 'chat2.openAiWebSearch', true),
     getPreferenceValue(host, 'chat2.titleModelId'),
@@ -131,7 +131,8 @@ export const resolveBackendConfiguration = async (
       accessToken: '',
       baseUrl: '',
       openAiWebSearch,
-      supportsStreaming: configuredSupportsStreaming,
+      responseMethod:
+        configuredResponseMethod === 'websocket' ? 'websocket' : 'http',
       titleModelId: getTitleModelId(titleModelId),
       useMockBackend: true,
     }
@@ -145,12 +146,13 @@ export const resolveBackendConfiguration = async (
   const accessToken = usesEditorBackend
     ? providedAccessToken || (await resolveAccessToken(host))
     : ''
-  const supportsStreaming = usesEditorBackend || configuredSupportsStreaming
+  const responseMethod =
+    configuredResponseMethod === 'websocket' ? 'websocket' : 'http'
   return {
     accessToken,
     baseUrl,
     openAiWebSearch,
-    supportsStreaming,
+    responseMethod,
     titleModelId: getTitleModelId(titleModelId),
     ...(usesEditorBackend && {
       accountStorage: true,

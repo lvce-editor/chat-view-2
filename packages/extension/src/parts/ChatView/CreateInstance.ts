@@ -472,7 +472,7 @@ const isSameBackendConfiguration = (
     oldConfiguration.openAiWebSearch === newConfiguration.openAiWebSearch &&
     oldConfiguration.titleModelId === newConfiguration.titleModelId &&
     oldConfiguration.baseUrl === newConfiguration.baseUrl &&
-    oldConfiguration.supportsStreaming === newConfiguration.supportsStreaming
+    oldConfiguration.responseMethod === newConfiguration.responseMethod
   )
 }
 
