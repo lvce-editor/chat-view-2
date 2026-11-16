@@ -414,18 +414,29 @@ export const createInstance = async (
       loading: false,
     }
   }
-  const checkAccount = async (): Promise<void> => {
+  const checkAccount = async (automatic = false): Promise<void> => {
     cancel()
+    const { providerSelected } = state
     const requestGeneration = generation
     controller = new AbortController()
     const { signal } = controller
-    state = { ...state, boards: [], error: undefined, loading: true }
+    state = {
+      ...state,
+      boards: [],
+      error: undefined,
+      loading: true,
+    }
     try {
       const result = await host.status(
         AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       )
       if (disposed || generation !== requestGeneration) return
-      state = { ...state, accountConnected: result.connected, loading: false }
+      state = {
+        ...state,
+        accountConnected: result.connected,
+        loading: false,
+        providerSelected: result.connected || (!automatic && providerSelected),
+      }
       if (result.connected) {
         state = { ...state, loading: true }
         await notify()
@@ -443,6 +454,7 @@ export const createInstance = async (
     } catch (error) {
       if (disposed || generation !== requestGeneration) return
       connectionError(error)
+      if (automatic) state = { ...state, providerSelected: false }
     }
     await notify()
   }
@@ -671,7 +683,7 @@ export const createInstance = async (
     await changeBoard(event.name)
     if (event.name === 'board-disconnect') await disconnect()
   }
-  return {
+  const instance: BoardViewInstance = {
     dispose(): void {
       disposed = true
       cancel()
@@ -791,6 +803,8 @@ export const createInstance = async (
       return { boardId }
     },
   }
+  if (!initialBoard) void checkAccount(true)
+  return instance
 }
 
 export const view: View<VirtualDomViewInstance> = {

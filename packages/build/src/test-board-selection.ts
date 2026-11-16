@@ -167,9 +167,12 @@ export const testBoardSelection = async (
     await page.goto(baseUrl)
     await page.locator('.Workbench').waitFor()
     await page.getByRole('tab', { name: 'Boards', exact: true }).click()
-    await page.locator('button[name="board-provider:trello"]').click()
     const tiles = page.locator('.BoardTile')
     await page.getByRole('button', { name: 'Open Engineering' }).waitFor()
+    assert.equal(
+      await page.locator('button[name="board-provider:trello"]').count(),
+      0,
+    )
     assert.equal(await tiles.count(), 3)
     assert.deepEqual(await page.locator('.BoardTileName').allTextContents(), [
       'Design & research',
