@@ -1,4 +1,4 @@
-import { access, cp, readFile } from 'node:fs/promises'
+import { access, cp, mkdir, readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path, { join } from 'node:path'
 import './build.ts'
@@ -112,6 +112,13 @@ await cp(
   path.join(root, 'dist2'),
   path.join(root, 'dist', commitHash, 'extensions', extensionId),
   { recursive: true, force: true },
+)
+
+const boardPath = path.join(root, 'dist', 'board')
+await mkdir(boardPath, { recursive: true })
+await cp(
+  path.join(root, 'dist', 'index.html'),
+  path.join(boardPath, 'index.html'),
 )
 
 await assertStaticChatExtension(commitHash)
