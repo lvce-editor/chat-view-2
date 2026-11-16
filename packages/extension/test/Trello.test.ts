@@ -83,6 +83,10 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
           pos: 4,
         },
       ],
+      prefs: {
+        backgroundBottomColor: '#ff58b0',
+        backgroundTopColor: '#a82be0',
+      },
     }),
   ])
   const result = await loadBoard(
@@ -90,6 +94,10 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
     new AbortController().signal,
     request,
   )
+  expect(result).toMatchObject({
+    backgroundColor: '#ff58b0',
+    backgroundGradient: 'linear-gradient(135deg, #a82be0, #ff58b0)',
+  })
   expect(result.lists.map((list) => list.name)).toEqual(['Now', 'Later'])
   expect(result.cards.map((card) => card.name)).toEqual([
     'First',
@@ -120,6 +128,11 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
       headers: { Authorization: 'Bearer trello-token' },
     }),
   )
+  const boardUrl = request.mock.calls[1]?.[0]
+  expect(
+    typeof boardUrl === 'string' &&
+      new URL(boardUrl).searchParams.get('fields'),
+  ).toBe('name,prefs')
   expect(JSON.stringify(request.mock.calls[1])).not.toContain('lvce-token')
 })
 

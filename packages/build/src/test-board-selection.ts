@@ -81,11 +81,22 @@ export const testBoardSelection = async (
       return
     }
     directLoads.push(`${url.pathname}${url.search}`)
+    const id = url.pathname.split('/').at(-1)
     await route.fulfill({
       headers: { 'Access-Control-Allow-Origin': '*' },
       json: {
-        id: '22222222',
+        id,
         name: 'Engineering',
+        prefs:
+          id === '22222222'
+            ? {
+                backgroundImage:
+                  'https://trello-backgrounds.s3.amazonaws.com/engineering.jpg',
+              }
+            : {
+                backgroundBottomColor: '#ff58b0',
+                backgroundTopColor: '#a82be0',
+              },
         lists: [
           { id: 'list-1', name: 'Todo', pos: 1 },
           { id: 'list-2', name: 'Doing', pos: 2 },
@@ -203,8 +214,19 @@ export const testBoardSelection = async (
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
     assert.deepEqual(directLoads, [
-      '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name&list_fields=name%2Cpos&lists=open',
+      '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name%2Cprefs&list_fields=name%2Cpos&lists=open',
     ])
+    assert.equal(
+      await page.locator('.BoardViewTrello').evaluate(
+        (element) =>
+          (
+            element as unknown as {
+              style: { backgroundImage: string }
+            }
+          ).style.backgroundImage,
+      ),
+      'url("https://trello-backgrounds.s3.amazonaws.com/engineering.jpg")',
+    )
     assert.deepEqual(proxiedLoads, [])
     const cover = page.locator('.BoardCardCover')
     await cover.waitFor({ state: 'visible' })
@@ -315,6 +337,36 @@ export const testBoardSelection = async (
     assert.ok(
       box && box.x >= 0 && box.x + box.width <= 390,
       'Board selector fits a narrow viewport',
+    )
+    await page
+      .getByRole('button', {
+        name: 'Open Long board name with a gradient background',
+      })
+      .click()
+    await page
+      .getByRole('heading', { name: 'Engineering', exact: true })
+      .waitFor()
+    assert.equal(
+      await page.locator('.BoardViewTrello').evaluate(
+        (element) =>
+          (
+            element as unknown as {
+              style: { backgroundImage: string }
+            }
+          ).style.backgroundImage,
+      ),
+      'linear-gradient(135deg, rgb(168, 43, 224), rgb(255, 88, 176))',
+    )
+    assert.equal(
+      await page.locator('.BoardViewTrello').evaluate(
+        (element) =>
+          (
+            element as unknown as {
+              style: { backgroundColor: string }
+            }
+          ).style.backgroundColor,
+      ),
+      'rgb(255, 88, 176)',
     )
     process.stdout.write(
       'static Trello discovery, clickable board tiles, empty state and retry: pass\n',
