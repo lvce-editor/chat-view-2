@@ -48,6 +48,22 @@ export const testBoardSelection = async (
     }
     assert.equal(request.headers().authorization, 'Bearer trello-test')
     const url = new URL(request.url())
+    if (url.pathname === '/1/search') {
+      await route.fulfill({
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        json: {
+          boards: [{ id: '22222222', name: 'Engineering' }],
+          cards: [
+            {
+              id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+              idBoard: '22222222',
+              name: 'Card with cover',
+            },
+          ],
+        },
+      })
+      return
+    }
     if (url.pathname === '/1/members/me/boards') {
       discoveryLoads.push(`${url.pathname}${url.search}`)
       await route.fulfill({
@@ -271,11 +287,19 @@ export const testBoardSelection = async (
         .evaluate((element) => element.style.backgroundImage),
       'linear-gradient(135deg, rgb(12, 102, 228), rgb(139, 77, 200))',
     )
+    const boardSearch = page.getByRole('searchbox', { name: 'Search boards' })
+    await boardSearch.fill('cover')
+    await page
+      .getByRole('button', { name: 'Card · Card with cover — Engineering' })
+      .waitFor()
+    assert.equal(await page.locator('.BoardSearchResult').count(), 2)
+    await boardSearch.fill('')
     assert.equal(discoveryLoads.length, 1)
     await page.getByRole('button', { name: 'Open Engineering' }).click()
     await page
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
+    assert.equal(new URL(page.url()).hash, '#22222222')
     assert.deepEqual(directLoads, [
       '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name%2Cprefs&list_fields=name%2Cpos&lists=open',
     ])
@@ -290,6 +314,12 @@ export const testBoardSelection = async (
       ),
       'url("https://trello-backgrounds.s3.amazonaws.com/engineering.jpg")',
     )
+    await page.reload()
+    await page
+      .getByRole('heading', { name: 'Engineering', exact: true })
+      .waitFor()
+    assert.equal(new URL(page.url()).hash, '#22222222')
+    assert.equal(directLoads.length, 2)
     assert.deepEqual(proxiedLoads, [])
     const cover = page.locator('.BoardCardCover')
     await cover.waitFor({ state: 'visible' })
@@ -297,6 +327,7 @@ export const testBoardSelection = async (
     assert.ok(coverSrc)
     assert.match(coverSrc, /^data:image\/png;base64,/u)
     assert.deepEqual(coverLoads, [
+      'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
       'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
     ])
     await page.getByText('Card with cover', { exact: true }).waitFor()
@@ -450,7 +481,7 @@ export const testBoardSelection = async (
       .getByRole('button', { name: 'Refresh board', exact: true })
       .click()
     await refresh
-    assert.equal(directLoads.length, 5)
+    assert.equal(directLoads.length, 6)
     assert.deepEqual(proxiedLoads, [])
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })

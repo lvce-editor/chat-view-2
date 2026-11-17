@@ -31,6 +31,14 @@ export interface TrelloBoardSummary {
   readonly name: string
 }
 
+export interface TrelloSearchResult {
+  readonly boardId?: string
+  readonly boardName?: string
+  readonly id: string
+  readonly kind: 'board' | 'card'
+  readonly name: string
+}
+
 export interface TrelloBoard {
   readonly backgroundColor?: string
   readonly backgroundGradient?: string
@@ -369,6 +377,10 @@ export interface TrelloClient {
     listId: string,
     signal: Readonly<AbortSignal>,
   ) => Promise<void>
+  readonly search: (
+    query: string,
+    signal: Readonly<AbortSignal>,
+  ) => Promise<readonly TrelloSearchResult[]>
   readonly status: (signal: Readonly<AbortSignal>) => Promise<TrelloStatus>
   readonly updateCard: (
     id: string,
@@ -652,6 +664,84 @@ export const createTrelloClient = (
       })
     }
   }
+  const search = async (
+    query: string,
+    signal: Readonly<AbortSignal>,
+  ): Promise<readonly TrelloSearchResult[]> => {
+    const value = query.trim()
+    if (!value) return []
+    try {
+      const data = await trelloRequest(
+        `search?${new URLSearchParams({
+          board_fields: 'name,shortLink',
+          boards_limit: '10',
+          card_fields: 'name,idBoard,idList',
+          cards_limit: '20',
+          modelTypes: 'boards,cards',
+          partial: 'true',
+          query: value,
+        })}`,
+        signal,
+      )
+      if (
+        !isRecord(data) ||
+        !Array.isArray(data.boards) ||
+        !Array.isArray(data.cards)
+      )
+        throw new TrelloError({
+          code: 'TRELLO_INVALID_RESPONSE',
+          message:
+            'Trello returned unreadable search results. Try again shortly.',
+        })
+      const boardResults: TrelloSearchResult[] = data.boards.flatMap((item) => {
+        const board = normalizeBoardSummary(item)
+        return board
+          ? [{ id: board.id, kind: 'board' as const, name: board.name }]
+          : []
+      })
+      const cardResults: TrelloSearchResult[] = data.cards.flatMap((item) => {
+        if (
+          !isRecord(item) ||
+          typeof item.id !== 'string' ||
+          !cardIdPattern.test(item.id) ||
+          typeof item.name !== 'string'
+        )
+          return []
+        const board = isRecord(item.board) ? item.board : undefined
+        const directBoardId = item.idBoard
+        const nestedBoardId = board?.id
+        let boardId: string | undefined
+        if (
+          typeof directBoardId === 'string' &&
+          boardIdPattern.test(directBoardId)
+        )
+          boardId = directBoardId
+        else if (
+          typeof nestedBoardId === 'string' &&
+          boardIdPattern.test(nestedBoardId)
+        )
+          boardId = nestedBoardId
+        if (!boardId) return []
+        return [
+          {
+            boardId,
+            boardName: typeof board?.name === 'string' ? board.name : '',
+            id: item.id,
+            kind: 'card' as const,
+            name: item.name,
+          },
+        ]
+      })
+      return [...boardResults, ...cardResults]
+    } catch (error) {
+      if (signal.aborted || error instanceof TrelloError) throw error
+      throw new TrelloError({
+        code: 'TRELLO_REQUEST_FAILED',
+        message:
+          'Unable to search Trello. Check your connection and try again.',
+      })
+    }
+  }
   const createCard = async (
     idList: string,
     name: string,
@@ -706,6 +796,7 @@ export const createTrelloClient = (
     load,
     loadCard,
     moveCard,
+    search,
     status,
     updateCard,
   }
