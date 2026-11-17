@@ -156,18 +156,26 @@ const normalizeBoardBackground = (
     prefs?.backgroundBottomColor,
   )
   const backgroundColor = safeBackgroundColor(
-    prefs?.backgroundColor ?? backgroundBottomColor ?? backgroundTopColor,
+    value.backgroundColor ??
+      prefs?.backgroundColor ??
+      backgroundBottomColor ??
+      backgroundTopColor,
   )
   const backgroundGradient =
     backgroundTopColor && backgroundBottomColor
       ? `linear-gradient(135deg, ${backgroundTopColor}, ${backgroundBottomColor})`
-      : safeBackgroundGradient(prefs?.backgroundGradient ?? prefs?.background)
+      : safeBackgroundGradient(
+          value.backgroundGradient ??
+            prefs?.backgroundGradient ??
+            prefs?.background,
+        )
   const scaledBackgrounds = Array.isArray(prefs?.backgroundImageScaled)
     ? prefs.backgroundImageScaled
     : []
   const largestBackground = scaledBackgrounds.at(-1)
   const backgroundImage = safeBackgroundImage(
-    prefs?.backgroundImage ??
+    value.backgroundImage ??
+      prefs?.backgroundImage ??
       (isRecord(largestBackground) ? largestBackground.url : undefined),
   )
   return {
@@ -176,7 +184,7 @@ const normalizeBoardBackground = (
     ...(backgroundImage && { backgroundImage }),
   }
 }
-const normalizeBoardSummary = (
+export const normalizeBoardSummary = (
   value: unknown,
 ): TrelloBoardSummary | undefined => {
   if (
@@ -188,7 +196,11 @@ const normalizeBoardSummary = (
     return undefined
   return {
     ...normalizeBoardBackground(value),
-    id: value.id,
+    id:
+      typeof value.shortLink === 'string' &&
+      boardIdPattern.test(value.shortLink)
+        ? value.shortLink
+        : value.id,
     name: value.name,
   }
 }
@@ -502,7 +514,7 @@ export const createTrelloClient = (
     try {
       const data = await trelloRequest(
         `members/me/boards?${new URLSearchParams({
-          fields: 'id,name,prefs',
+          fields: 'id,name,prefs,shortLink',
           filter: 'open',
         })}`,
         signal,

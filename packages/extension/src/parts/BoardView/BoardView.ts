@@ -14,14 +14,17 @@ import {
   boardIdPattern,
   trelloClient,
   parseBoardId,
+  normalizeBoardSummary,
   TrelloError,
   type TrelloBoard,
   type TrelloCard,
   type TrelloList,
+  type TrelloBoardSummary,
 } from './Trello.ts'
 
 export const viewId = 'chat2.views.board'
 export const connectionsPreference = 'chat2.connectedBoardIds'
+export const boardSummariesPreference = 'chat2.connectedBoardSummaries'
 
 export interface BoardHost {
   readonly authorize: typeof trelloClient.authorize
@@ -99,6 +102,7 @@ export const createInstance = async (
   host: BoardHost = defaultHost,
 ): Promise<BoardViewInstance> => {
   let connectedIds: readonly string[] = []
+  let rememberedBoards: readonly TrelloBoardSummary[] = []
   try {
     const saved: unknown = await host.read(connectionsPreference)
     if (Array.isArray(saved))
@@ -107,6 +111,15 @@ export const createInstance = async (
       )
   } catch {
     // The connection form remains usable when settings cannot be read.
+  }
+  try {
+    const saved: unknown = await host.read(boardSummariesPreference)
+    if (Array.isArray(saved))
+      rememberedBoards = saved
+        .map(normalizeBoardSummary)
+        .filter((board): board is NonNullable<typeof board> => Boolean(board))
+  } catch {
+    // Remembered board names are optional; old ID-only preferences remain valid.
   }
   const savedState = context?.state
   const savedId =
@@ -131,6 +144,7 @@ export const createInstance = async (
     error: undefined,
     loading: false,
     providerSelected: false,
+    rememberedBoards,
   }
   let generation = 0
   let controller: AbortController | undefined
@@ -190,12 +204,20 @@ export const createInstance = async (
     ])
     state = { ...state, error: undefined, loading: true }
     try {
-      const { boardId, connectedIds } = state
+      const { boardId, connectedIds, rememberedBoards } = state
       const board = await host.load(boardId, signal)
       if (disposed || requestGeneration !== generation) return
       const id = parseBoardId(boardId)
       host.session.set(id, { board })
       const ids = [...new Set([...connectedIds, id])]
+      const summary = normalizeBoardSummary(board)
+      const rememberedSummary = summary ? { ...summary, id } : undefined
+      const summaries = summary
+        ? [
+            rememberedSummary!,
+            ...rememberedBoards.filter((item) => item.id !== id),
+          ]
+        : rememberedBoards
       state = {
         ...state,
         accountConnected: true,
@@ -203,6 +225,7 @@ export const createInstance = async (
         boardId: id,
         connectedIds: ids,
         loading: false,
+        rememberedBoards: summaries,
       }
       await syncTitle(board.name)
       try {
@@ -217,6 +240,11 @@ export const createInstance = async (
               'The board is connected, but its ID could not be saved. Reconnect it next time.',
           },
         }
+      }
+      try {
+        await host.write(boardSummariesPreference, summaries)
+      } catch {
+        // Board IDs remain usable when display metadata cannot be saved.
       }
     } catch (error) {
       if (disposed || requestGeneration !== generation) return
