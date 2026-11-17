@@ -1,4 +1,4 @@
-// cspell:words prefs
+// cspell:words prefs AQID
 
 import { expect, jest, test } from '@jest/globals'
 import type { BackendConfiguration } from '../src/parts/BackendConfiguration/BackendConfiguration.ts'
@@ -70,7 +70,18 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
       cards: [
         ...board.cards,
         {
-          coverDataUrl: 'data:image/webp;base64,dGVzdA==',
+          cover: {
+            scaled: [
+              {
+                url: 'https://trello.com/1/cards/covered/previews/small',
+                width: 150,
+              },
+              {
+                url: 'https://trello.com/1/cards/covered/previews/large',
+                width: 300,
+              },
+            ],
+          },
           id: 'covered',
           idList: 'now',
           name: 'Cover',
@@ -87,6 +98,9 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
         backgroundBottomColor: '#ff58b0',
         backgroundTopColor: '#a82be0',
       },
+    }),
+    new Response(new Uint8Array([1, 2, 3]), {
+      headers: { 'content-type': 'image/webp' },
     }),
   ])
   const result = await loadBoard(
@@ -106,7 +120,7 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
     'No cover',
   ])
   expect(result.cards.find((card) => card.name === 'Cover')?.coverDataUrl).toBe(
-    'data:image/webp;base64,dGVzdA==',
+    'data:image/webp;base64,AQID',
   )
   expect(
     result.cards.find((card) => card.name === 'No cover')?.coverDataUrl,
@@ -134,6 +148,50 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
       new URL(boardUrl).searchParams.get('fields'),
   ).toBe('name,prefs')
   expect(JSON.stringify(request.mock.calls[1])).not.toContain('lvce-token')
+  expect(request).toHaveBeenNthCalledWith(
+    3,
+    'https://trello.com/1/cards/covered/previews/large',
+    expect.objectContaining({
+      credentials: 'omit',
+      headers: { Authorization: 'Bearer trello-token' },
+      redirect: 'error',
+    }),
+  )
+  expect(JSON.stringify(request.mock.calls)).not.toContain('AQID')
+})
+
+test('searches accessible Trello boards and cards with validated board ownership', async () => {
+  const request = requestSequence([
+    Response.json({ accessToken: 'trello-token' }),
+    Response.json({
+      boards: [{ id: '5k8NLHLh', name: 'Work' }],
+      cards: [
+        {
+          id: '507f1f77bcf86cd799439011',
+          idBoard: '12345678',
+          name: 'Chat task',
+        },
+      ],
+    }),
+  ])
+  const client = createTrelloClient(configuration, request)
+  await expect(
+    client.search('chat', new AbortController().signal),
+  ).resolves.toEqual([
+    { id: '5k8NLHLh', kind: 'board', name: 'Work' },
+    {
+      boardId: '12345678',
+      boardName: '',
+      id: '507f1f77bcf86cd799439011',
+      kind: 'card',
+      name: 'Chat task',
+    },
+  ])
+  expect(request.mock.calls[1]?.[0]).toContain('/1/search?')
+  expect(request.mock.calls[1]?.[0]).toContain('cards_limit=20')
+  expect(request.mock.calls[1]?.[1]).toMatchObject({
+    headers: { Authorization: 'Bearer trello-token' },
+  })
 })
 
 for (const [status, code] of [
@@ -366,6 +424,40 @@ test('discovers board names and background preferences directly from Trello', as
       headers: { Authorization: 'Bearer trello-token' },
     }),
   )
+})
+
+test('keeps cards usable when an authenticated cover preview cannot be loaded', async () => {
+  const result = await loadBoard(
+    '5k8NLHLh',
+    new AbortController().signal,
+    requestSequence([
+      Response.json({ accessToken: 'trello-token' }),
+      Response.json({
+        ...board,
+        cards: [
+          {
+            cover: {
+              scaled: [
+                {
+                  url: 'https://trello.com/1/cards/covered/previews/large',
+                  width: 300,
+                },
+              ],
+            },
+            id: 'covered',
+            idList: 'now',
+            name: 'Still usable',
+            pos: 1,
+          },
+        ],
+      }),
+      new Response('forbidden', { status: 403 }),
+    ]),
+  )
+  expect(result.cards).toEqual([
+    expect.objectContaining({ id: 'covered', name: 'Still usable' }),
+  ])
+  expect(result.cards[0]?.coverDataUrl).toBeUndefined()
 })
 
 test('accepts empty discovery and rejects malformed board lists', async () => {

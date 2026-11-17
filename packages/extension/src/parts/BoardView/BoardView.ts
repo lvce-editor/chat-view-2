@@ -7,6 +7,12 @@ import {
   type ViewEvent,
   type VirtualDomViewInstance,
 } from '@lvce-editor/api'
+import {
+  getBoardHash,
+  getUrl,
+  isBoardPath,
+  parseBoardHash,
+} from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { getWorkspaceTitle } from '../ChatView/CreateInstance.ts'
 import { createSession, type BoardSession } from './BoardSession.ts'
 import { render, type BoardState } from './Render.ts'
@@ -33,16 +39,17 @@ export interface BoardHost {
   readonly moveCard: typeof trelloClient.moveCard
   readonly read: typeof getPreference
   readonly revoke: typeof trelloClient.disconnect
+  readonly search: typeof trelloClient.search
   readonly session: BoardSession
   readonly status: typeof trelloClient.status
   readonly updateCard: typeof trelloClient.updateCard
   readonly write: typeof setPreference
 }
 interface BoardDragHandlers {
-  readonly handleBoardDragEnd: () => Promise<void>
+  readonly handleBoardDragEnd: () => void
   readonly handleBoardDragOver: (name: string) => void
   readonly handleBoardDragStart: (name: string) => void
-  readonly handleBoardDrop: (name: string) => Promise<void>
+  readonly handleBoardDrop: (name: string) => void
 }
 interface BoardViewInstance extends VirtualDomViewInstance, BoardDragHandlers {
   readonly handleDialogKeyDown: (key: unknown) => void
@@ -80,10 +87,34 @@ const defaultHost: BoardHost = {
   moveCard: trelloClient.moveCard,
   read: getPreference,
   revoke: trelloClient.disconnect,
+  search: trelloClient.search,
   session: createSession(),
   status: trelloClient.status,
   updateCard: trelloClient.updateCard,
   write: setPreference,
+}
+
+const getBoardHashFromHost = async (host: BoardHost): Promise<string> => {
+  try {
+    const href = await host.execute('Layout.getHref')
+    return typeof href === 'string' ? href : ''
+  } catch {
+    return ''
+  }
+}
+
+const setBoardHash = async (
+  host: BoardHost,
+  boardId: string,
+): Promise<void> => {
+  try {
+    const href = await getBoardHashFromHost(host)
+    const url = getUrl(href)
+    if (!url || !isBoardPath(url.pathname)) return
+    await host.execute('Layout.setHash', boardId ? getBoardHash(boardId) : '')
+  } catch {
+    // Older editor builds do not expose URL commands.
+  }
 }
 
 const getProviderAction = (
@@ -109,6 +140,12 @@ export const createInstance = async (
     // The connection form remains usable when settings cannot be read.
   }
   const savedState = context?.state
+  const href = await getBoardHashFromHost(host)
+  const boardHash = parseBoardHash(href)
+  const urlBoardId =
+    boardHash.type === 'board' && boardIdPattern.test(boardHash.id)
+      ? boardHash.id
+      : ''
   const savedId =
     typeof savedState === 'object' &&
     savedState !== null &&
@@ -116,9 +153,9 @@ export const createInstance = async (
     typeof savedState.boardId === 'string'
       ? savedState.boardId
       : ''
-  const initialId = connectedIds.includes(savedId)
-    ? savedId
-    : connectedIds[0] || ''
+  const initialId =
+    urlBoardId ||
+    (connectedIds.includes(savedId) ? savedId : connectedIds[0] || '')
   const connection = host.session.get(initialId)
   let state: BoardState = {
     accountConnected: Boolean(connection),
@@ -134,6 +171,9 @@ export const createInstance = async (
   }
   let generation = 0
   let controller: AbortController | undefined
+  let searchController: AbortController | undefined
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
+  let searchGeneration = 0
   let moveController: AbortController | undefined
   let disposed = false
   const syncTitle = async (title: string): Promise<void> => {
@@ -194,6 +234,7 @@ export const createInstance = async (
       const board = await host.load(boardId, signal)
       if (disposed || requestGeneration !== generation) return
       const id = parseBoardId(boardId)
+      await setBoardHash(host, id)
       host.session.set(id, { board })
       const ids = [...new Set([...connectedIds, id])]
       state = {
@@ -352,6 +393,7 @@ export const createInstance = async (
   const disconnect = async (): Promise<void> => {
     cancel()
     const { boardId, connectedIds } = state
+    await setBoardHash(host, '')
     host.session.remove(boardId)
     const ids = connectedIds.filter((id) => id !== boardId)
     state = {
@@ -616,7 +658,58 @@ export const createInstance = async (
         state = { ...state, boardId: value, error: undefined, loading: false }
         break
       case 'board-search':
-        state = { ...state, searchQuery: value }
+        const {
+          searchError: _previousSearchError,
+          ...stateWithoutSearchError
+        } = state
+        state = {
+          ...stateWithoutSearchError,
+          searchLoading: Boolean(value.trim()),
+          searchQuery: value,
+          searchResults: [],
+        }
+        searchGeneration++
+        searchController?.abort()
+        if (searchTimer) clearTimeout(searchTimer)
+        if (value.trim()) {
+          const currentGeneration = searchGeneration
+          searchTimer = setTimeout(() => {
+            searchController = new AbortController()
+            void host
+              .search(
+                value,
+                AbortSignal.any([
+                  searchController.signal,
+                  AbortSignal.timeout(45_000),
+                ]),
+              )
+              .then((searchResults) => {
+                if (disposed || currentGeneration !== searchGeneration) return
+                state = { ...state, searchLoading: false, searchResults }
+                void notify()
+              })
+              .catch((error: unknown) => {
+                if (
+                  disposed ||
+                  currentGeneration !== searchGeneration ||
+                  searchController?.signal.aborted
+                )
+                  return
+                state = {
+                  ...state,
+                  searchError:
+                    error instanceof TrelloError
+                      ? error.details
+                      : {
+                          code: 'TRELLO_SEARCH_FAILED',
+                          message: 'Unable to search Trello. Try again.',
+                        },
+                  searchLoading: false,
+                }
+                void notify()
+              })
+          }, 250)
+        }
         break
       case 'edit-card-desc':
         state = { ...state, editDesc: value, editError: undefined }
@@ -677,6 +770,9 @@ export const createInstance = async (
   const changeBoard = async (name: string | undefined): Promise<void> => {
     if (name !== 'board-change' && !name?.startsWith('board-select:')) return
     cancel()
+    searchGeneration++
+    searchController?.abort()
+    if (searchTimer) clearTimeout(searchTimer)
     state = {
       ...state,
       board: undefined,
@@ -692,8 +788,56 @@ export const createInstance = async (
       searchQuery: '',
     }
     const { boardId } = state
+    await setBoardHash(host, boardId)
     await restoreConnection(boardId)
     if (boardId && !host.session.get(boardId)) void connect()
+  }
+  const openSearchCard = async (id: string): Promise<void> => {
+    const { searchResults = [] } = state
+    const result = searchResults.find(
+      (item) => item.kind === 'card' && item.id === id,
+    )
+    if (!result?.boardId) return
+    cancel()
+    const requestGeneration = generation
+    controller = new AbortController()
+    state = {
+      ...state,
+      accountConnected: true,
+      board: undefined,
+      boardId: result.boardId,
+      editingCard: undefined,
+      error: undefined,
+      loading: true,
+      searchQuery: '',
+    }
+    await notify()
+    try {
+      const board = await host.load(
+        result.boardId,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)]),
+      )
+      if (disposed || requestGeneration !== generation) return
+      host.session.set(result.boardId, { board })
+      state = { ...state, board, loading: false }
+      await syncTitle(board.name)
+      await notify()
+      openCard(`board-card:${id}`)
+    } catch (error) {
+      if (disposed || requestGeneration !== generation) return
+      state = {
+        ...state,
+        error:
+          error instanceof TrelloError
+            ? error.details
+            : {
+                code: 'TRELLO_REQUEST_FAILED',
+                message: 'Unable to load this board. Try again.',
+              },
+        loading: false,
+      }
+      await notify()
+    }
   }
   const handleClick = async (event: Readonly<ViewEvent>): Promise<void> => {
     const providerAction = getProviderAction(event.name)
@@ -710,6 +854,10 @@ export const createInstance = async (
     }
     if (event.name?.startsWith('board-card:')) {
       openCard(event.name)
+      return
+    }
+    if (event.name?.startsWith('board-search-card:')) {
+      void openSearchCard(event.name.slice('board-search-card:'.length))
       return
     }
     if (event.name === 'board-card-details-retry') {
@@ -734,6 +882,9 @@ export const createInstance = async (
     dispose(): void {
       disposed = true
       cancel()
+      searchGeneration++
+      searchController?.abort()
+      if (searchTimer) clearTimeout(searchTimer)
       void (async (): Promise<void> => {
         try {
           await restoreTitle()
@@ -743,8 +894,10 @@ export const createInstance = async (
       })()
     },
     getContext: () => ({ focusEditor, focusNewCard, focusRestore }),
-    handleBoardDragEnd(): Promise<void> {
-      return clearDrag()
+    // View commands are serialized: return before waiting for a rerender
+    // queued behind this command, including the optimistic drop frame.
+    handleBoardDragEnd(): void {
+      void clearDrag()
     },
     handleBoardDragOver(name: string): void {
       const { board, draggedCardId, dropTargetId, editingCard, loading } = state
@@ -776,8 +929,8 @@ export const createInstance = async (
       state = { ...state, draggedCardId: cardId, dropTargetId: undefined }
       void notify()
     },
-    handleBoardDrop(name: string): Promise<void> {
-      return moveCard(name)
+    handleBoardDrop(name: string): void {
+      void moveCard(name)
     },
     handleDialogKeyDown(key: unknown): void {
       const { editingCard, savingCard } = state
@@ -835,7 +988,7 @@ export const createInstance = async (
     ): string => {
       const { cardDraft, editingCard } = state
       if (oldContext.focusEditor !== newContext.focusEditor && editingCard)
-        return '[name="edit-card-name"]'
+        return '[role="dialog"]'
       if (oldContext.focusNewCard !== newContext.focusNewCard && cardDraft)
         return '[name="board-card-title"]'
       return oldContext.focusRestore === newContext.focusRestore || !focusCardId
@@ -852,7 +1005,10 @@ export const createInstance = async (
       return { boardId }
     },
   }
-  if (!initialBoard) void checkAccount(true)
+  if (!initialBoard) {
+    if (urlBoardId) void connect()
+    else void checkAccount(true)
+  }
   return instance
 }
 

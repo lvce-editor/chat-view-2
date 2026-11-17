@@ -12,6 +12,7 @@ import {
   copyChatViewComponentState,
   createInstance,
   newChatInActiveChatViewInstance,
+  setWorkbenchLayoutUrl,
   submitActiveChatViewInstance,
 } from '../src/parts/ChatView/CreateInstance.ts'
 import {
@@ -54,6 +55,24 @@ const getPathByClass = (
   }
   return visit([])
 }
+
+test('board hashes do not become chat task hashes during layout transitions', async () => {
+  const execute = jest.fn(async (command: string) => {
+    if (command === 'Layout.getHref')
+      return 'https://example.com/board?workspace=one#22222222'
+    if (command === 'Layout.getAssetDir') return '/assets'
+    return undefined
+  }) as unknown as Parameters<typeof setWorkbenchLayoutUrl>[0]
+
+  await setWorkbenchLayoutUrl(execute, 'ai-native')
+  expect(execute).toHaveBeenCalledWith(
+    'Layout.setPathName',
+    '/chat?workspace=one',
+  )
+
+  await setWorkbenchLayoutUrl(execute, 'ide')
+  expect(execute).toHaveBeenCalledWith('Layout.setPathName', '/?workspace=one')
+})
 
 const dispatch = async (
   instance: Awaited<ReturnType<typeof createInstance>>,

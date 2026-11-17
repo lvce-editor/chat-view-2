@@ -45,6 +45,7 @@ const createHost = (): BoardHost => ({
   moveCard: jest.fn<BoardHost['moveCard']>().mockResolvedValue(undefined),
   read: jest.fn<BoardHost['read']>().mockResolvedValue([]),
   revoke: jest.fn<BoardHost['revoke']>().mockResolvedValue(undefined),
+  search: jest.fn<BoardHost['search']>().mockResolvedValue([]),
   session: createSession(),
   status: jest
     .fn<BoardHost['status']>()
@@ -128,6 +129,13 @@ test('searches connected boards by name and opens the selected result', async ()
     { id: '5k8NLHLh', name: 'Lvce Editor' },
     { id: '12345678', name: 'Personal Tasks' },
   ])
+  jest
+    .mocked(host.search)
+    .mockImplementation(async (query) =>
+      query === 'missing'
+        ? []
+        : [{ id: '12345678', kind: 'board', name: 'Personal Tasks' }],
+    )
   const view = await createInstance(createContext(), host)
   await flush()
   await view.handleEvent?.({
@@ -135,12 +143,18 @@ test('searches connected boards by name and opens the selected result', async ()
     type: 'input',
     value: 'missing',
   })
-  expect(JSON.stringify(await view.render())).toContain('No boards found')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain(
+    'No boards or cards found',
+  )
   await view.handleEvent?.({
     name: 'board-search',
     type: 'input',
     value: 'personal',
   })
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await flush()
   const dom = JSON.stringify(await view.render())
   expect(dom).toContain('Personal Tasks')
   expect(dom).not.toContain('Lvce Editor')
@@ -179,6 +193,46 @@ test('matches remembered short IDs with board summaries after reload', async () 
   await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
   await flush()
   expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.any(AbortSignal))
+  view.dispose?.()
+})
+
+test('searches Trello cards remotely and opens the owning board and card', async () => {
+  const host = createHost()
+  const cardId = '507f1f77bcf86cd799439011'
+  jest.mocked(host.search).mockResolvedValue([
+    {
+      boardId: '12345678',
+      boardName: 'Personal',
+      id: cardId,
+      kind: 'card',
+      name: 'Chat task',
+    },
+  ])
+  jest.mocked(host.load).mockResolvedValue({
+    ...board,
+    cards: [{ ...board.cards[0], id: cardId, name: 'Chat task' }],
+    id: '12345678',
+    name: 'Personal',
+  })
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-search',
+    type: 'input',
+    value: 'chat',
+  })
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain(
+    'Card · Chat task — Personal',
+  )
+  await view.handleEvent?.({
+    name: `board-search-card:${cardId}`,
+    type: 'click',
+  })
+  await flush()
+  expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
+  expect(host.loadCard).toHaveBeenCalledWith(cardId, expect.any(AbortSignal))
+  expect(JSON.stringify(await view.render())).toContain('BoardDialogOverlay')
   view.dispose?.()
 })
 
@@ -365,9 +419,14 @@ test('opens a card editor and updates the board only after Trello confirms the s
   })
   await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
   await flush()
+  const previousFocusContext = view.getContext?.() || {}
   await view.handleEvent?.({ name: 'board-card:one', type: 'click' })
   await flush()
+  expect(
+    view.renderFocus?.(previousFocusContext, view.getContext?.() || {}),
+  ).toBe('[role="dialog"]')
   expect(JSON.stringify(await view.render())).toContain('Edit card')
+  expect(JSON.stringify(await view.render())).not.toContain('"autoFocus":true')
   expect(JSON.stringify(await view.render())).toContain('Details')
   await view.handleEvent?.({
     name: 'edit-card-name',
@@ -452,7 +511,7 @@ test('moves one card into an empty list and keeps the saved board in session', a
   view.handleBoardDragStart('board-card:one')
   view.handleBoardDragOver('board-list:empty')
   expect(JSON.stringify(await view.render())).toContain('BoardCardsDropTarget')
-  await view.handleBoardDrop('board-list:empty')
+  view.handleBoardDrop('board-list:empty')
   await flush()
 
   expect(host.moveCard).toHaveBeenCalledWith('one', 'empty', expect.anything())
@@ -481,10 +540,10 @@ test('same-list and cancelled drops do not persist a move', async () => {
   await flush()
 
   view.handleBoardDragStart('board-card:one')
-  await view.handleBoardDrop('board-list:todo')
+  view.handleBoardDrop('board-list:todo')
   view.handleBoardDragStart('board-card:one')
   view.handleBoardDragOver('board-list:empty')
-  await view.handleBoardDragEnd()
+  view.handleBoardDragEnd()
 
   expect(host.moveCard).not.toHaveBeenCalled()
   expect(JSON.stringify(await view.render())).not.toContain(
@@ -505,7 +564,7 @@ test('failed moves restore the original list and show recoverable feedback', asy
   await flush()
 
   view.handleBoardDragStart('board-card:one')
-  await view.handleBoardDrop('board-list:empty')
+  view.handleBoardDrop('board-list:empty')
   await flush()
 
   expect(JSON.stringify(await view.render())).toContain('TRELLO_MOVE_FAILED')
@@ -675,6 +734,41 @@ test('discovers Trello boards automatically on entry and reload', async () => {
     disabled: false,
   })
   reloadedView.dispose?.()
+})
+
+test('restores the board from its URL hash before saved view state', async () => {
+  const host = createHost()
+  jest.mocked(host.read).mockResolvedValue(['5k8NLHLh', '12345678'])
+  jest.mocked(host.execute).mockImplementation(async (command) => {
+    if (command === 'Layout.getHref')
+      return 'https://example.com/board?workspace=one#12345678'
+    return undefined
+  })
+  const view = await createInstance(
+    { ...createContext(), state: { boardId: '5k8NLHLh' } },
+    host,
+  )
+  await flush()
+  expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
+  expect(JSON.stringify(await view.render())).toContain('A task')
+  view.dispose?.()
+})
+
+test('selection updates the board URL hash and clearing selection removes it', async () => {
+  const host = createHost()
+  jest.mocked(host.execute).mockImplementation(async (command) => {
+    if (command === 'Layout.getHref')
+      return 'https://example.com/board?workspace=one#old'
+    return undefined
+  })
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
+  expect(host.execute).toHaveBeenCalledWith('Layout.setHash', '#5k8NLHLh')
+  await view.handleEvent?.({ name: 'board-change', type: 'click' })
+  expect(host.execute).toHaveBeenCalledWith('Layout.setHash', '')
+  view.dispose?.()
 })
 
 test('shows the existing empty state for an automatically discovered empty account', async () => {
