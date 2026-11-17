@@ -46,10 +46,10 @@ export interface BoardHost {
   readonly write: typeof setPreference
 }
 interface BoardDragHandlers {
-  readonly handleBoardDragEnd: () => Promise<void>
+  readonly handleBoardDragEnd: () => void
   readonly handleBoardDragOver: (name: string) => void
   readonly handleBoardDragStart: (name: string) => void
-  readonly handleBoardDrop: (name: string) => Promise<void>
+  readonly handleBoardDrop: (name: string) => void
 }
 interface BoardViewInstance extends VirtualDomViewInstance, BoardDragHandlers {
   readonly handleDialogKeyDown: (key: unknown) => void
@@ -894,8 +894,10 @@ export const createInstance = async (
       })()
     },
     getContext: () => ({ focusEditor, focusNewCard, focusRestore }),
-    handleBoardDragEnd(): Promise<void> {
-      return clearDrag()
+    // View commands are serialized: return before waiting for a rerender
+    // queued behind this command, including the optimistic drop frame.
+    handleBoardDragEnd(): void {
+      void clearDrag()
     },
     handleBoardDragOver(name: string): void {
       const { board, draggedCardId, dropTargetId, editingCard, loading } = state
@@ -927,8 +929,8 @@ export const createInstance = async (
       state = { ...state, draggedCardId: cardId, dropTargetId: undefined }
       void notify()
     },
-    handleBoardDrop(name: string): Promise<void> {
-      return moveCard(name)
+    handleBoardDrop(name: string): void {
+      void moveCard(name)
     },
     handleDialogKeyDown(key: unknown): void {
       const { editingCard, savingCard } = state
