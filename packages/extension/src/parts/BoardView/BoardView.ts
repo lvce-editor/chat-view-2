@@ -39,6 +39,7 @@ export interface BoardHost {
   readonly moveCard: typeof trelloClient.moveCard
   readonly read: typeof getPreference
   readonly revoke: typeof trelloClient.disconnect
+  readonly search: typeof trelloClient.search
   readonly session: BoardSession
   readonly status: typeof trelloClient.status
   readonly updateCard: typeof trelloClient.updateCard
@@ -86,6 +87,7 @@ const defaultHost: BoardHost = {
   moveCard: trelloClient.moveCard,
   read: getPreference,
   revoke: trelloClient.disconnect,
+  search: trelloClient.search,
   session: createSession(),
   status: trelloClient.status,
   updateCard: trelloClient.updateCard,
@@ -169,6 +171,9 @@ export const createInstance = async (
   }
   let generation = 0
   let controller: AbortController | undefined
+  let searchController: AbortController | undefined
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
+  let searchGeneration = 0
   let moveController: AbortController | undefined
   let disposed = false
   const syncTitle = async (title: string): Promise<void> => {
@@ -653,7 +658,58 @@ export const createInstance = async (
         state = { ...state, boardId: value, error: undefined, loading: false }
         break
       case 'board-search':
-        state = { ...state, searchQuery: value }
+        const {
+          searchError: _previousSearchError,
+          ...stateWithoutSearchError
+        } = state
+        state = {
+          ...stateWithoutSearchError,
+          searchLoading: Boolean(value.trim()),
+          searchQuery: value,
+          searchResults: [],
+        }
+        searchGeneration++
+        searchController?.abort()
+        if (searchTimer) clearTimeout(searchTimer)
+        if (value.trim()) {
+          const currentGeneration = searchGeneration
+          searchTimer = setTimeout(() => {
+            searchController = new AbortController()
+            void host
+              .search(
+                value,
+                AbortSignal.any([
+                  searchController.signal,
+                  AbortSignal.timeout(45_000),
+                ]),
+              )
+              .then((searchResults) => {
+                if (disposed || currentGeneration !== searchGeneration) return
+                state = { ...state, searchLoading: false, searchResults }
+                void notify()
+              })
+              .catch((error: unknown) => {
+                if (
+                  disposed ||
+                  currentGeneration !== searchGeneration ||
+                  searchController?.signal.aborted
+                )
+                  return
+                state = {
+                  ...state,
+                  searchError:
+                    error instanceof TrelloError
+                      ? error.details
+                      : {
+                          code: 'TRELLO_SEARCH_FAILED',
+                          message: 'Unable to search Trello. Try again.',
+                        },
+                  searchLoading: false,
+                }
+                void notify()
+              })
+          }, 250)
+        }
         break
       case 'edit-card-desc':
         state = { ...state, editDesc: value, editError: undefined }
@@ -714,6 +770,9 @@ export const createInstance = async (
   const changeBoard = async (name: string | undefined): Promise<void> => {
     if (name !== 'board-change' && !name?.startsWith('board-select:')) return
     cancel()
+    searchGeneration++
+    searchController?.abort()
+    if (searchTimer) clearTimeout(searchTimer)
     state = {
       ...state,
       board: undefined,
@@ -733,6 +792,53 @@ export const createInstance = async (
     await restoreConnection(boardId)
     if (boardId && !host.session.get(boardId)) void connect()
   }
+  const openSearchCard = async (id: string): Promise<void> => {
+    const { searchResults = [] } = state
+    const result = searchResults.find(
+      (item) => item.kind === 'card' && item.id === id,
+    )
+    if (!result?.boardId) return
+    cancel()
+    const requestGeneration = generation
+    controller = new AbortController()
+    state = {
+      ...state,
+      accountConnected: true,
+      board: undefined,
+      boardId: result.boardId,
+      editingCard: undefined,
+      error: undefined,
+      loading: true,
+      searchQuery: '',
+    }
+    await notify()
+    try {
+      const board = await host.load(
+        result.boardId,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(45_000)]),
+      )
+      if (disposed || requestGeneration !== generation) return
+      host.session.set(result.boardId, { board })
+      state = { ...state, board, loading: false }
+      await syncTitle(board.name)
+      await notify()
+      openCard(`board-card:${id}`)
+    } catch (error) {
+      if (disposed || requestGeneration !== generation) return
+      state = {
+        ...state,
+        error:
+          error instanceof TrelloError
+            ? error.details
+            : {
+                code: 'TRELLO_REQUEST_FAILED',
+                message: 'Unable to load this board. Try again.',
+              },
+        loading: false,
+      }
+      await notify()
+    }
+  }
   const handleClick = async (event: Readonly<ViewEvent>): Promise<void> => {
     const providerAction = getProviderAction(event.name)
     if (providerAction) {
@@ -748,6 +854,10 @@ export const createInstance = async (
     }
     if (event.name?.startsWith('board-card:')) {
       openCard(event.name)
+      return
+    }
+    if (event.name?.startsWith('board-search-card:')) {
+      void openSearchCard(event.name.slice('board-search-card:'.length))
       return
     }
     if (event.name === 'board-card-details-retry') {
@@ -772,6 +882,9 @@ export const createInstance = async (
     dispose(): void {
       disposed = true
       cancel()
+      searchGeneration++
+      searchController?.abort()
+      if (searchTimer) clearTimeout(searchTimer)
       void (async (): Promise<void> => {
         try {
           await restoreTitle()

@@ -47,6 +47,22 @@ export const testBoardSelection = async (
     }
     assert.equal(request.headers().authorization, 'Bearer trello-test')
     const url = new URL(request.url())
+    if (url.pathname === '/1/search') {
+      await route.fulfill({
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        json: {
+          boards: [{ id: '22222222', name: 'Engineering' }],
+          cards: [
+            {
+              id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+              idBoard: '22222222',
+              name: 'Card with cover',
+            },
+          ],
+        },
+      })
+      return
+    }
     if (url.pathname === '/1/members/me/boards') {
       discoveryLoads.push(`${url.pathname}${url.search}`)
       await route.fulfill({
@@ -238,6 +254,13 @@ export const testBoardSelection = async (
         .evaluate((element) => element.style.backgroundImage),
       'linear-gradient(135deg, rgb(12, 102, 228), rgb(139, 77, 200))',
     )
+    const boardSearch = page.getByRole('searchbox', { name: 'Search boards' })
+    await boardSearch.fill('cover')
+    await page
+      .getByRole('button', { name: 'Card · Card with cover — Engineering' })
+      .waitFor()
+    assert.equal(await page.locator('.BoardSearchResult').count(), 2)
+    await boardSearch.fill('')
     assert.equal(discoveryLoads.length, 1)
     await page.getByRole('button', { name: 'Open Engineering' }).click()
     await page

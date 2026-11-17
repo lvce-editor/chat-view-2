@@ -45,6 +45,7 @@ const createHost = (): BoardHost => ({
   moveCard: jest.fn<BoardHost['moveCard']>().mockResolvedValue(undefined),
   read: jest.fn<BoardHost['read']>().mockResolvedValue([]),
   revoke: jest.fn<BoardHost['revoke']>().mockResolvedValue(undefined),
+  search: jest.fn<BoardHost['search']>().mockResolvedValue([]),
   session: createSession(),
   status: jest
     .fn<BoardHost['status']>()
@@ -128,6 +129,13 @@ test('searches connected boards by name and opens the selected result', async ()
     { id: '5k8NLHLh', name: 'Lvce Editor' },
     { id: '12345678', name: 'Personal Tasks' },
   ])
+  jest
+    .mocked(host.search)
+    .mockImplementation(async (query) =>
+      query === 'missing'
+        ? []
+        : [{ id: '12345678', kind: 'board', name: 'Personal Tasks' }],
+    )
   const view = await createInstance(createContext(), host)
   await flush()
   await view.handleEvent?.({
@@ -135,12 +143,18 @@ test('searches connected boards by name and opens the selected result', async ()
     type: 'input',
     value: 'missing',
   })
-  expect(JSON.stringify(await view.render())).toContain('No boards found')
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain(
+    'No boards or cards found',
+  )
   await view.handleEvent?.({
     name: 'board-search',
     type: 'input',
     value: 'personal',
   })
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await flush()
   const dom = JSON.stringify(await view.render())
   expect(dom).toContain('Personal Tasks')
   expect(dom).not.toContain('Lvce Editor')
@@ -157,6 +171,46 @@ test('searches connected boards by name and opens the selected result', async ()
   await flush()
   expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
   expect(JSON.stringify(await view.render())).toContain('BoardViewTrello')
+  view.dispose?.()
+})
+
+test('searches Trello cards remotely and opens the owning board and card', async () => {
+  const host = createHost()
+  const cardId = '507f1f77bcf86cd799439011'
+  jest.mocked(host.search).mockResolvedValue([
+    {
+      boardId: '12345678',
+      boardName: 'Personal',
+      id: cardId,
+      kind: 'card',
+      name: 'Chat task',
+    },
+  ])
+  jest.mocked(host.load).mockResolvedValue({
+    ...board,
+    cards: [{ ...board.cards[0], id: cardId, name: 'Chat task' }],
+    id: '12345678',
+    name: 'Personal',
+  })
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-search',
+    type: 'input',
+    value: 'chat',
+  })
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain(
+    'Card · Chat task — Personal',
+  )
+  await view.handleEvent?.({
+    name: `board-search-card:${cardId}`,
+    type: 'click',
+  })
+  await flush()
+  expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
+  expect(host.loadCard).toHaveBeenCalledWith(cardId, expect.any(AbortSignal))
+  expect(JSON.stringify(await view.render())).toContain('BoardDialogOverlay')
   view.dispose?.()
 })
 

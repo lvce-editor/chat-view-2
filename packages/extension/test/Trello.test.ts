@@ -136,6 +136,40 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
   expect(JSON.stringify(request.mock.calls[1])).not.toContain('lvce-token')
 })
 
+test('searches accessible Trello boards and cards with validated board ownership', async () => {
+  const request = requestSequence([
+    Response.json({ accessToken: 'trello-token' }),
+    Response.json({
+      boards: [{ id: '5k8NLHLh', name: 'Work' }],
+      cards: [
+        {
+          id: '507f1f77bcf86cd799439011',
+          idBoard: '12345678',
+          name: 'Chat task',
+        },
+      ],
+    }),
+  ])
+  const client = createTrelloClient(configuration, request)
+  await expect(
+    client.search('chat', new AbortController().signal),
+  ).resolves.toEqual([
+    { id: '5k8NLHLh', kind: 'board', name: 'Work' },
+    {
+      boardId: '12345678',
+      boardName: '',
+      id: '507f1f77bcf86cd799439011',
+      kind: 'card',
+      name: 'Chat task',
+    },
+  ])
+  expect(request.mock.calls[1]?.[0]).toContain('/1/search?')
+  expect(request.mock.calls[1]?.[0]).toContain('cards_limit=20')
+  expect(request.mock.calls[1]?.[1]).toMatchObject({
+    headers: { Authorization: 'Bearer trello-token' },
+  })
+})
+
 for (const [status, code] of [
   [400, 'TRELLO_BOARD_NOT_FOUND'],
   [404, 'TRELLO_BOARD_NOT_FOUND'],
