@@ -442,7 +442,7 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
   return Dom.node(
     VirtualDomElements.Div,
     {
-      ariaLabel: `Card details: ${editingCard.name}`,
+      ariaLabel: 'Edit Trello card',
       ariaModal: true,
       className: 'BoardDialogOverlay',
       onKeyDown: 'handleDialogKeyDown',
