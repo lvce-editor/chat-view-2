@@ -305,7 +305,7 @@ test('discovers board names and background preferences directly from Trello', as
     Response.json({ accessToken: 'trello-token' }),
     Response.json([
       {
-        id: '22222222',
+        id: '222222221111111133333333',
         name: 'Zebra',
         prefs: {
           backgroundImageScaled: [
@@ -317,6 +317,7 @@ test('discovers board names and background preferences directly from Trello', as
             },
           ],
         },
+        shortLink: '22222222',
       },
       {
         extra: 'discard',
@@ -359,7 +360,7 @@ test('discovers board names and background preferences directly from Trello', as
   )
   expect(request).toHaveBeenNthCalledWith(
     2,
-    'https://api.trello.com/1/members/me/boards?fields=id%2Cname%2Cprefs&filter=open',
+    'https://api.trello.com/1/members/me/boards?fields=id%2Cname%2Cprefs%2CshortLink&filter=open',
     expect.objectContaining({
       credentials: 'omit',
       headers: { Authorization: 'Bearer trello-token' },
