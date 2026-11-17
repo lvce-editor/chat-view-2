@@ -156,26 +156,18 @@ const normalizeBoardBackground = (
     prefs?.backgroundBottomColor,
   )
   const backgroundColor = safeBackgroundColor(
-    value.backgroundColor ??
-      prefs?.backgroundColor ??
-      backgroundBottomColor ??
-      backgroundTopColor,
+    prefs?.backgroundColor ?? backgroundBottomColor ?? backgroundTopColor,
   )
   const backgroundGradient =
     backgroundTopColor && backgroundBottomColor
       ? `linear-gradient(135deg, ${backgroundTopColor}, ${backgroundBottomColor})`
-      : safeBackgroundGradient(
-          value.backgroundGradient ??
-            prefs?.backgroundGradient ??
-            prefs?.background,
-        )
+      : safeBackgroundGradient(prefs?.backgroundGradient ?? prefs?.background)
   const scaledBackgrounds = Array.isArray(prefs?.backgroundImageScaled)
     ? prefs.backgroundImageScaled
     : []
   const largestBackground = scaledBackgrounds.at(-1)
   const backgroundImage = safeBackgroundImage(
-    value.backgroundImage ??
-      prefs?.backgroundImage ??
+    prefs?.backgroundImage ??
       (isRecord(largestBackground) ? largestBackground.url : undefined),
   )
   return {
@@ -184,7 +176,7 @@ const normalizeBoardBackground = (
     ...(backgroundImage && { backgroundImage }),
   }
 }
-export const normalizeBoardSummary = (
+const normalizeBoardSummary = (
   value: unknown,
 ): TrelloBoardSummary | undefined => {
   if (

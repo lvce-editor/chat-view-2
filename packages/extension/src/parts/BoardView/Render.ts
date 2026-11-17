@@ -49,7 +49,6 @@ export interface BoardState {
   readonly error: BoardError | undefined
   readonly loading: boolean
   readonly providerSelected: boolean
-  readonly rememberedBoards: readonly TrelloBoardSummary[]
   readonly savingCard?: boolean
   readonly searchQuery?: string
 }
@@ -285,14 +284,7 @@ const renderConnection = (state: BoardState): readonly Dom.Node[] => {
       ]
 }
 const renderSetup = (state: BoardState): Dom.Node => {
-  const {
-    boards,
-    connectedIds,
-    loading,
-    providerSelected,
-    rememberedBoards,
-    searchQuery,
-  } = state
+  const { boards, connectedIds, loading, providerSelected, searchQuery } = state
   const showProviderGrid = !providerSelected
   const rememberedIds = connectedIds.filter((id) =>
     boards.every((board) => board.id !== id),
@@ -326,9 +318,7 @@ const renderSetup = (state: BoardState): Dom.Node => {
                 Dom.div('BoardRemembered', [
                   Dom.heading(3, 'BoardRememberedTitle', 'Remembered boards'),
                   ...rememberedIds.map((id) => {
-                    const board =
-                      boards.find((item) => item.id === id) ||
-                      rememberedBoards.find((item) => item.id === id)
+                    const board = boards.find((item) => item.id === id)
                     return board
                       ? renderBoardTile({ ...board, id }, loading)
                       : Dom.button(`board-select:${id}`, id, 'BoardButton')
