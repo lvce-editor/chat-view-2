@@ -294,6 +294,9 @@ const renderSetup = (state: BoardState): Dom.Node => {
     searchQuery,
   } = state
   const showProviderGrid = !providerSelected
+  const rememberedIds = connectedIds.filter((id) =>
+    boards.every((board) => board.id !== id),
+  )
   return Dom.div('BoardSetup', [
     Dom.heading(2, 'BoardSetupTitle', 'Connect a board'),
     ...(showProviderGrid
@@ -318,11 +321,11 @@ const renderSetup = (state: BoardState): Dom.Node => {
             ),
           ]),
           ...renderConnection(state),
-          ...(connectedIds.length > 0 && !searchQuery
+          ...(rememberedIds.length > 0 && !searchQuery
             ? [
                 Dom.div('BoardRemembered', [
                   Dom.heading(3, 'BoardRememberedTitle', 'Remembered boards'),
-                  ...connectedIds.map((id) => {
+                  ...rememberedIds.map((id) => {
                     const board =
                       boards.find((item) => item.id === id) ||
                       rememberedBoards.find((item) => item.id === id)

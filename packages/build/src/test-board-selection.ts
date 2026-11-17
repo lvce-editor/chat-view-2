@@ -424,7 +424,11 @@ export const testBoardSelection = async (
       .getByRole('button', { name: 'Connect Trello', exact: true })
       .click()
     await page.getByText('No open boards found.', { exact: false }).waitFor()
-    assert.equal(await tiles.count(), 0)
+    assert.equal(await tiles.count(), 1)
+    assert.equal(
+      await tiles.first().getAttribute('aria-label'),
+      'Open Engineering',
+    )
     fail = true
     await page
       .getByRole('button', { name: 'Refresh boards', exact: true })
