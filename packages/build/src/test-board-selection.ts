@@ -243,6 +243,7 @@ export const testBoardSelection = async (
     await page
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
+    assert.equal(new URL(page.url()).hash, '#22222222')
     assert.deepEqual(directLoads, [
       '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name%2Cprefs&list_fields=name%2Cpos&lists=open',
     ])
@@ -257,6 +258,12 @@ export const testBoardSelection = async (
       ),
       'url("https://trello-backgrounds.s3.amazonaws.com/engineering.jpg")',
     )
+    await page.reload()
+    await page
+      .getByRole('heading', { name: 'Engineering', exact: true })
+      .waitFor()
+    assert.equal(new URL(page.url()).hash, '#22222222')
+    assert.equal(directLoads.length, 2)
     assert.deepEqual(proxiedLoads, [])
     const cover = page.locator('.BoardCardCover')
     await cover.waitFor({ state: 'visible' })
@@ -414,7 +421,7 @@ export const testBoardSelection = async (
       .getByRole('button', { name: 'Refresh board', exact: true })
       .click()
     await refresh
-    assert.equal(directLoads.length, 5)
+    assert.equal(directLoads.length, 6)
     assert.deepEqual(proxiedLoads, [])
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })

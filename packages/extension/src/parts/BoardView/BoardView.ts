@@ -7,6 +7,12 @@ import {
   type ViewEvent,
   type VirtualDomViewInstance,
 } from '@lvce-editor/api'
+import {
+  getBoardHash,
+  getUrl,
+  isBoardPath,
+  parseBoardHash,
+} from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { getWorkspaceTitle } from '../ChatView/CreateInstance.ts'
 import { createSession, type BoardSession } from './BoardSession.ts'
 import { render, type BoardState } from './Render.ts'
@@ -86,6 +92,29 @@ const defaultHost: BoardHost = {
   write: setPreference,
 }
 
+const getBoardHashFromHost = async (host: BoardHost): Promise<string> => {
+  try {
+    const href = await host.execute('Layout.getHref')
+    return typeof href === 'string' ? href : ''
+  } catch {
+    return ''
+  }
+}
+
+const setBoardHash = async (
+  host: BoardHost,
+  boardId: string,
+): Promise<void> => {
+  try {
+    const href = await getBoardHashFromHost(host)
+    const url = getUrl(href)
+    if (!url || !isBoardPath(url.pathname)) return
+    await host.execute('Layout.setHash', boardId ? getBoardHash(boardId) : '')
+  } catch {
+    // Older editor builds do not expose URL commands.
+  }
+}
+
 const getProviderAction = (
   name: string | undefined,
 ): 'trello' | 'providers' | undefined => {
@@ -109,6 +138,12 @@ export const createInstance = async (
     // The connection form remains usable when settings cannot be read.
   }
   const savedState = context?.state
+  const href = await getBoardHashFromHost(host)
+  const boardHash = parseBoardHash(href)
+  const urlBoardId =
+    boardHash.type === 'board' && boardIdPattern.test(boardHash.id)
+      ? boardHash.id
+      : ''
   const savedId =
     typeof savedState === 'object' &&
     savedState !== null &&
@@ -116,9 +151,9 @@ export const createInstance = async (
     typeof savedState.boardId === 'string'
       ? savedState.boardId
       : ''
-  const initialId = connectedIds.includes(savedId)
-    ? savedId
-    : connectedIds[0] || ''
+  const initialId =
+    urlBoardId ||
+    (connectedIds.includes(savedId) ? savedId : connectedIds[0] || '')
   const connection = host.session.get(initialId)
   let state: BoardState = {
     accountConnected: Boolean(connection),
@@ -194,6 +229,7 @@ export const createInstance = async (
       const board = await host.load(boardId, signal)
       if (disposed || requestGeneration !== generation) return
       const id = parseBoardId(boardId)
+      await setBoardHash(host, id)
       host.session.set(id, { board })
       const ids = [...new Set([...connectedIds, id])]
       state = {
@@ -352,6 +388,7 @@ export const createInstance = async (
   const disconnect = async (): Promise<void> => {
     cancel()
     const { boardId, connectedIds } = state
+    await setBoardHash(host, '')
     host.session.remove(boardId)
     const ids = connectedIds.filter((id) => id !== boardId)
     state = {
@@ -692,6 +729,7 @@ export const createInstance = async (
       searchQuery: '',
     }
     const { boardId } = state
+    await setBoardHash(host, boardId)
     await restoreConnection(boardId)
     if (boardId && !host.session.get(boardId)) void connect()
   }
@@ -852,7 +890,10 @@ export const createInstance = async (
       return { boardId }
     },
   }
-  if (!initialBoard) void checkAccount(true)
+  if (!initialBoard) {
+    if (urlBoardId) void connect()
+    else void checkAccount(true)
+  }
   return instance
 }
 

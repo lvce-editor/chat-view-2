@@ -7,6 +7,10 @@ export type ChatTaskHash =
   | { readonly id: string; readonly type: 'task' }
   | { readonly type: 'invalid' | 'none' }
 
+export type BoardHash =
+  | { readonly id: string; readonly type: 'board' }
+  | { readonly type: 'invalid' | 'none' }
+
 export const getUrl = (href: string): URL | undefined => {
   if (!URL.canParse(href)) {
     return undefined
@@ -15,6 +19,10 @@ export const getUrl = (href: string): URL | undefined => {
 }
 
 export const getChatTaskHash = (id: string): string => {
+  return `#${encodeURIComponent(id)}`
+}
+
+export const getBoardHash = (id: string): string => {
   return `#${encodeURIComponent(id)}`
 }
 
@@ -68,6 +76,22 @@ export const parseChatTaskHash = (href: string): ChatTaskHash => {
   try {
     const id = decodeURIComponent(encodedId)
     return id ? { id, type: 'task' } : { type: 'invalid' }
+  } catch {
+    return { type: 'invalid' }
+  }
+}
+
+export const parseBoardHash = (href: string): BoardHash => {
+  if (!URL.canParse(href)) {
+    return { type: 'none' }
+  }
+  const { hash, pathname } = new URL(href)
+  if (!isBoardPath(pathname) || !hash) {
+    return { type: 'none' }
+  }
+  try {
+    const id = decodeURIComponent(hash.slice(1))
+    return id ? { id, type: 'board' } : { type: 'invalid' }
   } catch {
     return { type: 'invalid' }
   }
