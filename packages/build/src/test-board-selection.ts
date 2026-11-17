@@ -16,6 +16,7 @@ export const testBoardSelection = async (
   const discoveryLoads: string[] = []
   const directLoads: string[] = []
   const proxiedLoads: string[] = []
+  const coverLoads: string[] = []
   await context.route(`${backend}/**`, async (route) => {
     const path = new URL(route.request().url()).pathname
     assert.equal(route.request().headers().authorization, 'Bearer board-test')
@@ -129,8 +130,14 @@ export const testBoardSelection = async (
         ],
         cards: [
           {
-            coverDataUrl:
-              'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
+            cover: {
+              scaled: [
+                {
+                  url: 'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
+                  width: 300,
+                },
+              ],
+            },
             id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
             idList: 'list-1',
             name: 'Card with cover',
@@ -145,6 +152,32 @@ export const testBoardSelection = async (
             badges: { comments: 0, attachments: 0 },
           },
         ],
+      },
+    })
+  })
+  await context.route('https://trello.com/**', async (route) => {
+    const request = route.request()
+    if (request.method() === 'OPTIONS') {
+      await route.fulfill({
+        status: 204,
+        headers: {
+          'Access-Control-Allow-Headers': 'authorization',
+          'Access-Control-Allow-Methods': 'GET',
+          'Access-Control-Allow-Origin': '*',
+        },
+      })
+      return
+    }
+    assert.equal(request.headers().authorization, 'Bearer trello-test')
+    coverLoads.push(request.url())
+    await route.fulfill({
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
+        'base64',
+      ),
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'image/png',
       },
     })
   })
@@ -263,6 +296,9 @@ export const testBoardSelection = async (
     const coverSrc = await cover.getAttribute('src')
     assert.ok(coverSrc)
     assert.match(coverSrc, /^data:image\/png;base64,/u)
+    assert.deepEqual(coverLoads, [
+      'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
+    ])
     await page.getByText('Card with cover', { exact: true }).waitFor()
     const badges = page.locator('.BoardCardBadges')
     await badges.waitFor()
