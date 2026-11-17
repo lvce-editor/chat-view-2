@@ -17,12 +17,16 @@ export const testBoardSelection = async (
   const directLoads: string[] = []
   const proxiedLoads: string[] = []
   const coverLoads: string[] = []
+  const moveRequests: string[] = []
   await context.route(`${backend}/**`, async (route) => {
     const path = new URL(route.request().url()).pathname
     assert.equal(route.request().headers().authorization, 'Bearer board-test')
     let body: unknown
     let status = 200
-    if (path.endsWith('/status')) {
+    if (route.request().method() === 'PUT') {
+      moveRequests.push(path)
+      body = {}
+    } else if (path.endsWith('/status')) {
       body = { configured: true, connected: true }
     } else if (path.endsWith('/token')) {
       body = { accessToken: 'trello-test' }
@@ -141,8 +145,8 @@ export const testBoardSelection = async (
                 backgroundTopColor: '#a82be0',
               },
         lists: [
-          { id: 'list-1', name: 'Todo', pos: 1 },
-          { id: 'list-2', name: 'Doing', pos: 2 },
+          { id: 'bbbbbbbbbbbbbbbbbbbbbbbb', name: 'Todo', pos: 1 },
+          { id: 'cccccccccccccccccccccccc', name: 'Doing', pos: 2 },
         ],
         cards: [
           {
@@ -155,14 +159,14 @@ export const testBoardSelection = async (
               ],
             },
             id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
-            idList: 'list-1',
+            idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
             name: 'Card with cover',
             pos: 1,
             badges: { comments: 3, attachments: 1 },
           },
           {
             id: 'card-2',
-            idList: 'list-1',
+            idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
             name: 'No activity',
             pos: 2,
             badges: { comments: 0, attachments: 0 },
@@ -422,8 +426,73 @@ export const testBoardSelection = async (
     )
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'detached' })
+    const draggedCard = page.locator(
+      'button[name="board-card:aaaaaaaaaaaaaaaaaaaaaaaa"]',
+    )
+    const emptyList = page.locator('.BoardCards').nth(1)
+    const dragCardToList = async (): Promise<void> => {
+      const cardBox = await draggedCard.boundingBox()
+      const listBox = await emptyList.boundingBox()
+      assert.ok(cardBox && listBox, 'Card and destination list are visible')
+      await page.mouse.move(
+        cardBox.x + cardBox.width / 2,
+        cardBox.y + cardBox.height / 2,
+      )
+      await page.mouse.down()
+      await page.mouse.move(
+        cardBox.x + cardBox.width / 2 + 20,
+        cardBox.y + cardBox.height / 2,
+        { steps: 3 },
+      )
+      await page.mouse.move(
+        listBox.x + listBox.width / 2,
+        listBox.y + listBox.height / 2,
+        { steps: 5 },
+      )
+    }
+    for (let index = 0; index < 2; index++) {
+      await dragCardToList()
+      await page.locator('.BoardCardsDropTarget').waitFor()
+      assert.equal(
+        await draggedCard.evaluate((element) =>
+          element.className.includes('BoardCardDragging'),
+        ),
+        true,
+      )
+      await page.keyboard.press('Escape')
+      await page.locator('.BoardCardsDropTarget').waitFor({ state: 'detached' })
+      await page.mouse.up()
+      assert.equal(
+        await draggedCard.evaluate((element) =>
+          element.className.includes('BoardCardDragging'),
+        ),
+        false,
+      )
+    }
+    await dragCardToList()
+    await page.locator('.BoardCardsDropTarget').waitFor()
+    await page.mouse.move(5, 5)
+    await page.mouse.up()
+    await page.locator('.BoardCardsDropTarget').waitFor({ state: 'detached' })
+    assert.deepEqual(moveRequests, [])
+    assert.equal(
+      await page.locator('.BoardCards').first().locator(draggedCard).count(),
+      1,
+    )
+    await dragCardToList()
+    await page.locator('.BoardCardsDropTarget').waitFor()
+    const moved = page.waitForResponse(
+      (response) => response.request().method() === 'PUT',
+    )
+    await page.mouse.up()
+    await moved
+    await page.locator('.BoardCardsDropTarget').waitFor({ state: 'detached' })
+    assert.equal(await emptyList.locator(draggedCard).count(), 1)
+    assert.deepEqual(moveRequests, [
+      '/api/integrations/trello/cards/aaaaaaaaaaaaaaaaaaaaaaaa/list/cccccccccccccccccccccccc',
+    ])
     process.stdout.write(
-      'Card details: status, attachments, comments/activity, desktop/mobile and dismissal: pass\n',
+      'Card details: status, attachments, comments/activity, desktop/mobile, dismissal and drag cancellation: pass\n',
     )
     const title = page.getByRole('textbox', { name: 'Card title', exact: true })
     for (const list of ['Todo', 'Doing', 'Todo']) {
