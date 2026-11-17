@@ -70,7 +70,6 @@ const input = (
       name,
       onInput: 'handleInput',
       spellcheck: false,
-      ...(name === 'edit-card-name' && { autoFocus: true }),
       ...(value !== undefined && { value }),
     }),
   ])
@@ -443,7 +442,7 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
   return Dom.node(
     VirtualDomElements.Div,
     {
-      ariaLabel: 'Edit Trello card',
+      ariaLabel: `Card details: ${editingCard.name}`,
       ariaModal: true,
       className: 'BoardDialogOverlay',
       onKeyDown: 'handleDialogKeyDown',

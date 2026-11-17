@@ -835,7 +835,7 @@ export const createInstance = async (
     ): string => {
       const { cardDraft, editingCard } = state
       if (oldContext.focusEditor !== newContext.focusEditor && editingCard)
-        return '[name="edit-card-name"]'
+        return '[role="dialog"]'
       if (oldContext.focusNewCard !== newContext.focusNewCard && cardDraft)
         return '[name="board-card-title"]'
       return oldContext.focusRestore === newContext.focusRestore || !focusCardId

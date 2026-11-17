@@ -343,9 +343,14 @@ test('opens a card editor and updates the board only after Trello confirms the s
   })
   await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
   await flush()
+  const previousFocusContext = view.getContext?.() || {}
   await view.handleEvent?.({ name: 'board-card:one', type: 'click' })
   await flush()
+  expect(
+    view.renderFocus?.(previousFocusContext, view.getContext?.() || {}),
+  ).toBe('[role="dialog"]')
   expect(JSON.stringify(await view.render())).toContain('Edit card')
+  expect(JSON.stringify(await view.render())).not.toContain('"autoFocus":true')
   expect(JSON.stringify(await view.render())).toContain('Details')
   await view.handleEvent?.({
     name: 'edit-card-name',
