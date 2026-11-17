@@ -10,6 +10,7 @@ import type {
   TrelloBoard,
   TrelloBoardSummary,
   TrelloCard,
+  TrelloSearchResult,
 } from './Trello.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 
@@ -50,7 +51,10 @@ export interface BoardState {
   readonly loading: boolean
   readonly providerSelected: boolean
   readonly savingCard?: boolean
+  readonly searchError?: BoardError | undefined
+  readonly searchLoading?: boolean
   readonly searchQuery?: string
+  readonly searchResults?: readonly TrelloSearchResult[]
 }
 
 const input = (
@@ -179,8 +183,36 @@ const renderBoardTiles = (state: BoardState): Dom.Node => {
 }
 
 const renderBoardSearch = (state: BoardState): Dom.Node => {
-  const { boards, searchQuery = '' } = state
+  const {
+    boards,
+    searchError,
+    searchLoading,
+    searchQuery = '',
+    searchResults = [],
+  } = state
   const query = searchQuery.trim().toLocaleLowerCase()
+  const matchingBoards = boards.some((board) =>
+    board.name.toLocaleLowerCase().includes(query),
+  )
+  const showEmpty = searchResults.length === 0 && !searchLoading && !searchError
+  const emptyContent = matchingBoards
+    ? [renderBoardTiles(state)]
+    : [Dom.div('BoardSearchEmpty', [Dom.textNode('No boards or cards found')])]
+  const renderSearchResult = (result: TrelloSearchResult): Dom.Node => {
+    const boardName =
+      result.boardName ||
+      boards.find((board) => board.id === result.boardId)?.name
+    const name = boardName
+      ? `Card · ${result.name} — ${boardName}`
+      : `Card · ${result.name}`
+    return Dom.button(
+      result.kind === 'board'
+        ? `board-select:${result.id}`
+        : `board-search-card:${result.id}`,
+      result.kind === 'board' ? `Board · ${result.name}` : name,
+      'BoardSearchResult',
+    )
+  }
   return Dom.div('BoardSearch', [
     Dom.node(VirtualDomElements.Input, {
       ariaLabel: 'Search boards',
@@ -189,22 +221,29 @@ const renderBoardSearch = (state: BoardState): Dom.Node => {
       inputType: 'search',
       name: 'board-search',
       onInput: 'handleInput',
-      placeholder: 'Search boards',
+      placeholder: 'Search boards and cards',
       spellcheck: false,
       value: searchQuery,
     }),
     ...(query
       ? [
           Dom.div('BoardSearchResults', [
-            ...(boards.some((board) =>
-              board.name.toLocaleLowerCase().includes(query),
-            )
-              ? [renderBoardTiles(state)]
-              : [
-                  Dom.div('BoardSearchEmpty', [
-                    Dom.textNode('No boards found'),
+            ...(searchLoading
+              ? [
+                  Dom.div('BoardSearchStatus', [
+                    Dom.textNode('Searching Trello…'),
                   ]),
-                ]),
+                ]
+              : []),
+            ...(searchError
+              ? [
+                  Dom.div('BoardSearchError', [
+                    Dom.textNode(searchError.message),
+                  ]),
+                ]
+              : []),
+            ...searchResults.map(renderSearchResult),
+            ...(showEmpty ? emptyContent : []),
           ]),
         ]
       : []),
