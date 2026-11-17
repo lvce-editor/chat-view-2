@@ -383,12 +383,12 @@ export const setWorkbenchLayoutUrl = async (
       return
     }
     const wasChatPath = isChatPath(url.pathname)
+    const wasBoardPath = isBoardPath(url.pathname)
     if (layout === 'ai-native' || layout === 'board') {
       const assetDir = await execute('Layout.getAssetDir')
       if (typeof assetDir !== 'string') {
         return
       }
-      const wasBoardPath = isBoardPath(url.pathname)
       url.pathname =
         layout === 'ai-native'
           ? getChatPath(href, assetDir)
@@ -396,7 +396,10 @@ export const setWorkbenchLayoutUrl = async (
       if (layout === 'ai-native') {
         if (taskId) {
           url.hash = getChatTaskHash(taskId)
-        } else if (parseChatTaskHash(href).type !== 'none') {
+        } else if (
+          parseChatTaskHash(href).type !== 'none' ||
+          (wasBoardPath && url.hash)
+        ) {
           url.hash = ''
         }
       } else if (!wasBoardPath && parseChatTaskHash(href).type !== 'none') {
@@ -404,7 +407,10 @@ export const setWorkbenchLayoutUrl = async (
       }
     } else {
       url.pathname = getIdePath(href)
-      if (wasChatPath && parseChatTaskHash(href).type !== 'none') {
+      if (
+        wasBoardPath ||
+        (wasChatPath && parseChatTaskHash(href).type !== 'none')
+      ) {
         url.hash = ''
       }
     }

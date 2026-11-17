@@ -1,6 +1,7 @@
 // cspell:ignore Fwith
 import { expect, test } from '@jest/globals'
 import {
+  getBoardHash,
   getBoardPath,
   getChatPath,
   getChatTaskHash,
@@ -8,6 +9,7 @@ import {
   isBoardPath,
   isChatPath,
   parseChatTaskHash,
+  parseBoardHash,
 } from '../src/parts/ChatSessionUrl/ChatSessionUrl.ts'
 
 test('creates a plain encoded chat task fragment', () => {
@@ -101,4 +103,23 @@ test('creates and detects the board route and returns to the hosted IDE path', (
     getIdePath('https://example.com/prefix/board?workspace=one#workspace=x'),
   ).toBe('/prefix/')
   expect(getIdePath('https://example.com/board/')).toBe('/')
+})
+
+test('parses board hashes only on the board route', () => {
+  expect(getBoardHash('5k8NLHLh')).toBe('#5k8NLHLh')
+  expect(
+    parseBoardHash('https://example.com/board?workspace=one#5k8NLHLh'),
+  ).toEqual({
+    id: '5k8NLHLh',
+    type: 'board',
+  })
+  expect(parseBoardHash('https://example.com/chat#5k8NLHLh')).toEqual({
+    type: 'none',
+  })
+  expect(parseBoardHash('https://example.com/board#%')).toEqual({
+    type: 'invalid',
+  })
+  expect(parseBoardHash('https://example.com/board#')).toEqual({
+    type: 'none',
+  })
 })

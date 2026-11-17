@@ -655,6 +655,41 @@ test('discovers Trello boards automatically on entry and reload', async () => {
   reloadedView.dispose?.()
 })
 
+test('restores the board from its URL hash before saved view state', async () => {
+  const host = createHost()
+  jest.mocked(host.read).mockResolvedValue(['5k8NLHLh', '12345678'])
+  jest.mocked(host.execute).mockImplementation(async (command) => {
+    if (command === 'Layout.getHref')
+      return 'https://example.com/board?workspace=one#12345678'
+    return undefined
+  })
+  const view = await createInstance(
+    { ...createContext(), state: { boardId: '5k8NLHLh' } },
+    host,
+  )
+  await flush()
+  expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
+  expect(JSON.stringify(await view.render())).toContain('A task')
+  view.dispose?.()
+})
+
+test('selection updates the board URL hash and clearing selection removes it', async () => {
+  const host = createHost()
+  jest.mocked(host.execute).mockImplementation(async (command) => {
+    if (command === 'Layout.getHref')
+      return 'https://example.com/board?workspace=one#old'
+    return undefined
+  })
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
+  expect(host.execute).toHaveBeenCalledWith('Layout.setHash', '#5k8NLHLh')
+  await view.handleEvent?.({ name: 'board-change', type: 'click' })
+  expect(host.execute).toHaveBeenCalledWith('Layout.setHash', '')
+  view.dispose?.()
+})
+
 test('shows the existing empty state for an automatically discovered empty account', async () => {
   const host = createHost()
   jest.mocked(host.boards).mockResolvedValue([])
