@@ -351,7 +351,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 24px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--BoardBorder);
   background: var(--BoardHover);
 }
@@ -403,9 +403,9 @@
 .BoardDialogMain {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 22px;
   min-width: 0;
-  padding: 24px;
+  padding: 28px 24px;
 }
 .BoardDialogActivity {
   min-width: 0;
@@ -415,8 +415,8 @@
 }
 .BoardDetailHeading {
   margin: 0 0 16px;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 650;
 }
 .BoardDetailEmpty {
   line-height: 1.5;
@@ -450,7 +450,21 @@
 }
 .BoardDialogTitle {
   margin: 0;
-  font-size: 20px;
+  font-size: 24px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.BoardDialogMain > .BoardField {
+  gap: 10px;
+  font-weight: 600;
+}
+.BoardDialogMain .BoardInput {
+  font-weight: 400;
+}
+.BoardDialogMain .BoardInput:focus-visible {
+  border-color: var(--BoardFocus);
+  outline: 2px solid color-mix(in srgb, var(--BoardFocus) 25%, transparent);
+  outline-offset: 1px;
 }
 .BoardDescriptionInput {
   min-height: 140px;
@@ -529,11 +543,14 @@
   }
   .BoardDialogMain,
   .BoardDialogActivity {
-    padding: 18px;
+    padding: 20px 18px;
   }
   .BoardDialogActivity {
     border-left: none;
     border-top: 1px solid var(--BoardBorder);
+  }
+  .BoardDialogHeader {
+    padding-inline: 18px;
   }
   .BoardProviderGrid {
     grid-template-columns: 1fr;

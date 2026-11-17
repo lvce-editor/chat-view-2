@@ -74,7 +74,6 @@ const input = (
       name,
       onInput: 'handleInput',
       spellcheck: false,
-      ...(name === 'edit-card-name' && { autoFocus: true }),
       ...(value !== undefined && { value }),
     }),
   ])

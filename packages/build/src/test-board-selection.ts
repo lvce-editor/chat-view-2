@@ -381,8 +381,7 @@ export const testBoardSelection = async (
     await dialog.waitFor()
     await page.waitForFunction(
       () =>
-        globalThis.document.activeElement?.getAttribute('name') ===
-        'edit-card-name',
+        globalThis.document.activeElement?.getAttribute('role') === 'dialog',
     )
     await page.keyboard.press('Escape')
     await dialog.waitFor({ state: 'detached' })
