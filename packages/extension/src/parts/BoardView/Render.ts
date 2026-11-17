@@ -123,6 +123,54 @@ const renderComposer = (
   ])
 }
 
+const renderBoardTile = (
+  board: TrelloBoardSummary,
+  loading: boolean,
+): Dom.Node =>
+  Dom.node(
+    VirtualDomElements.Button,
+    {
+      ariaLabel: `Open ${board.name}`,
+      buttonType: 'button',
+      className: 'BoardTile',
+      disabled: loading,
+      name: `board-select:${board.id}`,
+      onClick: 'handleClick',
+    },
+    [
+      Dom.node(
+        VirtualDomElements.Span,
+        {
+          className: 'BoardTileBackground',
+          style: [
+            board.backgroundColor &&
+              `background-color:${board.backgroundColor}`,
+            board.backgroundGradient &&
+              `background-image:${board.backgroundGradient}`,
+            board.backgroundColor &&
+              !board.backgroundGradient &&
+              'background-image:none',
+          ]
+            .filter(Boolean)
+            .join(';'),
+        },
+        board.backgroundImage
+          ? [
+              Dom.node(VirtualDomElements.Img, {
+                alt: '',
+                className: 'BoardTileImage',
+                loading: 'lazy',
+                src: board.backgroundImage,
+              }),
+            ]
+          : [],
+      ),
+      Dom.node(VirtualDomElements.Span, { className: 'BoardTileName' }, [
+        Dom.textNode(board.name),
+      ]),
+    ],
+  )
+
 const renderBoardTiles = (state: BoardState): Dom.Node => {
   const { boards, loading, searchQuery = '' } = state
   const query = searchQuery.trim().toLocaleLowerCase()
@@ -131,51 +179,7 @@ const renderBoardTiles = (state: BoardState): Dom.Node => {
     : boards
   return Dom.div(
     'BoardTileGrid',
-    matchingBoards.map((board) =>
-      Dom.node(
-        VirtualDomElements.Button,
-        {
-          ariaLabel: `Open ${board.name}`,
-          buttonType: 'button',
-          className: 'BoardTile',
-          disabled: loading,
-          name: `board-select:${board.id}`,
-          onClick: 'handleClick',
-        },
-        [
-          Dom.node(
-            VirtualDomElements.Span,
-            {
-              className: 'BoardTileBackground',
-              style: [
-                board.backgroundColor &&
-                  `background-color:${board.backgroundColor}`,
-                board.backgroundGradient &&
-                  `background-image:${board.backgroundGradient}`,
-                board.backgroundColor &&
-                  !board.backgroundGradient &&
-                  'background-image:none',
-              ]
-                .filter(Boolean)
-                .join(';'),
-            },
-            board.backgroundImage
-              ? [
-                  Dom.node(VirtualDomElements.Img, {
-                    alt: '',
-                    className: 'BoardTileImage',
-                    loading: 'lazy',
-                    src: board.backgroundImage,
-                  }),
-                ]
-              : [],
-          ),
-          Dom.node(VirtualDomElements.Span, { className: 'BoardTileName' }, [
-            Dom.textNode(board.name),
-          ]),
-        ],
-      ),
-    ),
+    matchingBoards.map((board) => renderBoardTile(board, loading)),
   )
 }
 
@@ -284,6 +288,7 @@ const renderSetup = (state: BoardState): Dom.Node => {
   const {
     boards,
     connectedIds,
+    loading,
     providerSelected,
     rememberedBoards,
     searchQuery,
@@ -322,50 +327,7 @@ const renderSetup = (state: BoardState): Dom.Node => {
                       boards.find((item) => item.id === id) ||
                       rememberedBoards.find((item) => item.id === id)
                     return board
-                      ? Dom.node(
-                          VirtualDomElements.Button,
-                          {
-                            ariaLabel: `Open ${board.name}`,
-                            buttonType: 'button',
-                            className: 'BoardTile',
-                            name: `board-select:${id}`,
-                            onClick: 'handleClick',
-                          },
-                          [
-                            Dom.node(
-                              VirtualDomElements.Span,
-                              {
-                                className: 'BoardTileBackground',
-                                style: [
-                                  board.backgroundColor &&
-                                    `background-color:${board.backgroundColor}`,
-                                  board.backgroundGradient &&
-                                    `background-image:${board.backgroundGradient}`,
-                                  board.backgroundColor &&
-                                    !board.backgroundGradient &&
-                                    'background-image:none',
-                                ]
-                                  .filter(Boolean)
-                                  .join(';'),
-                              },
-                              board.backgroundImage
-                                ? [
-                                    Dom.node(VirtualDomElements.Img, {
-                                      alt: '',
-                                      className: 'BoardTileImage',
-                                      loading: 'lazy',
-                                      src: board.backgroundImage,
-                                    }),
-                                  ]
-                                : [],
-                            ),
-                            Dom.node(
-                              VirtualDomElements.Span,
-                              { className: 'BoardTileName' },
-                              [Dom.textNode(board.name)],
-                            ),
-                          ],
-                        )
+                      ? renderBoardTile({ ...board, id }, loading)
                       : Dom.button(`board-select:${id}`, id, 'BoardButton')
                   }),
                 ]),
