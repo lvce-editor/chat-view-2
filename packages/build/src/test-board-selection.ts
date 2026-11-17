@@ -559,7 +559,10 @@ export const testBoardSelection = async (
       .getByRole('button', { name: 'Connect Trello', exact: true })
       .click()
     await page.getByText('No open boards found.', { exact: false }).waitFor()
-    assert.equal(await tiles.count(), 0)
+    assert.equal(
+      await page.locator('button[name="board-select:22222222"]').innerText(),
+      '22222222',
+    )
     fail = true
     await page
       .getByRole('button', { name: 'Refresh boards', exact: true })

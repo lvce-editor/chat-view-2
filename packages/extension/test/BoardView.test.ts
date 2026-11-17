@@ -174,6 +174,28 @@ test('searches connected boards by name and opens the selected result', async ()
   view.dispose?.()
 })
 
+test('matches remembered short IDs with board summaries after reload', async () => {
+  const host = createHost()
+  jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
+  jest.mocked(host.boards).mockResolvedValue([
+    {
+      backgroundColor: '#ff58b0',
+      backgroundGradient: 'linear-gradient(135deg, #a82be0, #ff58b0)',
+      id: '5k8NLHLh',
+      name: 'Lvce Editor',
+    },
+  ])
+  const view = await createInstance(createContext(), host)
+  await flush()
+  const beforeOpen = JSON.stringify(await view.render())
+  expect(beforeOpen).toContain('Lvce Editor')
+  expect(beforeOpen).toContain('linear-gradient(135deg, #a82be0, #ff58b0)')
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
+  await flush()
+  expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.any(AbortSignal))
+  view.dispose?.()
+})
+
 test('searches Trello cards remotely and opens the owning board and card', async () => {
   const host = createHost()
   const cardId = '507f1f77bcf86cd799439011'

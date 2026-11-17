@@ -198,7 +198,11 @@ const normalizeBoardSummary = (
     return undefined
   return {
     ...normalizeBoardBackground(value),
-    id: value.id,
+    id:
+      typeof value.shortLink === 'string' &&
+      boardIdPattern.test(value.shortLink)
+        ? value.shortLink
+        : value.id,
     name: value.name,
   }
 }
@@ -634,7 +638,7 @@ export const createTrelloClient = (
     try {
       const data = await trelloRequest(
         `members/me/boards?${new URLSearchParams({
-          fields: 'id,name,prefs',
+          fields: 'id,name,prefs,shortLink',
           filter: 'open',
         })}`,
         signal,

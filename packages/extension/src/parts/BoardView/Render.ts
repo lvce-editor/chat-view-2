@@ -125,6 +125,54 @@ const renderComposer = (
   ])
 }
 
+const renderBoardTile = (
+  board: TrelloBoardSummary,
+  loading: boolean,
+): Dom.Node =>
+  Dom.node(
+    VirtualDomElements.Button,
+    {
+      ariaLabel: `Open ${board.name}`,
+      buttonType: 'button',
+      className: 'BoardTile',
+      disabled: loading,
+      name: `board-select:${board.id}`,
+      onClick: 'handleClick',
+    },
+    [
+      Dom.node(
+        VirtualDomElements.Span,
+        {
+          className: 'BoardTileBackground',
+          style: [
+            board.backgroundColor &&
+              `background-color:${board.backgroundColor}`,
+            board.backgroundGradient &&
+              `background-image:${board.backgroundGradient}`,
+            board.backgroundColor &&
+              !board.backgroundGradient &&
+              'background-image:none',
+          ]
+            .filter(Boolean)
+            .join(';'),
+        },
+        board.backgroundImage
+          ? [
+              Dom.node(VirtualDomElements.Img, {
+                alt: '',
+                className: 'BoardTileImage',
+                loading: 'lazy',
+                src: board.backgroundImage,
+              }),
+            ]
+          : [],
+      ),
+      Dom.node(VirtualDomElements.Span, { className: 'BoardTileName' }, [
+        Dom.textNode(board.name),
+      ]),
+    ],
+  )
+
 const renderBoardTiles = (state: BoardState): Dom.Node => {
   const { boards, loading, searchQuery = '' } = state
   const query = searchQuery.trim().toLocaleLowerCase()
@@ -133,51 +181,7 @@ const renderBoardTiles = (state: BoardState): Dom.Node => {
     : boards
   return Dom.div(
     'BoardTileGrid',
-    matchingBoards.map((board) =>
-      Dom.node(
-        VirtualDomElements.Button,
-        {
-          ariaLabel: `Open ${board.name}`,
-          buttonType: 'button',
-          className: 'BoardTile',
-          disabled: loading,
-          name: `board-select:${board.id}`,
-          onClick: 'handleClick',
-        },
-        [
-          Dom.node(
-            VirtualDomElements.Span,
-            {
-              className: 'BoardTileBackground',
-              style: [
-                board.backgroundColor &&
-                  `background-color:${board.backgroundColor}`,
-                board.backgroundGradient &&
-                  `background-image:${board.backgroundGradient}`,
-                board.backgroundColor &&
-                  !board.backgroundGradient &&
-                  'background-image:none',
-              ]
-                .filter(Boolean)
-                .join(';'),
-            },
-            board.backgroundImage
-              ? [
-                  Dom.node(VirtualDomElements.Img, {
-                    alt: '',
-                    className: 'BoardTileImage',
-                    loading: 'lazy',
-                    src: board.backgroundImage,
-                  }),
-                ]
-              : [],
-          ),
-          Dom.node(VirtualDomElements.Span, { className: 'BoardTileName' }, [
-            Dom.textNode(board.name),
-          ]),
-        ],
-      ),
-    ),
+    matchingBoards.map((board) => renderBoardTile(board, loading)),
   )
 }
 
@@ -318,8 +322,11 @@ const renderConnection = (state: BoardState): readonly Dom.Node[] => {
       ]
 }
 const renderSetup = (state: BoardState): Dom.Node => {
-  const { connectedIds, providerSelected, searchQuery } = state
+  const { boards, connectedIds, loading, providerSelected, searchQuery } = state
   const showProviderGrid = !providerSelected
+  const rememberedIds = connectedIds.filter((id) =>
+    boards.every((board) => board.id !== id),
+  )
   return Dom.div('BoardSetup', [
     Dom.heading(2, 'BoardSetupTitle', 'Connect a board'),
     ...(showProviderGrid
@@ -344,13 +351,16 @@ const renderSetup = (state: BoardState): Dom.Node => {
             ),
           ]),
           ...renderConnection(state),
-          ...(connectedIds.length > 0 && !searchQuery
+          ...(rememberedIds.length > 0 && !searchQuery
             ? [
                 Dom.div('BoardRemembered', [
                   Dom.heading(3, 'BoardRememberedTitle', 'Remembered boards'),
-                  ...connectedIds.map((id) =>
-                    Dom.button(`board-select:${id}`, id, 'BoardButton'),
-                  ),
+                  ...rememberedIds.map((id) => {
+                    const board = boards.find((item) => item.id === id)
+                    return board
+                      ? renderBoardTile({ ...board, id }, loading)
+                      : Dom.button(`board-select:${id}`, id, 'BoardButton')
+                  }),
                 ]),
               ]
             : []),
