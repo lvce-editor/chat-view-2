@@ -160,6 +160,21 @@ test('loads successful cover enrichments from the separate backend endpoint', as
   )
 })
 
+test('requests sanitized cover diagnostics only when explicitly enabled', async () => {
+  const request = requestWith({ boardCardCount: 1 })
+  const client = createTrelloClient(configuration, request)
+  await expect(
+    client.loadCovers('5k8NLHLh', new AbortController().signal, true),
+  ).resolves.toEqual([])
+  expect(request).toHaveBeenCalledWith(
+    'https://backend.test/api/integrations/trello/boards/5k8NLHLh/covers?diagnostics=1',
+    expect.objectContaining({
+      credentials: 'omit',
+      headers: { Authorization: 'Bearer lvce-token' },
+    }),
+  )
+})
+
 test('searches accessible Trello boards and cards with validated board ownership', async () => {
   const request = requestSequence([
     Response.json({ accessToken: 'trello-token' }),

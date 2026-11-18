@@ -380,6 +380,33 @@ export const testBoardSelection = async (
         .evaluate((element) => element.scrollHeight > element.clientHeight),
       'Long columns keep their cards in a scrollable list',
     )
+    const longCards = longColumn.locator('.BoardCards')
+    const addCard = longColumn.getByRole('button', {
+      name: 'Add a card to Done',
+    })
+    const footerBottom = async (): Promise<number> => {
+      const box = await addCard.boundingBox()
+      assert.ok(box, 'Long-list add control stays visible')
+      return box.y + box.height
+    }
+    const initialFooterBottom = await footerBottom()
+    assert.ok(initialFooterBottom < 720, 'Add control fits in the viewport')
+    await longCards.evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+    })
+    assert.ok(
+      Math.abs((await footerBottom()) - initialFooterBottom) < 2,
+      'Scrolling cards does not move the add control',
+    )
+    await longCards.locator('.BoardCard').last().waitFor({ state: 'visible' })
+    await longCards.evaluate((element) => {
+      element.scrollTop = 0
+    })
+    assert.ok(
+      (await columns.nth(0).boundingBox())!.height < longColumnBox!.height &&
+        (await columns.nth(1).boundingBox())!.height < longColumnBox!.height,
+      'Empty and short columns remain content-sized',
+    )
     assert.deepEqual(boardLoads, ['/api/integrations/trello/boards/22222222'])
     assert.equal(
       await page.locator('.BoardViewTrello').evaluate(
