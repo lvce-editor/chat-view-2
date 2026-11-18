@@ -71,18 +71,9 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
         ...board.cards,
         {
           cover: {
-            scaled: [
-              {
-                url: 'https://trello.com/1/cards/covered/previews/small',
-                width: 150,
-              },
-              {
-                url: 'https://trello.com/1/cards/covered/previews/large',
-                width: 300,
-              },
-            ],
+            idAttachment: '507f1f77bcf86cd799439013',
           },
-          id: 'covered',
+          id: '507f1f77bcf86cd799439012',
           idList: 'now',
           name: 'Cover',
           pos: 3,
@@ -98,6 +89,18 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
         backgroundBottomColor: '#ff58b0',
         backgroundTopColor: '#a82be0',
       },
+    }),
+    Response.json({
+      previews: [
+        {
+          url: 'https://trello.com/1/cards/covered/previews/small',
+          width: 150,
+        },
+        {
+          url: 'https://trello.com/1/cards/covered/previews/large',
+          width: 300,
+        },
+      ],
     }),
     new Response(new Uint8Array([1, 2, 3]), {
       headers: { 'content-type': 'image/webp' },
@@ -150,6 +153,15 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
   expect(JSON.stringify(request.mock.calls[1])).not.toContain('lvce-token')
   expect(request).toHaveBeenNthCalledWith(
     3,
+    'https://api.trello.com/1/cards/507f1f77bcf86cd799439012/attachments/507f1f77bcf86cd799439013',
+    expect.objectContaining({
+      credentials: 'omit',
+      headers: { Authorization: 'Bearer trello-token' },
+      redirect: 'error',
+    }),
+  )
+  expect(request).toHaveBeenNthCalledWith(
+    4,
     'https://trello.com/1/cards/covered/previews/large',
     expect.objectContaining({
       credentials: 'omit',
@@ -426,7 +438,7 @@ test('discovers board names and background preferences directly from Trello', as
   )
 })
 
-test('keeps cards usable when an authenticated cover preview cannot be loaded', async () => {
+test('keeps cards usable when cover attachment metadata cannot be loaded', async () => {
   const result = await loadBoard(
     '5k8NLHLh',
     new AbortController().signal,
@@ -437,14 +449,9 @@ test('keeps cards usable when an authenticated cover preview cannot be loaded', 
         cards: [
           {
             cover: {
-              scaled: [
-                {
-                  url: 'https://trello.com/1/cards/covered/previews/large',
-                  width: 300,
-                },
-              ],
+              idAttachment: '507f1f77bcf86cd799439013',
             },
-            id: 'covered',
+            id: '507f1f77bcf86cd799439012',
             idList: 'now',
             name: 'Still usable',
             pos: 1,
@@ -455,7 +462,10 @@ test('keeps cards usable when an authenticated cover preview cannot be loaded', 
     ]),
   )
   expect(result.cards).toEqual([
-    expect.objectContaining({ id: 'covered', name: 'Still usable' }),
+    expect.objectContaining({
+      id: '507f1f77bcf86cd799439012',
+      name: 'Still usable',
+    }),
   ])
   expect(result.cards[0]?.coverDataUrl).toBeUndefined()
 })

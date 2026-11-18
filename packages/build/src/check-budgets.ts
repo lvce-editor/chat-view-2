@@ -5,8 +5,8 @@ import { root } from './root.ts'
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
   // Card details measured +7,178 bytes; board backgrounds add 746 bytes.
-  // Trello search and card covers measure 407,546 bytes together; retain roughly 2 KiB of headroom.
-  ['chatMain.js', 409_546],
+  // Trello search and card covers with attachment metadata measure 410,175 bytes; retain roughly 2 KiB of headroom.
+  ['chatMain.js', 412_175],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],

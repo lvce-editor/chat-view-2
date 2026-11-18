@@ -15,6 +15,7 @@ export const testBoardSelection = async (
   let fail = false
   const discoveryLoads: string[] = []
   const directLoads: string[] = []
+  const attachmentLoads: string[] = []
   const proxiedLoads: string[] = []
   const coverLoads: string[] = []
   const moveRequests: string[] = []
@@ -127,6 +128,24 @@ export const testBoardSelection = async (
       })
       return
     }
+    if (
+      url.pathname ===
+      '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/attachments/bbbbbbbbbbbbbbbbbbbbbbbb'
+    ) {
+      attachmentLoads.push(`${url.pathname}${url.search}`)
+      await route.fulfill({
+        headers: { 'Access-Control-Allow-Origin': '*' },
+        json: {
+          previews: [
+            {
+              url: 'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
+              width: 300,
+            },
+          ],
+        },
+      })
+      return
+    }
     directLoads.push(`${url.pathname}${url.search}`)
     const id = url.pathname.split('/').at(-1)
     await route.fulfill({
@@ -152,12 +171,7 @@ export const testBoardSelection = async (
         cards: [
           {
             cover: {
-              scaled: [
-                {
-                  url: 'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
-                  width: 300,
-                },
-              ],
+              idAttachment: 'bbbbbbbbbbbbbbbbbbbbbbbb',
             },
             id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
             idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
@@ -340,6 +354,9 @@ export const testBoardSelection = async (
     assert.deepEqual(directLoads, [
       '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name%2Cprefs&list_fields=name%2Cpos&lists=open',
     ])
+    assert.deepEqual(attachmentLoads, [
+      '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/attachments/bbbbbbbbbbbbbbbbbbbbbbbb',
+    ])
     assert.equal(
       await page.locator('.BoardViewTrello').evaluate(
         (element) =>
@@ -357,6 +374,10 @@ export const testBoardSelection = async (
       .waitFor()
     assert.equal(new URL(page.url()).hash, '#22222222')
     assert.equal(directLoads.length, 2)
+    assert.deepEqual(attachmentLoads, [
+      '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/attachments/bbbbbbbbbbbbbbbbbbbbbbbb',
+      '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/attachments/bbbbbbbbbbbbbbbbbbbbbbbb',
+    ])
     assert.deepEqual(proxiedLoads, [])
     const cover = page.locator('.BoardCardCover')
     await cover.waitFor({ state: 'visible' })

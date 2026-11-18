@@ -265,9 +265,18 @@ const isTrelloCoverPreview = (value: unknown): value is TrelloCoverPreview =>
   typeof value.width === 'number' &&
   isTrelloImageUrl(value.url)
 
+const getCoverAttachmentId = (value: unknown): string | undefined => {
+  if (!isRecord(value)) return undefined
+  const id = value.idAttachment
+  return typeof id === 'string' && cardIdPattern.test(id) ? id : undefined
+}
+
 const getCoverPreviewUrl = (value: unknown): string | undefined => {
-  if (!isRecord(value) || !Array.isArray(value.scaled)) return undefined
-  const previews = value.scaled.filter(isTrelloCoverPreview)
+  if (!isRecord(value)) return undefined
+  let rawPreviews: unknown[] = []
+  if (Array.isArray(value.scaled)) rawPreviews = value.scaled
+  else if (Array.isArray(value.previews)) rawPreviews = value.previews
+  const previews = rawPreviews.filter(isTrelloCoverPreview)
   const selected =
     previews.find((preview) => preview.width >= 300) ?? previews.at(-1)
   return selected?.url
@@ -541,8 +550,29 @@ export const createTrelloClient = (
         cards.push(
           ...(await Promise.all(
             batch.map(async (card) => {
+              const cover = isRecord(card) ? card.cover : undefined
+              const cardId = isRecord(card) ? card.id : undefined
+              let coverMetadata = cover
+              if (!getCoverPreviewUrl(cover)) {
+                const attachmentId = getCoverAttachmentId(cover)
+                if (
+                  attachmentId &&
+                  typeof cardId === 'string' &&
+                  cardIdPattern.test(cardId)
+                ) {
+                  try {
+                    coverMetadata = await trelloRequest(
+                      `cards/${cardId}/attachments/${attachmentId}`,
+                      signal,
+                      accessToken,
+                    )
+                  } catch (error) {
+                    if (signal.aborted) throw error
+                  }
+                }
+              }
               const coverDataUrl = await loadCoverDataUrl(
-                isRecord(card) ? card.cover : undefined,
+                coverMetadata,
                 accessToken,
                 signal,
                 request,
