@@ -670,7 +670,13 @@ const renderColumns = (
     board.lists.map((list) =>
       Dom.node(
         VirtualDomElements.Section,
-        { ariaLabel: list.name, className: 'BoardColumn' },
+        {
+          ariaLabel: list.name,
+          className: `BoardColumn${dropTargetId === list.id ? ' BoardCardsDropTarget' : ''}`,
+          name: `board-list:${list.id}`,
+          onDragOver: 'handleBoardDragOver',
+          onDrop: 'handleBoardDrop',
+        },
         [
           Dom.heading(
             2,
@@ -678,19 +684,12 @@ const renderColumns = (
             `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
           ),
           Dom.div(
-            `BoardCards${dropTargetId === list.id ? ' BoardCardsDropTarget' : ''}`,
-            [
-              ...(cardsByList.get(list.id) || [
-                Dom.div('BoardEmptyList', [Dom.textNode('No cards')]),
-              ]),
-              renderComposer(state, list.id, list.name),
+            'BoardCards',
+            cardsByList.get(list.id) || [
+              Dom.div('BoardEmptyList', [Dom.textNode('No cards')]),
             ],
-            {
-              name: `board-list:${list.id}`,
-              onDragOver: 'handleBoardDragOver',
-              onDrop: 'handleBoardDrop',
-            },
           ),
+          renderComposer(state, list.id, list.name),
         ],
       ),
     ),
