@@ -752,6 +752,7 @@ export const createInstance = async (
         details,
         detailsLoading: false,
         editDesc: details.desc,
+        editDescription: false,
       }
     } catch {
       if (disposed || signal.aborted || generation !== requestGeneration) return
@@ -776,6 +777,7 @@ export const createInstance = async (
       details: undefined,
       detailsError: undefined,
       editDesc: card.desc || '',
+      editDescription: false,
       editError: undefined,
       editingCard: card,
       editName: card.name,
@@ -885,6 +887,11 @@ export const createInstance = async (
     }
     if (event.name === 'board-card-details-retry') {
       void loadCardDetails()
+      return
+    }
+    if (event.name === 'board-description-edit') {
+      const { editDescription } = state
+      state = { ...state, editDescription: !editDescription }
       return
     }
     if (event.name === 'board-card-cancel') {

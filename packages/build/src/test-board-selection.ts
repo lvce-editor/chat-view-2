@@ -11,6 +11,9 @@ export const testBoardSelection = async (
 ): Promise<void> => {
   const context = await browser.newContext()
   const backend = 'https://trello-selection.test'
+  await context.route('https://example.com/description.png', (route) =>
+    route.fulfill({ body: '', contentType: 'image/png' }),
+  )
   let empty = false
   let fail = false
   const discoveryLoads: string[] = []
@@ -151,7 +154,7 @@ export const testBoardSelection = async (
       await route.fulfill({
         headers: { 'Access-Control-Allow-Origin': '*' },
         json: {
-          desc: 'A detailed description from Trello.',
+          desc: '# Card notes\n\nA **detailed description** from Trello.\n\n![Design diagram](https://example.com/description.png)',
           attachments: [
             { name: 'design.png', url: 'https://example.com/design.png' },
           ],
@@ -354,13 +357,30 @@ export const testBoardSelection = async (
     await dialog
       .getByText('Please review the attached design.', { exact: true })
       .waitFor()
+    await dialog.getByRole('heading', { name: 'Card notes' }).waitFor()
+    await dialog.getByText('A detailed description', { exact: false }).waitFor()
+    assert.equal(
+      await dialog.locator('.BoardDescriptionImage').getAttribute('src'),
+      'https://example.com/description.png',
+    )
     assert.equal(await dialog.getByLabel('Status: Todo').textContent(), 'Todo')
+    assert.equal(await dialog.locator('.BoardDescriptionMarkdown').count(), 1)
+    const descriptionEdit = dialog.getByRole('button', {
+      name: 'Edit description',
+    })
+    assert.equal(
+      await descriptionEdit.evaluate((button) => button.type),
+      'button',
+    )
+    await descriptionEdit.click()
     assert.equal(
       await dialog
-        .getByRole('textbox', { name: 'Description', exact: true })
+        .getByRole('textbox', { name: 'Markdown source' })
         .inputValue(),
-      'A detailed description from Trello.',
+      '# Card notes\n\nA **detailed description** from Trello.\n\n![Design diagram](https://example.com/description.png)',
     )
+    assert.deepEqual(moveRequests, [])
+    await dialog.getByRole('button', { name: 'Preview' }).click()
     assert.equal(
       await dialog
         .getByRole('link', { name: 'design.png' })
