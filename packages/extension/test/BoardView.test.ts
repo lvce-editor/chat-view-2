@@ -10,7 +10,17 @@ import { TrelloError, type TrelloBoard } from '../src/parts/BoardView/Trello.ts'
 
 const board: TrelloBoard = {
   cards: [
-    { desc: 'Details', id: 'one', idList: 'todo', name: 'A task', pos: 1 },
+    {
+      desc: 'Details',
+      id: 'one',
+      idList: 'todo',
+      labels: [
+        { color: 'yellow', id: 'yellow', name: 'In progress' },
+        { color: 'red', id: 'red', name: 'Urgent' },
+      ],
+      name: 'A task',
+      pos: 1,
+    },
   ],
   id: 'board',
   lists: [
@@ -102,6 +112,10 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   const dom = JSON.stringify(await view.render())
   expect(dom).toContain('BoardViewTrello')
   expect(dom).toContain('A task')
+  expect(dom).toContain('BoardCardLabel-yellow')
+  expect(dom).toContain('BoardCardLabel-red')
+  expect(dom).toContain('In progress')
+  expect(dom).toContain('Urgent')
   expect(dom).toContain('No cards')
   expect(host.execute).toHaveBeenCalledWith('WindowTitle.set', 'Work')
   expect(host.write).toHaveBeenCalledWith('chat2.connectedBoardIds', [
@@ -500,6 +514,9 @@ test('opens a card editor and updates the board only after Trello confirms the s
   expect(JSON.stringify(await view.render())).toContain('Edit card')
   expect(JSON.stringify(await view.render())).not.toContain('"autoFocus":true')
   expect(JSON.stringify(await view.render())).toContain('Details')
+  expect(JSON.stringify(await view.render())).not.toContain('edit-card-desc')
+  await view.handleEvent?.({ name: 'board-description-edit', type: 'click' })
+  expect(JSON.stringify(await view.render())).toContain('edit-card-desc')
   await view.handleEvent?.({
     name: 'edit-card-name',
     type: 'input',
@@ -826,6 +843,33 @@ test('restores the board from its URL hash before saved view state', async () =>
   view.dispose?.()
 })
 
+test('renders Markdown descriptions safely with images and safe links', async () => {
+  const host = createHost()
+  jest.mocked(host.loadCard).mockResolvedValue({
+    activities: [],
+    attachments: [],
+    desc: '# Summary\n\n**Bold** and [docs](https://example.com)\n\n![diagram](https://example.com/diagram.png) <script>alert(1)</script> [unsafe](javascript:alert(1))',
+  })
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '5k8NLHLh',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-card:one', type: 'click' })
+  await flush()
+  const dom = JSON.stringify(await view.render())
+  expect(dom).toContain('BoardDescriptionMarkdown')
+  expect(dom).toContain('BoardDescriptionImage')
+  expect(dom).toContain('https://example.com/diagram.png')
+  expect(dom).toContain('https://example.com')
+  expect(dom).toContain(' <script>alert(1)</script> ')
+  expect(dom).not.toContain('"href":"javascript:')
+  view.dispose?.()
+})
+
 test('selection updates the board URL hash and clearing selection removes it', async () => {
   const host = createHost()
   jest.mocked(host.execute).mockImplementation(async (command) => {
@@ -1001,6 +1045,42 @@ test('adds a card to its list, prevents duplicate submissions and updates the ca
   expect(JSON.stringify(await view.render())).not.toContain('BoardCardComposer')
   expect(host.session.get('5k8NLHLh')?.board.cards).toHaveLength(2)
   expect(JSON.stringify(view.saveState?.())).not.toContain('New task')
+})
+
+test('dismisses a blurred card composer without interrupting a submit', async () => {
+  const host = createHost()
+  const pending =
+    Promise.withResolvers<Awaited<ReturnType<BoardHost['createCard']>>>()
+  jest.mocked(host.createCard).mockReturnValue(pending.promise)
+  const view = await openBoard(host)
+
+  await view.handleEvent?.({ name: 'board-add:todo', type: 'click' })
+  await view.handleEvent?.({ name: 'board-card-title', type: 'blur' })
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  await flush()
+  expect(JSON.stringify(await view.render())).not.toContain('BoardCardComposer')
+
+  await view.handleEvent?.({ name: 'board-add:todo', type: 'click' })
+  await view.handleEvent?.({
+    name: 'board-card-title',
+    type: 'input',
+    value: 'Submitted after blur',
+  })
+  await view.handleEvent?.({ name: 'board-card-title', type: 'blur' })
+  await view.handleEvent?.({ name: 'board-create-card', type: 'submit' })
+  await flush()
+
+  expect(host.createCard).toHaveBeenCalledTimes(1)
+  expect(JSON.stringify(await view.render())).toContain('Adding…')
+  pending.resolve({
+    desc: '',
+    id: 'new',
+    idList: 'todo',
+    name: 'Submitted after blur',
+    pos: 2,
+  })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('Submitted after blur')
 })
 
 test('retains failed card titles, supports cancel and ignores invalid lists', async () => {

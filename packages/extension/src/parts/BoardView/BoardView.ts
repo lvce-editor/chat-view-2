@@ -29,6 +29,9 @@ import {
 export const viewId = 'chat2.views.board'
 export const connectionsPreference = 'chat2.connectedBoardIds'
 
+const isCardTitleBlur = (event: Readonly<ViewEvent>): boolean =>
+  event.type === 'blur' && event.name === 'board-card-title'
+
 export interface BoardHost {
   readonly authorize: typeof trelloClient.authorize
   readonly boards: typeof trelloClient.boards
@@ -689,6 +692,15 @@ export const createInstance = async (
         })
     }, 250)
   }
+  const dismissCardAfterBlur = (): void => {
+    const { cardDraft } = state
+    setTimeout(() => {
+      const { cardDraft: currentDraft } = state
+      if (currentDraft !== cardDraft || !cardDraft) return
+      cancelCard()
+      void notify()
+    }, 0)
+  }
   const handleInput = (name: string | undefined, value: string): void => {
     const { cardDraft } = state
     switch (name) {
@@ -737,6 +749,7 @@ export const createInstance = async (
         details,
         detailsLoading: false,
         editDesc: details.desc,
+        editDescription: false,
       }
     } catch {
       if (disposed || signal.aborted || generation !== requestGeneration) return
@@ -761,6 +774,7 @@ export const createInstance = async (
       details: undefined,
       detailsError: undefined,
       editDesc: card.desc || '',
+      editDescription: false,
       editError: undefined,
       editingCard: card,
       editName: card.name,
@@ -870,6 +884,11 @@ export const createInstance = async (
     }
     if (event.name === 'board-card-details-retry') {
       void loadCardDetails()
+      return
+    }
+    if (event.name === 'board-description-edit') {
+      const { editDescription } = state
+      state = { ...state, editDescription: !editDescription }
       return
     }
     if (event.name === 'board-card-cancel') {
@@ -1009,6 +1028,12 @@ export const createInstance = async (
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (await handleSearchEvent(event)) return
       if (handleNonClickEvent(event)) return
+      if (isCardTitleBlur(event)) {
+        // Let the focus transition finish before removing the composer. A
+        // submit click follows the input blur and marks the draft as saving.
+        dismissCardAfterBlur()
+        return
+      }
       if (event.type === 'click') {
         if (handleActionClick(event.name)) return
         await handleClick(event)
