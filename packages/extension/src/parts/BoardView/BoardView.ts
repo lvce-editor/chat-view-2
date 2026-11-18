@@ -108,6 +108,12 @@ const getBoardHashFromHost = async (host: BoardHost): Promise<string> => {
   }
 }
 
+const isCoverDiagnosticsEnabled = async (host: BoardHost): Promise<boolean> => {
+  const href = await getBoardHashFromHost(host)
+  const url = getUrl(href)
+  return url?.searchParams.get('trelloCoverDiagnostics') === '1'
+}
+
 const setBoardHash = async (
   host: BoardHost,
   boardId: string,
@@ -252,7 +258,7 @@ export const createInstance = async (
       }
       await notify()
       void host
-        .loadCovers(id, signal)
+        .loadCovers(id, signal, await isCoverDiagnosticsEnabled(host))
         .then(async (covers) => {
           if (
             disposed ||
