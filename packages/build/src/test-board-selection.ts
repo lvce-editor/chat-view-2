@@ -416,7 +416,7 @@ export const testBoardSelection = async (
       narrowMain &&
         narrowActivity &&
         narrowActivity.y >= narrowMain.y + narrowMain.height - 1,
-      'Activity stacks below details on mobile',
+      `Activity stacks below details on mobile (viewport=390x844, main=${JSON.stringify(narrowMain)}, activity=${JSON.stringify(narrowActivity)})`,
     )
     const panel = await page.locator('.BoardDialog').boundingBox()
     assert.ok(
