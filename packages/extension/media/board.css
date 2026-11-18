@@ -117,6 +117,9 @@
   background: var(--BoardBackground);
   box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
 }
+.BoardSearch:not(:focus-within) .BoardSearchResults {
+  display: none;
+}
 .BoardSearchResults .BoardTileGrid {
   margin-top: 0;
 }
