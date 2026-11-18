@@ -181,11 +181,7 @@ export const createInstance = async (
   let disposed = false
   const syncFavicon = async (faviconUrl: string): Promise<void> => {
     try {
-      await host.execute(
-        'WebView.compatRendererProcessInvoke',
-        'Favicon.set',
-        faviconUrl,
-      )
+      await host.execute('WindowTitle.setFavicon', faviconUrl)
     } catch {
       // Older editor builds do not expose favicon commands.
     }

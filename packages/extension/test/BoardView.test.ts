@@ -1190,11 +1190,7 @@ test('synchronizes the favicon for cached, refreshed and closed boards', async (
   jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
   host.session.set('5k8NLHLh', { board: { ...board, faviconUrl: icon } })
   const view = await createInstance(createContext(), host)
-  expect(host.execute).toHaveBeenCalledWith(
-    'WebView.compatRendererProcessInvoke',
-    'Favicon.set',
-    icon,
-  )
+  expect(host.execute).toHaveBeenCalledWith('WindowTitle.setFavicon', icon)
   jest.mocked(host.load).mockResolvedValueOnce({
     ...board,
     faviconUrl: 'data:image/svg+xml,refreshed',
@@ -1202,32 +1198,22 @@ test('synchronizes the favicon for cached, refreshed and closed boards', async (
   await view.handleEvent?.({ name: 'board-refresh', type: 'click' })
   await flush()
   expect(host.execute).toHaveBeenCalledWith(
-    'WebView.compatRendererProcessInvoke',
-    'Favicon.set',
+    'WindowTitle.setFavicon',
     'data:image/svg+xml,refreshed',
   )
   jest.mocked(host.execute).mockClear()
   await view.handleEvent?.({ name: 'board-change', type: 'click' })
-  expect(host.execute).toHaveBeenCalledWith(
-    'WebView.compatRendererProcessInvoke',
-    'Favicon.set',
-    '',
-  )
+  expect(host.execute).toHaveBeenCalledWith('WindowTitle.setFavicon', '')
   jest.mocked(host.execute).mockClear()
   await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
   expect(host.execute).toHaveBeenCalledWith(
-    'WebView.compatRendererProcessInvoke',
-    'Favicon.set',
+    'WindowTitle.setFavicon',
     'data:image/svg+xml,refreshed',
   )
   jest.mocked(host.execute).mockClear()
   view.dispose?.()
   await flush()
-  expect(host.execute).toHaveBeenCalledWith(
-    'WebView.compatRendererProcessInvoke',
-    'Favicon.set',
-    '',
-  )
+  expect(host.execute).toHaveBeenCalledWith('WindowTitle.setFavicon', '')
 })
 
 test('an old workspace-title lookup cannot clear a reopened board favicon', async () => {
@@ -1250,8 +1236,10 @@ test('an old workspace-title lookup cannot clear a reopened board favicon', asyn
   await flush()
   const faviconCalls = jest
     .mocked(host.execute)
-    .mock.calls.filter((call: readonly unknown[]) => call[1] === 'Favicon.set')
-  expect(faviconCalls.at(-1)?.[2]).toBe(icon)
+    .mock.calls.filter(
+      (call: readonly unknown[]) => call[0] === 'WindowTitle.setFavicon',
+    )
+  expect(faviconCalls.at(-1)?.[1]).toBe(icon)
   reopened.dispose?.()
   await flush()
 })
@@ -1265,25 +1253,21 @@ test.each(['authorization', 'search'])(
     host.session.set('5k8NLHLh', { board: { ...board, faviconUrl: icon } })
     const view = await createInstance(createContext(), host)
     try {
-      jest
-        .mocked(host.load)
-        .mockRejectedValue(
-          new TrelloError({
-            code: 'TRELLO_CONNECTION_REQUIRED',
-            message: 'Reconnect Trello.',
-          }),
-        )
+      jest.mocked(host.load).mockRejectedValue(
+        new TrelloError({
+          code: 'TRELLO_CONNECTION_REQUIRED',
+          message: 'Reconnect Trello.',
+        }),
+      )
       if (action === 'search') {
-        jest
-          .mocked(host.search)
-          .mockResolvedValue([
-            {
-              boardId: '12345678',
-              id: '507f1f77bcf86cd799439011',
-              kind: 'card',
-              name: 'Task',
-            },
-          ])
+        jest.mocked(host.search).mockResolvedValue([
+          {
+            boardId: '12345678',
+            id: '507f1f77bcf86cd799439011',
+            kind: 'card',
+            name: 'Task',
+          },
+        ])
         await view.handleEvent?.({
           name: 'board-search',
           type: 'input',
@@ -1302,9 +1286,9 @@ test.each(['authorization', 'search'])(
       const faviconCalls = jest
         .mocked(host.execute)
         .mock.calls.filter(
-          (call: readonly unknown[]) => call[1] === 'Favicon.set',
+          (call: readonly unknown[]) => call[0] === 'WindowTitle.setFavicon',
         )
-      expect(faviconCalls.at(-1)?.[2]).toBe('')
+      expect(faviconCalls.at(-1)?.[1]).toBe('')
     } finally {
       view.dispose?.()
       await flush()
