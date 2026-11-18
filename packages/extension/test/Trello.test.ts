@@ -47,8 +47,6 @@ const boardListRequest = (data: unknown): typeof fetch =>
     Response.json({ accessToken: 'trello-token' }),
     Response.json(data),
   ])
-const trelloBoardUrlPattern =
-  /^https:\/\/api\.trello\.com\/1\/boards\/5k8NLHLh\?/u
 
 test('accepts board URLs and IDs, rejecting unrelated URLs', () => {
   expect(parseBoardId(' https://trello.com/b/5k8NLHLh/lvce-editor ')).toBe(
@@ -62,24 +60,21 @@ test('accepts board URLs and IDs, rejecting unrelated URLs', () => {
   )
 })
 
-test('loads source-ordered lists and cards directly from Trello with a scoped Trello token', async () => {
+test('loads board cards and cover images through the authenticated backend', async () => {
   const request = requestSequence([
-    Response.json({ accessToken: 'trello-token' }),
     Response.json({
       ...board,
       cards: [
         ...board.cards,
         {
-          cover: {
-            idAttachment: '507f1f77bcf86cd799439013',
-          },
+          coverDataUrl: 'data:image/webp;base64,AQID',
           id: '507f1f77bcf86cd799439012',
           idList: 'now',
           name: 'Cover',
           pos: 3,
         },
         {
-          id: 'unsafe',
+          id: '507f1f77bcf86cd799439014',
           idList: 'now',
           name: 'No cover',
           pos: 4,
@@ -89,21 +84,6 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
         backgroundBottomColor: '#ff58b0',
         backgroundTopColor: '#a82be0',
       },
-    }),
-    Response.json({
-      previews: [
-        {
-          url: 'https://trello.com/1/cards/covered/previews/small',
-          width: 150,
-        },
-        {
-          url: 'https://trello.com/1/cards/covered/previews/large',
-          width: 300,
-        },
-      ],
-    }),
-    new Response(new Uint8Array([1, 2, 3]), {
-      headers: { 'content-type': 'image/webp' },
     }),
   ])
   const result = await loadBoard(
@@ -128,45 +108,12 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
   expect(
     result.cards.find((card) => card.name === 'No cover')?.coverDataUrl,
   ).toBeUndefined()
-  expect(request).toHaveBeenNthCalledWith(
-    1,
-    'https://backend.test/api/integrations/trello/token',
-    expect.objectContaining({
-      headers: {
-        Authorization: 'Bearer lvce-token',
-      },
-    }),
-  )
-  expect(request).toHaveBeenNthCalledWith(
-    2,
-    expect.stringMatching(trelloBoardUrlPattern),
+  expect(request).toHaveBeenCalledTimes(1)
+  expect(request).toHaveBeenCalledWith(
+    'https://backend.test/api/integrations/trello/boards/5k8NLHLh',
     expect.objectContaining({
       credentials: 'omit',
-      headers: { Authorization: 'Bearer trello-token' },
-    }),
-  )
-  const boardUrl = request.mock.calls[1]?.[0]
-  expect(
-    typeof boardUrl === 'string' &&
-      new URL(boardUrl).searchParams.get('fields'),
-  ).toBe('name,prefs')
-  expect(JSON.stringify(request.mock.calls[1])).not.toContain('lvce-token')
-  expect(request).toHaveBeenNthCalledWith(
-    3,
-    'https://api.trello.com/1/cards/507f1f77bcf86cd799439012/attachments/507f1f77bcf86cd799439013',
-    expect.objectContaining({
-      credentials: 'omit',
-      headers: { Authorization: 'Bearer trello-token' },
-      redirect: 'error',
-    }),
-  )
-  expect(request).toHaveBeenNthCalledWith(
-    4,
-    'https://trello.com/1/cards/covered/previews/large',
-    expect.objectContaining({
-      credentials: 'omit',
-      headers: { Authorization: 'Bearer trello-token' },
-      redirect: 'error',
+      headers: { Authorization: 'Bearer lvce-token' },
     }),
   )
   expect(JSON.stringify(request.mock.calls)).not.toContain('AQID')
@@ -216,8 +163,7 @@ for (const [status, code] of [
 ] as const) {
   test(`maps HTTP ${status} to ${code} without exposing the response body`, async () => {
     const request = requestSequence([
-      Response.json({ accessToken: 'trello-token' }),
-      Response.json('secret upstream body', { status }),
+      Response.json({ code, error: 'secret upstream body' }, { status }),
     ])
     await expect(
       loadBoard('5k8NLHLh', new AbortController().signal, request),
@@ -235,34 +181,30 @@ test('handles transport failures, invalid JSON and malformed board data', async 
   await expect(loadBoard('5k8NLHLh', signal, offline)).rejects.toMatchObject({
     details: { code: 'TRELLO_REQUEST_FAILED' },
   })
-  const malformedBoardRequest = requestSequence([
-    Response.json({ accessToken: 'trello-token' }),
-    Response.json({ ...board, lists: null }),
-  ])
+  const malformedBoardRequest = requestWith({ ...board, lists: null })
   await expect(
     loadBoard('5k8NLHLh', signal, malformedBoardRequest),
   ).rejects.toMatchObject({ details: { code: 'TRELLO_INVALID_RESPONSE' } })
   const invalidJson = jest
     .fn<typeof fetch>()
-    .mockResolvedValueOnce(Response.json({ accessToken: 'trello-token' }))
     .mockResolvedValue(new Response('not json'))
   await expect(
     loadBoard('5k8NLHLh', signal, invalidJson),
   ).rejects.toMatchObject({ details: { code: 'TRELLO_REQUEST_FAILED' } })
 })
 
-test('passes cancellation to the direct Trello request', async () => {
+test('passes cancellation to the authenticated backend board request', async () => {
   const controller = new AbortController()
-  const tokenResponse = Response.json({ accessToken: 'trello-token' })
-  jest.spyOn(tokenResponse, 'json').mockImplementation(async () => {
+  const boardResponse = Response.json(board)
+  jest.spyOn(boardResponse, 'json').mockImplementation(async () => {
     controller.abort()
-    return { accessToken: 'trello-token' }
+    return board
   })
-  const request = requestSequence([tokenResponse, Response.json(board)])
+  const request = requestSequence([boardResponse])
   await loadBoard('5k8NLHLh', controller.signal, request)
-  expect(request.mock.calls[1]?.[1]?.signal).toBeInstanceOf(AbortSignal)
-  expect(request.mock.calls[1]?.[1]?.signal?.aborted).toBe(true)
-  expect(request).toHaveBeenCalledTimes(2)
+  expect(request.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal)
+  expect(request.mock.calls[0]?.[1]?.signal?.aborted).toBe(true)
+  expect(request).toHaveBeenCalledTimes(1)
 })
 
 test('requires LVCE login and never forwards its token to an unrelated backend', async () => {
@@ -281,11 +223,10 @@ test('requires LVCE login and never forwards its token to an unrelated backend',
   expect(request).not.toHaveBeenCalled()
 })
 
-test('refreshes the LVCE access token once on 401 and omits cookies', async () => {
+test('refreshes the LVCE token once for a backend board request', async () => {
   const request = jest
     .fn<typeof fetch>()
     .mockResolvedValueOnce(Response.json({}, { status: 401 }))
-    .mockResolvedValueOnce(Response.json({ accessToken: 'trello-token' }))
     .mockResolvedValueOnce(Response.json(board))
   const refreshAccessToken = jest
     .fn<() => Promise<string>>()
@@ -296,9 +237,9 @@ test('refreshes the LVCE access token once on 401 and omits cookies', async () =
   )
   await client.load('5k8NLHLh', new AbortController().signal)
   expect(refreshAccessToken).toHaveBeenCalledTimes(1)
-  expect(request.mock.calls[2]?.[1]).toMatchObject({
+  expect(request.mock.calls[1]?.[1]).toMatchObject({
     credentials: 'omit',
-    headers: { Authorization: 'Bearer trello-token' },
+    headers: { Authorization: 'Bearer new-lvce-token' },
     redirect: 'error',
   })
 })
@@ -438,28 +379,21 @@ test('discovers board names and background preferences directly from Trello', as
   )
 })
 
-test('keeps cards usable when cover attachment metadata cannot be loaded', async () => {
+test('keeps cards usable when the backend has no cover preview', async () => {
   const result = await loadBoard(
     '5k8NLHLh',
     new AbortController().signal,
-    requestSequence([
-      Response.json({ accessToken: 'trello-token' }),
-      Response.json({
-        ...board,
-        cards: [
-          {
-            cover: {
-              idAttachment: '507f1f77bcf86cd799439013',
-            },
-            id: '507f1f77bcf86cd799439012',
-            idList: 'now',
-            name: 'Still usable',
-            pos: 1,
-          },
-        ],
-      }),
-      new Response('forbidden', { status: 403 }),
-    ]),
+    requestWith({
+      ...board,
+      cards: [
+        {
+          id: '507f1f77bcf86cd799439012',
+          idList: 'now',
+          name: 'Still usable',
+          pos: 1,
+        },
+      ],
+    }),
   )
   expect(result.cards).toEqual([
     expect.objectContaining({
@@ -507,10 +441,7 @@ test('normalizes comment and attachment badges without rejecting older boards', 
   const result = await loadBoard(
     '5k8NLHLh',
     new AbortController().signal,
-    requestSequence([
-      Response.json({ accessToken: 'trello-token' }),
-      Response.json({ ...board, cards }),
-    ]),
+    requestWith({ ...board, cards }),
   )
   expect(
     result.cards.map(({ attachmentCount, commentCount }) => [
