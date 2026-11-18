@@ -176,13 +176,22 @@ export const createInstance = async (
   let searchGeneration = 0
   let moveController: AbortController | undefined
   let disposed = false
-  const syncTitle = async (title: string): Promise<void> => {
+  const syncTab = async (title: string, faviconUrl = ''): Promise<void> => {
+    try {
+      await host.execute(
+        'WebView.compatRendererProcessInvoke',
+        'Favicon.set',
+        faviconUrl,
+      )
+    } catch {
+      // Older editor builds do not expose favicon commands.
+    }
     await host.execute('WindowTitle.set', title)
   }
-  const restoreTitle = async (): Promise<void> =>
-    syncTitle(await getWorkspaceTitle(host.execute))
+  const restoreTab = async (): Promise<void> =>
+    syncTab(await getWorkspaceTitle(host.execute))
   const { board: initialBoard } = state
-  await syncTitle(initialBoard?.name || 'Boards')
+  await syncTab(initialBoard?.name || 'Boards', initialBoard?.faviconUrl)
   let focusEditor = false
   let focusNewCard = false
   let focusRestore = false
@@ -245,7 +254,7 @@ export const createInstance = async (
         connectedIds: ids,
         loading: false,
       }
-      await syncTitle(board.name)
+      await syncTab(board.name, board.faviconUrl)
       try {
         await host.write(connectionsPreference, ids)
       } catch {
@@ -394,6 +403,7 @@ export const createInstance = async (
     cancel()
     const { boardId, connectedIds } = state
     await setBoardHash(host, '')
+    await syncTab('Boards')
     host.session.remove(boardId)
     const ids = connectedIds.filter((id) => id !== boardId)
     state = {
@@ -421,11 +431,11 @@ export const createInstance = async (
   const restoreConnection = async (id: string): Promise<void> => {
     const selected = host.session.get(id)
     if (!selected) {
-      await syncTitle('Boards')
+      await syncTab('Boards')
       return
     }
     state = { ...state, accountConnected: true, board: selected.board }
-    await syncTitle(selected.board.name)
+    await syncTab(selected.board.name, selected.board.faviconUrl)
   }
   const connectionError = (error: unknown): void => {
     state = {
@@ -575,7 +585,7 @@ export const createInstance = async (
         loading: false,
         providerSelected: true,
       }
-      await syncTitle('Boards')
+      await syncTab('Boards')
     } catch (error) {
       if (disposed || generation !== requestGeneration) return
       connectionError(error)
@@ -821,7 +831,7 @@ export const createInstance = async (
       if (disposed || requestGeneration !== generation) return
       host.session.set(result.boardId, { board })
       state = { ...state, board, loading: false }
-      await syncTitle(board.name)
+      await syncTab(board.name, board.faviconUrl)
       await notify()
       openCard(`board-card:${id}`)
     } catch (error) {
@@ -889,7 +899,7 @@ export const createInstance = async (
       if (searchTimer) clearTimeout(searchTimer)
       void (async (): Promise<void> => {
         try {
-          await restoreTitle()
+          await restoreTab()
         } catch {
           // Ignore title restoration when the host is shutting down.
         }

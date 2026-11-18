@@ -1117,3 +1117,51 @@ test('a late detail response cannot replace the next card or reopen a closed dia
     'BoardDialogOverlay',
   )
 })
+
+test('synchronizes the favicon for cached, refreshed and closed boards', async () => {
+  const host = createHost()
+  const icon = 'data:image/svg+xml,cached'
+  jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
+  host.session.set('5k8NLHLh', { board: { ...board, faviconUrl: icon } })
+  const view = await createInstance(createContext(), host)
+  expect(host.execute).toHaveBeenCalledWith(
+    'WebView.compatRendererProcessInvoke',
+    'Favicon.set',
+    icon,
+  )
+  jest
+    .mocked(host.load)
+    .mockResolvedValueOnce({
+      ...board,
+      faviconUrl: 'data:image/svg+xml,refreshed',
+    })
+  await view.handleEvent?.({ name: 'board-refresh', type: 'click' })
+  await flush()
+  expect(host.execute).toHaveBeenCalledWith(
+    'WebView.compatRendererProcessInvoke',
+    'Favicon.set',
+    'data:image/svg+xml,refreshed',
+  )
+  jest.mocked(host.execute).mockClear()
+  await view.handleEvent?.({ name: 'board-change', type: 'click' })
+  expect(host.execute).toHaveBeenCalledWith(
+    'WebView.compatRendererProcessInvoke',
+    'Favicon.set',
+    '',
+  )
+  jest.mocked(host.execute).mockClear()
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
+  expect(host.execute).toHaveBeenCalledWith(
+    'WebView.compatRendererProcessInvoke',
+    'Favicon.set',
+    'data:image/svg+xml,refreshed',
+  )
+  jest.mocked(host.execute).mockClear()
+  view.dispose?.()
+  await flush()
+  expect(host.execute).toHaveBeenCalledWith(
+    'WebView.compatRendererProcessInvoke',
+    'Favicon.set',
+    '',
+  )
+})

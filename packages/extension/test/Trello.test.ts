@@ -115,6 +115,9 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
     backgroundColor: '#ff58b0',
     backgroundGradient: 'linear-gradient(135deg, #a82be0, #ff58b0)',
   })
+  expect(decodeURIComponent(result.faviconUrl || '')).toContain(
+    'stop-color="#a82be0"',
+  )
   expect(result.lists.map((list) => list.name)).toEqual(['Now', 'Later'])
   expect(result.cards.map((card) => card.name)).toEqual([
     'First',
