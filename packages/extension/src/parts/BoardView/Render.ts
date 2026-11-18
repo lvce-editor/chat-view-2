@@ -132,11 +132,12 @@ const renderComposer = (
 const renderBoardTile = (
   board: TrelloBoardSummary,
   loading: boolean,
+  ariaLabel = `Open ${board.name}`,
 ): Dom.Node =>
   Dom.node(
     VirtualDomElements.Button,
     {
-      ariaLabel: `Open ${board.name}`,
+      ariaLabel,
       buttonType: 'button',
       className: 'BoardTile',
       disabled: loading,
@@ -227,6 +228,7 @@ const renderBoardSearch = (state: BoardState): Dom.Node => {
       className: searchInputClass,
       inputType: 'search',
       name: 'board-search',
+      onBlur: 'handleBlur',
       onInput: 'handleInput',
       placeholder: 'Search boards and cards',
       spellcheck: false,
@@ -363,7 +365,11 @@ const renderSetup = (state: BoardState): Dom.Node => {
                     const board = boards.find((item) => item.id === id)
                     return board
                       ? renderBoardTile({ ...board, id }, loading)
-                      : Dom.button(`board-select:${id}`, id, 'BoardButton')
+                      : renderBoardTile(
+                          { id, name: id },
+                          loading,
+                          `Open remembered board ${id}`,
+                        )
                   }),
                 ]),
               ]
@@ -666,11 +672,22 @@ const renderColumns = (
         VirtualDomElements.Section,
         { ariaLabel: list.name, className: 'BoardColumn' },
         [
-          Dom.heading(
-            2,
-            'BoardColumnTitle',
-            `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
-          ),
+          Dom.div('BoardColumnHeader', [
+            Dom.heading(
+              2,
+              'BoardColumnTitle',
+              `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
+            ),
+            Dom.button(
+              `list-actions:${list.id}`,
+              '…',
+              'BoardButton BoardListActionsButton',
+              {
+                ariaLabel: `List actions for ${list.name}`,
+                title: 'List actions',
+              },
+            ),
+          ]),
           Dom.div(
             `BoardCards${dropTargetId === list.id ? ' BoardCardsDropTarget' : ''}`,
             [
@@ -777,6 +794,27 @@ const getBoardStyle = (board: TrelloBoard | undefined): string | undefined => {
     .join(';')
 }
 
+const renderCardLabels = (
+  labels: TrelloCard['labels'],
+): readonly Dom.Node[] => {
+  if (!labels?.length) return []
+  return [
+    Dom.div(
+      'BoardCardLabels',
+      labels.map((label) =>
+        Dom.node(VirtualDomElements.Span, {
+          ariaLabel: label.name,
+          className: mergeClassNames(
+            'BoardCardLabel',
+            `BoardCardLabel-${label.color}`,
+          ),
+          role: 'img',
+        }),
+      ),
+    ),
+  ]
+}
+
 export const render = (state: BoardState): Dom.Node => {
   const {
     authorizing,
@@ -816,6 +854,7 @@ export const render = (state: BoardState): Dom.Node => {
                 }),
               ]
             : []),
+          ...renderCardLabels(card.labels),
           Dom.div('BoardCardTitle', [Dom.textNode(card.name)]),
           ...renderBadges(card),
         ],

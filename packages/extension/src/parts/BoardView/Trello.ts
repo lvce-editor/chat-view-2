@@ -14,8 +14,15 @@ export interface TrelloCard {
   readonly desc: string
   readonly id: string
   readonly idList: string
+  readonly labels?: readonly TrelloLabel[]
   readonly name: string
   readonly pos: number
+}
+
+export interface TrelloLabel {
+  readonly color: string
+  readonly id: string
+  readonly name: string
 }
 
 export interface TrelloList {
@@ -243,6 +250,40 @@ const normalizeCount = (value: unknown): number =>
     ? value
     : 0
 
+const trelloLabelColors = new Set([
+  'blue',
+  'green',
+  'lime',
+  'orange',
+  'pink',
+  'purple',
+  'red',
+  'sky',
+  'yellow',
+])
+
+const normalizeLabels = (value: unknown): readonly TrelloLabel[] => {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((label) => {
+    if (
+      !isRecord(label) ||
+      typeof label.id !== 'string' ||
+      !label.id ||
+      typeof label.name !== 'string' ||
+      !label.name.trim() ||
+      typeof label.color !== 'string'
+    )
+      return []
+    return [
+      {
+        color: trelloLabelColors.has(label.color) ? label.color : 'unknown',
+        id: label.id,
+        name: label.name,
+      },
+    ]
+  })
+}
+
 const normalizeCard = (value: unknown): TrelloCard | undefined => {
   if (!isCard(value)) return undefined
   const normalizedCoverDataUrl = value.coverDataUrl
@@ -255,6 +296,9 @@ const normalizeCard = (value: unknown): TrelloCard | undefined => {
     idList: value.idList,
     name: value.name,
     pos: value.pos,
+    ...(Array.isArray(value.labels) && {
+      labels: normalizeLabels(value.labels),
+    }),
     ...(typeof normalizedCoverDataUrl === 'string' &&
       normalizedCoverDataUrl.startsWith('data:image/') && {
         coverDataUrl: normalizedCoverDataUrl,
@@ -286,6 +330,12 @@ export interface TrelloClient {
     id: string,
     signal: Readonly<AbortSignal>,
   ) => Promise<CardDetails>
+  readonly loadCovers: (
+    input: string,
+    signal: Readonly<AbortSignal>,
+  ) => Promise<
+    readonly { readonly id: string; readonly coverDataUrl: string }[]
+  >
   readonly moveCard: (
     cardId: string,
     listId: string,
@@ -499,6 +549,25 @@ export const createTrelloClient = (
       })
     }
   }
+  const loadCovers = async (
+    input: string,
+    signal: Readonly<AbortSignal>,
+  ): Promise<
+    readonly { readonly id: string; readonly coverDataUrl: string }[]
+  > => {
+    const id = parseBoardId(input)
+    const { data } = await call(`boards/${id}/covers`, signal)
+    if (!Array.isArray(data)) return []
+    return data.filter(
+      (
+        cover,
+      ): cover is { readonly id: string; readonly coverDataUrl: string } =>
+        isRecord(cover) &&
+        typeof cover.id === 'string' &&
+        typeof cover.coverDataUrl === 'string' &&
+        cover.coverDataUrl.startsWith('data:image/'),
+    )
+  }
   const updateCard = async (
     id: string,
     name: string,
@@ -706,6 +775,7 @@ export const createTrelloClient = (
     disconnect,
     load,
     loadCard,
+    loadCovers,
     moveCard,
     search,
     status,

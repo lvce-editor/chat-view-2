@@ -19,6 +19,7 @@ export const testBoardSelection = async (
   const discoveryLoads: string[] = []
   const proxiedLoads: string[] = []
   const boardLoads: string[] = []
+  const coverLoads: string[] = []
   const moveRequests: string[] = []
   await context.route(`${backend}/**`, async (route) => {
     const path = new URL(route.request().url()).pathname
@@ -32,7 +33,18 @@ export const testBoardSelection = async (
       body = { configured: true, connected: true }
     } else if (path.endsWith('/token')) {
       body = { accessToken: 'trello-test' }
-    } else if (/^\/api\/integrations\/trello\/boards\//u.test(path)) {
+    } else if (
+      /^\/api\/integrations\/trello\/boards\/[^/]+\/covers$/u.test(path)
+    ) {
+      coverLoads.push(path)
+      body = [
+        {
+          coverDataUrl:
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
+          id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+        },
+      ]
+    } else if (/^\/api\/integrations\/trello\/boards\/[^/]+$/u.test(path)) {
       boardLoads.push(path)
       const id = path.split('/').at(-1)
       body = {
@@ -55,10 +67,12 @@ export const testBoardSelection = async (
         ],
         cards: [
           {
-            coverDataUrl:
-              'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
             id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
             idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+            labels: [
+              { color: 'yellow', id: 'yellow-label', name: 'In progress' },
+              { color: 'red', id: 'red-label', name: 'Urgent' },
+            ],
             name: 'Card with cover',
             pos: 1,
             badges: { comments: 3, attachments: 1 },
@@ -316,12 +330,22 @@ export const testBoardSelection = async (
       .getByRole('button', { name: 'Card · Card with cover — Engineering' })
       .waitFor()
     assert.equal(await page.locator('.BoardSearchResult').count(), 2)
-    await boardSearch.fill('')
-    assert.equal(discoveryLoads.length, 1)
-    await page.getByRole('button', { name: 'Open Engineering' }).click()
+    await page.locator('.BoardTitle').click()
+    await page.locator('.BoardSearchResults').waitFor({ state: 'hidden' })
+    assert.equal(await boardSearch.inputValue(), 'cover')
+    await boardSearch.click()
+    await page
+      .getByRole('button', { name: 'Card · Card with cover — Engineering' })
+      .waitFor()
+    await boardSearch.press('Tab')
+    await page.getByRole('button', { name: 'Board · Engineering' }).waitFor()
+    assert.equal(await page.locator('.BoardSearchResult').count(), 2)
+    await page.keyboard.press('Enter')
     await page
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
+    await boardSearch.fill('')
+    assert.equal(discoveryLoads.length, 1)
     assert.equal(new URL(page.url()).hash, '#22222222')
     assert.ok(
       (await readBoardIcon()).includes('<image href="data:image/png;base64,'),
@@ -373,9 +397,49 @@ export const testBoardSelection = async (
     assert.deepEqual(proxiedLoads, [])
     const cover = page.locator('.BoardCardCover')
     await cover.waitFor({ state: 'visible' })
+    assert.deepEqual(coverLoads, [
+      '/api/integrations/trello/boards/22222222/covers',
+      '/api/integrations/trello/boards/22222222/covers',
+    ])
     const coverSrc = await cover.getAttribute('src')
     assert.ok(coverSrc)
     assert.match(coverSrc, /^data:image\/png;base64,/u)
+    const labels = page.locator('.BoardCardLabels')
+    await labels.waitFor()
+    assert.equal(await labels.count(), 1)
+    assert.deepEqual(
+      await labels.getByRole('img').evaluateAll((elements) =>
+        elements.map((element) => ({
+          ariaLabel: element.getAttribute('aria-label'),
+          className: element.className,
+        })),
+      ),
+      [
+        {
+          ariaLabel: 'In progress',
+          className: 'BoardCardLabel BoardCardLabel-yellow',
+        },
+        { ariaLabel: 'Urgent', className: 'BoardCardLabel BoardCardLabel-red' },
+      ],
+    )
+    assert.equal(
+      await labels.locator('..').evaluate((element) => {
+        const children = [...element.children].map((child) => child.className)
+        return (
+          children.indexOf('BoardCardLabels') <
+          children.indexOf('BoardCardTitle')
+        )
+      }),
+      true,
+    )
+    assert.equal(
+      await page
+        .locator('.BoardCard')
+        .filter({ hasText: 'No activity' })
+        .locator('.BoardCardLabels')
+        .count(),
+      0,
+    )
     await page.getByText('Card with cover', { exact: true }).waitFor()
     const badges = page.locator('.BoardCardBadges')
     await badges.waitFor()
@@ -459,7 +523,7 @@ export const testBoardSelection = async (
       narrowMain &&
         narrowActivity &&
         narrowActivity.y >= narrowMain.y + narrowMain.height - 1,
-      'Activity stacks below details on mobile',
+      `Activity stacks below details on mobile (viewport=390x844, main=${JSON.stringify(narrowMain)}, activity=${JSON.stringify(narrowActivity)})`,
     )
     const panel = await page.locator('.BoardDialog').boundingBox()
     assert.ok(
@@ -585,10 +649,10 @@ export const testBoardSelection = async (
         name: 'Refresh board',
         exact: true,
       })
-      const refreshed = page.waitForResponse((response) =>
-        response
-          .url()
-          .startsWith(`${backend}/api/integrations/trello/boards/22222222`),
+      const refreshed = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname ===
+          '/api/integrations/trello/boards/22222222',
       )
       await refreshButton.click()
       await refreshed
@@ -610,9 +674,8 @@ export const testBoardSelection = async (
     const refresh = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response
-          .url()
-          .startsWith(`${backend}/api/integrations/trello/boards/22222222`),
+        new URL(response.url()).pathname ===
+          '/api/integrations/trello/boards/22222222',
     )
     await page
       .getByRole('button', { name: 'Refresh board', exact: true })
@@ -643,10 +706,45 @@ export const testBoardSelection = async (
       .getByRole('button', { name: 'Connect Trello', exact: true })
       .click()
     await page.getByText('No open boards found.', { exact: false }).waitFor()
-    assert.equal(
-      await page.locator('button[name="board-select:22222222"]').innerText(),
-      '22222222',
+    const rememberedTile = page.locator(
+      '.BoardRemembered button[name="board-select:22222222"]',
     )
+    assert.equal(await rememberedTile.innerText(), '22222222')
+    assert.equal(await rememberedTile.getAttribute('class'), 'BoardTile')
+    assert.equal(
+      await rememberedTile.getAttribute('aria-label'),
+      'Open remembered board 22222222',
+    )
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.locator('body').click({ position: { x: 5, y: 5 } })
+    let rememberedTileFocused = false
+    for (let index = 0; index < 100 && !rememberedTileFocused; index++) {
+      await page.keyboard.press('Tab')
+      rememberedTileFocused = await rememberedTile.evaluate(
+        (element) => globalThis.document.activeElement === element,
+      )
+    }
+    assert.equal(
+      rememberedTileFocused,
+      true,
+      'Remembered board is keyboard reachable',
+    )
+    assert.equal(
+      await rememberedTile.evaluate(
+        (element) => globalThis.getComputedStyle(element).outlineStyle,
+      ),
+      'solid',
+    )
+    const rememberedTileBox = await rememberedTile.boundingBox()
+    assert.ok(
+      rememberedTileBox &&
+        rememberedTileBox.x >= 0 &&
+        rememberedTileBox.x + rememberedTileBox.width <= 390,
+      'Remembered board tile fits a narrow viewport',
+    )
+    if (process.env.BOARD_REMEMBERED_SCREENSHOT)
+      await page.screenshot({ path: process.env.BOARD_REMEMBERED_SCREENSHOT })
+    await page.setViewportSize({ width: 1280, height: 720 })
     fail = true
     await page
       .getByRole('button', { name: 'Refresh boards', exact: true })

@@ -1,3 +1,5 @@
+// cspell:words AQID
+
 import type { ViewContext, VirtualDomViewInstance } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { createSession } from '../src/parts/BoardView/BoardSession.ts'
@@ -10,7 +12,17 @@ import { TrelloError, type TrelloBoard } from '../src/parts/BoardView/Trello.ts'
 
 const board: TrelloBoard = {
   cards: [
-    { desc: 'Details', id: 'one', idList: 'todo', name: 'A task', pos: 1 },
+    {
+      desc: 'Details',
+      id: 'one',
+      idList: 'todo',
+      labels: [
+        { color: 'yellow', id: 'yellow', name: 'In progress' },
+        { color: 'red', id: 'red', name: 'Urgent' },
+      ],
+      name: 'A task',
+      pos: 1,
+    },
   ],
   id: 'board',
   lists: [
@@ -42,6 +54,7 @@ const createHost = (): BoardHost => ({
     attachments: [],
     desc: id === 'new' ? '' : 'Details',
   })),
+  loadCovers: jest.fn<BoardHost['loadCovers']>().mockResolvedValue([]),
   moveCard: jest.fn<BoardHost['moveCard']>().mockResolvedValue(undefined),
   read: jest.fn<BoardHost['read']>().mockResolvedValue([]),
   revoke: jest.fn<BoardHost['revoke']>().mockResolvedValue(undefined),
@@ -60,6 +73,49 @@ const createHost = (): BoardHost => ({
       pos: 1,
     })),
   write: jest.fn<BoardHost['write']>().mockResolvedValue(undefined),
+})
+
+test('renders board before cover loading finishes and merges successful covers', async () => {
+  const host = createHost()
+  const covers =
+    Promise.withResolvers<Awaited<ReturnType<BoardHost['loadCovers']>>>()
+  jest.mocked(host.loadCovers).mockReturnValue(covers.promise)
+  const view = await createInstance(createContext(), host)
+  await flush()
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('A task')
+  expect(
+    host.session.get('5k8NLHLh')?.board.cards[0]?.coverDataUrl,
+  ).toBeUndefined()
+  covers.resolve([{ coverDataUrl: 'data:image/png;base64,AQID', id: 'one' }])
+  await flush()
+  expect(host.session.get('5k8NLHLh')?.board.cards[0]?.coverDataUrl).toBe(
+    'data:image/png;base64,AQID',
+  )
+  expect(JSON.stringify(await view.render())).toContain('BoardCardCover')
+  view.dispose?.()
+})
+
+test('ignores cover failures after the core board has loaded', async () => {
+  const host = createHost()
+  jest
+    .mocked(host.loadCovers)
+    .mockRejectedValue(new Error('cover request failed'))
+  const view = await createInstance(createContext(), host)
+  await flush()
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
+  await flush()
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('A task')
+  expect(JSON.stringify(await view.render())).not.toContain(
+    'TRELLO_REQUEST_FAILED',
+  )
+  view.dispose?.()
 })
 const createContext = (): ViewContext => ({
   requestRerender: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -102,7 +158,16 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   const dom = JSON.stringify(await view.render())
   expect(dom).toContain('BoardViewTrello')
   expect(dom).toContain('A task')
+  expect(dom).toContain('BoardCardLabel-yellow')
+  expect(dom).toContain('BoardCardLabel-red')
+  expect(dom).toContain('In progress')
+  expect(dom).toContain('Urgent')
   expect(dom).toContain('No cards')
+  expect(dom).toContain('list-actions:todo')
+  expect(dom).toContain('list-actions:empty')
+  expect(dom).toContain('List actions for Todo')
+  expect(dom).toContain('List actions for Empty')
+  expect(dom).toContain('"title":"List actions"')
   expect(host.execute).toHaveBeenCalledWith('WindowTitle.set', 'Work')
   expect(host.write).toHaveBeenCalledWith('chat2.connectedBoardIds', [
     '5k8NLHLh',
@@ -168,6 +233,8 @@ test('searches connected boards by name and opens the selected result', async ()
     type: 'input',
     value: 'personal',
   })
+  await view.handleEvent?.({ name: 'board-search', type: 'blur' })
+  expect(JSON.stringify(await view.render())).toContain('BoardSearchResults')
   await view.handleEvent?.({ name: 'board-select:12345678', type: 'click' })
   await flush()
   expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
@@ -258,6 +325,7 @@ test('searches Trello cards remotely and opens the owning board and card', async
   expect(JSON.stringify(await view.render())).toContain(
     'Card · Chat task — Personal',
   )
+  await view.handleEvent?.({ name: 'board-search', type: 'blur' })
   await view.handleEvent?.({
     name: `board-search-card:${cardId}`,
     type: 'click',
@@ -266,6 +334,42 @@ test('searches Trello cards remotely and opens the owning board and card', async
   expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
   expect(host.loadCard).toHaveBeenCalledWith(cardId, expect.any(AbortSignal))
   expect(JSON.stringify(await view.render())).toContain('BoardDialogOverlay')
+  view.dispose?.()
+})
+
+test('ignores late search results after blur and preserves the query', async () => {
+  const host = createHost()
+  let resolveSearch:
+    | ((results: Awaited<ReturnType<BoardHost['search']>>) => void)
+    | undefined
+  jest
+    .mocked(host.search)
+    .mockImplementation(
+      () => new Promise((resolve) => (resolveSearch = resolve)),
+    )
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({ name: 'board-search', type: 'click' })
+  await view.handleEvent?.({
+    name: 'board-search',
+    type: 'input',
+    value: 'chat',
+  })
+  await new Promise((resolve) => setTimeout(resolve, 275))
+  expect(host.search).toHaveBeenCalledTimes(1)
+  await view.handleEvent?.({ name: 'board-search', type: 'blur' })
+  await new Promise((resolve) => setTimeout(resolve, 1))
+  expect(JSON.stringify(await view.render())).toContain('BoardSearchResults')
+  expect(JSON.stringify(await view.render())).toContain('"value":"chat"')
+  resolveSearch?.([{ id: '12345678', kind: 'board', name: 'Chat Board' }])
+  await flush()
+  expect(JSON.stringify(await view.render())).not.toContain('Chat Board')
+  await view.handleEvent?.({
+    name: 'board-search',
+    type: 'input',
+    value: 'chats',
+  })
+  await new Promise((resolve) => setTimeout(resolve, 275))
+  expect(host.search).toHaveBeenCalledTimes(2)
   view.dispose?.()
 })
 
@@ -717,10 +821,17 @@ test('updates automatically when browser consent completes', async () => {
 
 test('opens remembered boards after reload without requesting Trello credentials', async () => {
   const host = createHost()
+  jest.mocked(host.boards).mockResolvedValue([])
   jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
   const view = await createInstance(createContext(), host)
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
+  expect(await boardTile(view, '5k8NLHLh')).toMatchObject({
+    ariaLabel: 'Open remembered board 5k8NLHLh',
+    className: 'BoardTile',
+    disabled: false,
+  })
+  expect(JSON.stringify(await view.render())).toContain('Remembered boards')
   await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
   await flush()
   expect(JSON.stringify(await view.render())).toContain('A task')
