@@ -777,6 +777,27 @@ const getBoardStyle = (board: TrelloBoard | undefined): string | undefined => {
     .join(';')
 }
 
+const renderCardLabels = (
+  labels: TrelloCard['labels'],
+): readonly Dom.Node[] => {
+  if (!labels?.length) return []
+  return [
+    Dom.div(
+      'BoardCardLabels',
+      labels.map((label) =>
+        Dom.node(VirtualDomElements.Span, {
+          ariaLabel: label.name,
+          className: mergeClassNames(
+            'BoardCardLabel',
+            `BoardCardLabel-${label.color}`,
+          ),
+          role: 'img',
+        }),
+      ),
+    ),
+  ]
+}
+
 export const render = (state: BoardState): Dom.Node => {
   const {
     authorizing,
@@ -816,6 +837,7 @@ export const render = (state: BoardState): Dom.Node => {
                 }),
               ]
             : []),
+          ...renderCardLabels(card.labels),
           Dom.div('BoardCardTitle', [Dom.textNode(card.name)]),
           ...renderBadges(card),
         ],

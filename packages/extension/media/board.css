@@ -399,6 +399,47 @@
   object-fit: cover;
   border-radius: 5px 5px 0 0;
 }
+.BoardCardLabels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px 0;
+}
+.BoardCardLabel {
+  display: block;
+  width: 40px;
+  height: 8px;
+  flex: 0 0 40px;
+  border-radius: 4px;
+  background-color: #6b778c;
+}
+.BoardCardLabel-blue {
+  background-color: #579dff;
+}
+.BoardCardLabel-green {
+  background-color: #4bce97;
+}
+.BoardCardLabel-lime {
+  background-color: #94c748;
+}
+.BoardCardLabel-orange {
+  background-color: #fea362;
+}
+.BoardCardLabel-pink {
+  background-color: #e774bb;
+}
+.BoardCardLabel-purple {
+  background-color: #9f8fef;
+}
+.BoardCardLabel-red {
+  background-color: #f87462;
+}
+.BoardCardLabel-sky {
+  background-color: #6cc3e0;
+}
+.BoardCardLabel-yellow {
+  background-color: #f5cd47;
+}
 .BoardCardTitle {
   padding: 12px;
   font-size: 14px;

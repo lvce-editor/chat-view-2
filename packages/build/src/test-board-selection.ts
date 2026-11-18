@@ -59,6 +59,10 @@ export const testBoardSelection = async (
               'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
             id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
             idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+            labels: [
+              { color: 'yellow', id: 'yellow-label', name: 'In progress' },
+              { color: 'red', id: 'red-label', name: 'Urgent' },
+            ],
             name: 'Card with cover',
             pos: 1,
             badges: { comments: 3, attachments: 1 },
@@ -333,6 +337,42 @@ export const testBoardSelection = async (
     const coverSrc = await cover.getAttribute('src')
     assert.ok(coverSrc)
     assert.match(coverSrc, /^data:image\/png;base64,/u)
+    const labels = page.locator('.BoardCardLabels')
+    await labels.waitFor()
+    assert.equal(await labels.count(), 1)
+    assert.deepEqual(
+      await labels.getByRole('img').evaluateAll((elements) =>
+        elements.map((element) => ({
+          ariaLabel: element.getAttribute('aria-label'),
+          className: element.className,
+        })),
+      ),
+      [
+        {
+          ariaLabel: 'In progress',
+          className: 'BoardCardLabel BoardCardLabel-yellow',
+        },
+        { ariaLabel: 'Urgent', className: 'BoardCardLabel BoardCardLabel-red' },
+      ],
+    )
+    assert.equal(
+      await labels.locator('..').evaluate((element) => {
+        const children = [...element.children].map((child) => child.className)
+        return (
+          children.indexOf('BoardCardLabels') <
+          children.indexOf('BoardCardTitle')
+        )
+      }),
+      true,
+    )
+    assert.equal(
+      await page
+        .locator('.BoardCard')
+        .filter({ hasText: 'No activity' })
+        .locator('.BoardCardLabels')
+        .count(),
+      0,
+    )
     await page.getByText('Card with cover', { exact: true }).waitFor()
     const badges = page.locator('.BoardCardBadges')
     await badges.waitFor()

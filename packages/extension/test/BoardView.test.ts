@@ -10,7 +10,17 @@ import { TrelloError, type TrelloBoard } from '../src/parts/BoardView/Trello.ts'
 
 const board: TrelloBoard = {
   cards: [
-    { desc: 'Details', id: 'one', idList: 'todo', name: 'A task', pos: 1 },
+    {
+      desc: 'Details',
+      id: 'one',
+      idList: 'todo',
+      labels: [
+        { color: 'yellow', id: 'yellow', name: 'In progress' },
+        { color: 'red', id: 'red', name: 'Urgent' },
+      ],
+      name: 'A task',
+      pos: 1,
+    },
   ],
   id: 'board',
   lists: [
@@ -102,6 +112,10 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   const dom = JSON.stringify(await view.render())
   expect(dom).toContain('BoardViewTrello')
   expect(dom).toContain('A task')
+  expect(dom).toContain('BoardCardLabel-yellow')
+  expect(dom).toContain('BoardCardLabel-red')
+  expect(dom).toContain('In progress')
+  expect(dom).toContain('Urgent')
   expect(dom).toContain('No cards')
   expect(host.execute).toHaveBeenCalledWith('WindowTitle.set', 'Work')
   expect(host.write).toHaveBeenCalledWith('chat2.connectedBoardIds', [

@@ -13,8 +13,15 @@ export interface TrelloCard {
   readonly desc: string
   readonly id: string
   readonly idList: string
+  readonly labels?: readonly TrelloLabel[]
   readonly name: string
   readonly pos: number
+}
+
+export interface TrelloLabel {
+  readonly color: string
+  readonly id: string
+  readonly name: string
 }
 
 export interface TrelloList {
@@ -241,6 +248,40 @@ const normalizeCount = (value: unknown): number =>
     ? value
     : 0
 
+const trelloLabelColors = new Set([
+  'blue',
+  'green',
+  'lime',
+  'orange',
+  'pink',
+  'purple',
+  'red',
+  'sky',
+  'yellow',
+])
+
+const normalizeLabels = (value: unknown): readonly TrelloLabel[] => {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((label) => {
+    if (
+      !isRecord(label) ||
+      typeof label.id !== 'string' ||
+      !label.id ||
+      typeof label.name !== 'string' ||
+      !label.name.trim() ||
+      typeof label.color !== 'string'
+    )
+      return []
+    return [
+      {
+        color: trelloLabelColors.has(label.color) ? label.color : 'unknown',
+        id: label.id,
+        name: label.name,
+      },
+    ]
+  })
+}
+
 const normalizeCard = (value: unknown): TrelloCard | undefined => {
   if (!isCard(value)) return undefined
   const normalizedCoverDataUrl = value.coverDataUrl
@@ -253,6 +294,9 @@ const normalizeCard = (value: unknown): TrelloCard | undefined => {
     idList: value.idList,
     name: value.name,
     pos: value.pos,
+    ...(Array.isArray(value.labels) && {
+      labels: normalizeLabels(value.labels),
+    }),
     ...(typeof normalizedCoverDataUrl === 'string' &&
       normalizedCoverDataUrl.startsWith('data:image/') && {
         coverDataUrl: normalizedCoverDataUrl,
