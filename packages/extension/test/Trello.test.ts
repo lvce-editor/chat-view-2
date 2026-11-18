@@ -131,6 +131,32 @@ test('loads board cards and cover images through the authenticated backend', asy
   expect(JSON.stringify(request.mock.calls)).not.toContain('AQID')
 })
 
+test('loads successful cover enrichments from the separate backend endpoint', async () => {
+  const request = requestWith([
+    {
+      coverDataUrl: 'data:image/png;base64,AQID',
+      id: '507f1f77bcf86cd799439011',
+    },
+    { coverDataUrl: 'https://example.com/image.png', id: 'bad' },
+  ])
+  const client = createTrelloClient(configuration, request)
+  await expect(
+    client.loadCovers('5k8NLHLh', new AbortController().signal),
+  ).resolves.toEqual([
+    {
+      coverDataUrl: 'data:image/png;base64,AQID',
+      id: '507f1f77bcf86cd799439011',
+    },
+  ])
+  expect(request).toHaveBeenCalledWith(
+    'https://backend.test/api/integrations/trello/boards/5k8NLHLh/covers',
+    expect.objectContaining({
+      credentials: 'omit',
+      headers: { Authorization: 'Bearer lvce-token' },
+    }),
+  )
+})
+
 test('searches accessible Trello boards and cards with validated board ownership', async () => {
   const request = requestSequence([
     Response.json({ accessToken: 'trello-token' }),

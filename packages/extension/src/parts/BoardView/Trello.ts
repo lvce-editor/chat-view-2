@@ -328,6 +328,12 @@ export interface TrelloClient {
     id: string,
     signal: Readonly<AbortSignal>,
   ) => Promise<CardDetails>
+  readonly loadCovers: (
+    input: string,
+    signal: Readonly<AbortSignal>,
+  ) => Promise<
+    readonly { readonly id: string; readonly coverDataUrl: string }[]
+  >
   readonly moveCard: (
     cardId: string,
     listId: string,
@@ -516,6 +522,25 @@ export const createTrelloClient = (
         message: 'Unable to load card details. Try again.',
       })
     }
+  }
+  const loadCovers = async (
+    input: string,
+    signal: Readonly<AbortSignal>,
+  ): Promise<
+    readonly { readonly id: string; readonly coverDataUrl: string }[]
+  > => {
+    const id = parseBoardId(input)
+    const { data } = await call(`boards/${id}/covers`, signal)
+    if (!Array.isArray(data)) return []
+    return data.filter(
+      (
+        cover,
+      ): cover is { readonly id: string; readonly coverDataUrl: string } =>
+        isRecord(cover) &&
+        typeof cover.id === 'string' &&
+        typeof cover.coverDataUrl === 'string' &&
+        cover.coverDataUrl.startsWith('data:image/'),
+    )
   }
   const updateCard = async (
     id: string,
@@ -724,6 +749,7 @@ export const createTrelloClient = (
     disconnect,
     load,
     loadCard,
+    loadCovers,
     moveCard,
     search,
     status,
