@@ -570,7 +570,9 @@ export const testBoardSelection = async (
     )
     const title = page.getByRole('textbox', { name: 'Card title', exact: true })
     for (const list of ['Todo', 'Doing', 'Todo']) {
-      await page.getByRole('button', { name: `Add a card to ${list}` }).click()
+      await page
+        .locator(`.BoardAddCard[aria-label="Add a card to ${list}"]`)
+        .click()
       await title.waitFor()
       await page.waitForFunction(
         () =>
@@ -587,12 +589,17 @@ export const testBoardSelection = async (
         'N',
       )
       assert.equal(await title.inputValue(), 'N')
-      // An ordinary rerender must not take focus back from another control.
+      // Moving focus outside the composer dismisses it and restores its
+      // original add control.
+      await openBoardOptions()
+      await title.waitFor({ state: 'detached' })
+      await page
+        .locator(`.BoardAddCard[aria-label="Add a card to ${list}"]`)
+        .waitFor()
       const refreshButton = page.getByRole('button', {
         name: 'Refresh board',
         exact: true,
       })
-      await openBoardOptions()
       const refreshed = page.waitForResponse((response) =>
         response.url().startsWith('https://api.trello.com/1/boards/22222222?'),
       )
@@ -608,15 +615,8 @@ export const testBoardSelection = async (
         )
         return button && !button.disabled
       })
-      assert.equal(
-        await title.evaluate(
-          (element) => globalThis.document.activeElement === element,
-        ),
-        false,
-      )
-      assert.equal(await title.inputValue(), 'N')
-      await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-      await title.waitFor({ state: 'detached' })
+      assert.equal(await title.count(), 0)
+      await openBoardOptions()
     }
     process.stdout.write('Add card focuses title on open and reopen: pass\n')
     await openBoardOptions()

@@ -75,6 +75,7 @@ const input = (
       ...(disabled && { disabled: true }),
       inputType: 'text',
       name,
+      ...(name === 'board-card-title' && { onBlur: 'handleBlur' }),
       onInput: 'handleInput',
       spellcheck: false,
       ...(value !== undefined && { value }),
