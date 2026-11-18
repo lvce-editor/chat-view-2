@@ -609,7 +609,7 @@ test('moves one card into an empty list and keeps the saved board in session', a
   const destinationIndex = moved.findIndex(
     (node) => node.name === 'board-list:empty',
   )
-  expect(String(moved[destinationIndex + 1]?.className)).toContain('BoardCard')
+  expect(String(moved[destinationIndex + 3]?.className)).toContain('BoardCard')
   expect(host.session.get('5k8NLHLh')?.board.cards[0]?.idList).toBe('empty')
   view.dispose?.()
   jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
