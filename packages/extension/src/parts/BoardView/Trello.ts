@@ -334,7 +334,6 @@ export interface TrelloClient {
   readonly loadCovers: (
     input: string,
     signal: Readonly<AbortSignal>,
-    diagnostics?: boolean,
   ) => Promise<
     readonly { readonly id: string; readonly coverDataUrl: string }[]
   >
@@ -556,16 +555,11 @@ export const createTrelloClient = (
   const loadCovers = async (
     input: string,
     signal: Readonly<AbortSignal>,
-    diagnostics = false,
   ): Promise<
     readonly { readonly id: string; readonly coverDataUrl: string }[]
   > => {
     const id = parseBoardId(input)
-    const diagnosticsQuery = diagnostics ? '?diagnostics=1' : ''
-    const { data } = await call(
-      `boards/${id}/covers${diagnosticsQuery}`,
-      signal,
-    )
+    const { data } = await call(`boards/${id}/covers`, signal)
     if (!Array.isArray(data)) return []
     return data.filter(
       (
