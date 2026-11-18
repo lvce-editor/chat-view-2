@@ -47,6 +47,9 @@ const createHost = (): BoardHost => ({
     name: 'New task',
     pos: 2,
   }),
+  createFavicon: jest
+    .fn<BoardHost['createFavicon']>()
+    .mockResolvedValue('data:image/svg+xml,photo'),
   execute: jest.fn<BoardHost['execute']>().mockResolvedValue(undefined),
   load: jest.fn<BoardHost['load']>().mockResolvedValue(board),
   loadCard: jest.fn<BoardHost['loadCard']>().mockImplementation(async (id) => ({
@@ -1402,6 +1405,55 @@ test.each(['authorization', 'search'])(
       expect(faviconCalls.at(-1)?.[1]).toBe('')
     } finally {
       view.dispose?.()
+      await flush()
+    }
+  },
+)
+
+test.each(['complete', 'leave'])(
+  'renders before the favicon photo finishes and handles %s',
+  async (action) => {
+    const host = createHost()
+    const pending = Promise.withResolvers<string>()
+    const colorIcon = 'data:image/svg+xml,color'
+    const photoIcon = 'data:image/svg+xml,photo'
+    jest.mocked(host.createFavicon).mockReturnValue(pending.promise)
+    jest
+      .mocked(host.load)
+      .mockResolvedValue({
+        ...board,
+        faviconBackground: { image: 'https://backgrounds.test/photo.png' },
+        faviconUrl: colorIcon,
+      })
+    const view = await createInstance(createContext(), host)
+    try {
+      await flush()
+      await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+      await flush()
+      await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
+      await flush()
+      expect(JSON.stringify(await view.render())).toContain('A task')
+      expect(host.createFavicon).toHaveBeenCalledTimes(1)
+      expect(host.execute).toHaveBeenCalledWith(
+        'WindowTitle.setFavicon',
+        colorIcon,
+      )
+      if (action === 'leave')
+        await view.handleEvent?.({ name: 'board-change', type: 'click' })
+      pending.resolve(photoIcon)
+      await flush()
+      const calls = jest
+        .mocked(host.execute)
+        .mock.calls.filter(
+          (call: readonly unknown[]) => call[0] === 'WindowTitle.setFavicon',
+        )
+      expect(calls.at(-1)?.[1]).toBe(action === 'leave' ? '' : photoIcon)
+      expect(host.session.get('5k8NLHLh')?.board.faviconUrl).toBe(
+        action === 'leave' ? colorIcon : photoIcon,
+      )
+    } finally {
+      view.dispose?.()
+      pending.resolve(photoIcon)
       await flush()
     }
   },

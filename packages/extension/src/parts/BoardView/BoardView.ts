@@ -14,6 +14,7 @@ import {
   parseBoardHash,
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { getWorkspaceTitle } from '../ChatView/CreateInstance.ts'
+import { createBoardFavicon } from './BoardFavicon.ts'
 import { createSession, type BoardSession } from './BoardSession.ts'
 import { render, type BoardState } from './Render.ts'
 import {
@@ -36,6 +37,7 @@ export interface BoardHost {
   readonly authorize: typeof trelloClient.authorize
   readonly boards: typeof trelloClient.boards
   readonly createCard: typeof trelloClient.createCard
+  readonly createFavicon: typeof createBoardFavicon
   readonly execute: typeof executeCommand
   readonly load: typeof trelloClient.load
   readonly loadCard: typeof trelloClient.loadCard
@@ -85,6 +87,7 @@ const defaultHost: BoardHost = {
   authorize: trelloClient.authorize,
   boards: trelloClient.boards,
   createCard: trelloClient.createCard,
+  createFavicon: createBoardFavicon,
   execute: executeCommand,
   load: trelloClient.load,
   loadCard: trelloClient.loadCard,
@@ -176,6 +179,7 @@ export const createInstance = async (
   }
   let generation = 0
   let controller: AbortController | undefined
+  let faviconController: AbortController | undefined
   let searchController: AbortController | undefined
   let searchTimer: ReturnType<typeof setTimeout> | undefined
   let searchGeneration = 0
@@ -216,6 +220,7 @@ export const createInstance = async (
   const cancel = (): void => {
     generation++
     controller?.abort()
+    faviconController?.abort()
     moveController?.abort()
     state = {
       ...state,
@@ -233,6 +238,45 @@ export const createInstance = async (
       focusRestore = !focusRestore
     }
     state = { ...state, editError: undefined, editingCard: undefined }
+  }
+  const refreshFavicon = (
+    id: string,
+    board: TrelloBoard,
+    requestGeneration: number,
+  ): void => {
+    const { faviconBackground } = board
+    if (
+      !faviconBackground?.image ||
+      disposed ||
+      requestGeneration !== generation
+    )
+      return
+    faviconController?.abort()
+    const requestController = new AbortController()
+    faviconController = requestController
+    void host
+      .createFavicon(faviconBackground, requestController.signal)
+      .then(async (faviconUrl) => {
+        if (
+          disposed ||
+          requestController.signal.aborted ||
+          requestGeneration !== generation
+        )
+          return
+        const { board: current } = state
+        if (!current) return
+        const updated = { ...current, faviconUrl }
+        host.session.set(id, { board: updated })
+        state = { ...state, board: updated }
+        await syncFavicon(faviconUrl)
+      })
+      .catch(() => {
+        // Keep the immediate color icon if the optional photo cannot be loaded.
+      })
+      .finally(() => {
+        if (faviconController === requestController)
+          faviconController = undefined
+      })
   }
   const connect = async (): Promise<void> => {
     const { board, cardDraft } = state
@@ -295,6 +339,7 @@ export const createInstance = async (
           // Covers are optional; the core board is already available.
         })
       await syncTab(board.name, board.faviconUrl)
+      refreshFavicon(id, board, requestGeneration)
       try {
         await host.write(connectionsPreference, ids)
       } catch {
@@ -471,6 +516,7 @@ export const createInstance = async (
     }
   }
   const restoreConnection = async (id: string): Promise<void> => {
+    const requestGeneration = generation
     const selected = host.session.get(id)
     if (!selected) {
       await syncTab('Boards')
@@ -478,6 +524,7 @@ export const createInstance = async (
     }
     state = { ...state, accountConnected: true, board: selected.board }
     await syncTab(selected.board.name, selected.board.faviconUrl)
+    refreshFavicon(id, selected.board, requestGeneration)
   }
   const connectionError = (error: unknown): void => {
     state = {
@@ -888,6 +935,7 @@ export const createInstance = async (
       host.session.set(result.boardId, { board })
       state = { ...state, board, loading: false }
       await syncTab(board.name, board.faviconUrl)
+      refreshFavicon(result.boardId, board, requestGeneration)
       await notify()
       openCard(`board-card:${id}`)
     } catch (error) {
@@ -1113,6 +1161,7 @@ export const createInstance = async (
       return { boardId }
     },
   }
+  if (initialBoard) refreshFavicon(initialId, initialBoard, generation)
   if (!initialBoard) {
     if (urlBoardId) void connect()
     else void checkAccount(true)

@@ -269,12 +269,20 @@ export const testBoardSelection = async (
     const originalIcons = await page
       .locator('head link[rel~="icon"]')
       .evaluateAll((icons) => icons.map((icon) => icon.getAttribute('href')))
-    const readBoardIcon = async (): Promise<string> => {
-      await page.waitForFunction(() =>
-        [...globalThis.document.querySelectorAll('head link[rel="icon"]')].some(
-          (icon) =>
-            icon.getAttribute('href')?.startsWith('data:image/svg+xml,'),
-        ),
+    const readBoardIcon = async (photo = false): Promise<string> => {
+      await page.waitForFunction(
+        (expectPhoto) =>
+          [
+            ...globalThis.document.querySelectorAll('head link[rel="icon"]'),
+          ].some((icon) => {
+            const href = icon.getAttribute('href') || ''
+            return (
+              href.startsWith('data:image/svg+xml,') &&
+              (!expectPhoto ||
+                decodeURIComponent(href).includes('<image href="data:image/'))
+            )
+          }),
+        photo,
       )
       const href = await page
         .locator('head link[rel="icon"]')
@@ -348,7 +356,9 @@ export const testBoardSelection = async (
     assert.equal(discoveryLoads.length, 1)
     assert.equal(new URL(page.url()).hash, '#22222222')
     assert.ok(
-      (await readBoardIcon()).includes('<image href="data:image/png;base64,'),
+      (await readBoardIcon(true)).includes(
+        '<image href="data:image/png;base64,',
+      ),
     )
     const columns = page.locator('.BoardColumn')
     const emptyColumn = columns.nth(1)
@@ -388,7 +398,9 @@ export const testBoardSelection = async (
       .waitFor()
     assert.equal(new URL(page.url()).hash, '#22222222')
     assert.ok(
-      (await readBoardIcon()).includes('<image href="data:image/png;base64,'),
+      (await readBoardIcon(true)).includes(
+        '<image href="data:image/png;base64,',
+      ),
     )
     assert.deepEqual(boardLoads, [
       '/api/integrations/trello/boards/22222222',

@@ -676,3 +676,25 @@ test('rejects incomplete card detail responses instead of presenting missing dat
     ),
   ).rejects.toThrow('Unable to load card details')
 })
+
+test('returns board metadata and a color icon without fetching the favicon photo', async () => {
+  const request = requestWith({
+    ...board,
+    prefs: {
+      backgroundColor: '#22a06b',
+      backgroundImage: 'https://backgrounds.test/photo.png',
+    },
+  })
+  const result = await loadBoard(
+    '5k8NLHLh',
+    new AbortController().signal,
+    request,
+  )
+  expect(request).toHaveBeenCalledTimes(1)
+  expect(result.faviconBackground?.image).toBe(
+    'https://backgrounds.test/photo.png',
+  )
+  const svg = decodeURIComponent(result.faviconUrl || '')
+  expect(svg).toContain('fill="#22a06b"')
+  expect(svg).not.toContain('<image')
+})
