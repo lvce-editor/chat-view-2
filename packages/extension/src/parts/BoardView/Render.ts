@@ -49,6 +49,7 @@ export interface BoardState {
   readonly editName?: string
   readonly error: BoardError | undefined
   readonly loading: boolean
+  readonly optionsOpen?: boolean
   readonly providerSelected: boolean
   readonly savingCard?: boolean
   readonly searchError?: BoardError | undefined
@@ -651,13 +652,77 @@ const renderColumns = (
   )
 
 const renderToolbar = (state: BoardState): Dom.Node => {
-  const { board } = state
-  return Dom.div('BoardToolbar', [
-    Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
-    ...(board ? [renderBoardSearch(state)] : []),
-    Dom.button('board-chat', 'Chat', 'BoardButton'),
-    Dom.button('board-ide', 'IDE layout', 'BoardButton'),
-  ])
+  const { board, cardDraft, loading, optionsOpen } = state
+  return Dom.node(
+    VirtualDomElements.Div,
+    {
+      className: board
+        ? 'BoardToolbar'
+        : 'BoardToolbar BoardToolbarWithoutBoard',
+    },
+    [
+      Dom.heading(1, 'BoardTitle', board?.name || 'Boards'),
+      ...(board ? [renderBoardSearch(state)] : []),
+      ...(board
+        ? [
+            Dom.div(
+              'BoardOverflow',
+              [
+                Dom.button(
+                  'board-options',
+                  '…',
+                  'BoardButton BoardOptionsButton',
+                  {
+                    ariaExpanded: Boolean(optionsOpen),
+                    ariaLabel: 'More board options',
+                    disabled: loading,
+                  },
+                ),
+                ...(optionsOpen
+                  ? [
+                      Dom.node(
+                        VirtualDomElements.Div,
+                        {
+                          ariaLabel: 'Board options',
+                          className: 'BoardOverflowMenu',
+                          role: 'group',
+                        },
+                        [
+                          Dom.button(
+                            'board-refresh',
+                            'Refresh board',
+                            'BoardButton',
+                            {
+                              disabled: loading || Boolean(cardDraft?.saving),
+                            },
+                          ),
+                          Dom.button(
+                            'board-change',
+                            'Connect another board',
+                            'BoardButton',
+                          ),
+                          Dom.button(
+                            'board-disconnect',
+                            'Forget board',
+                            'BoardButton',
+                          ),
+                          Dom.button(
+                            'board-disconnect-account',
+                            'Disconnect Trello',
+                            'BoardButton',
+                            { disabled: loading },
+                          ),
+                        ],
+                      ),
+                    ]
+                  : []),
+              ],
+              { onKeyDown: 'handleDialogKeyDown' },
+            ),
+          ]
+        : []),
+    ],
+  )
 }
 
 const getBoardStyle = (board: TrelloBoard | undefined): string | undefined => {
@@ -677,7 +742,6 @@ export const render = (state: BoardState): Dom.Node => {
   const {
     authorizing,
     board,
-    cardDraft,
     draggedCardId,
     dropTargetId,
     editingCard,
@@ -733,23 +797,6 @@ export const render = (state: BoardState): Dom.Node => {
       ...(errorNode ? [errorNode] : []),
       ...(board
         ? [
-            Dom.div('BoardActions', [
-              Dom.button('board-refresh', 'Refresh board', 'BoardButton', {
-                disabled: loading || Boolean(cardDraft?.saving),
-              }),
-              Dom.button(
-                'board-change',
-                'Connect another board',
-                'BoardButton',
-              ),
-              Dom.button('board-disconnect', 'Forget board', 'BoardButton'),
-              Dom.button(
-                'board-disconnect-account',
-                'Disconnect Trello',
-                'BoardButton',
-                { disabled: loading },
-              ),
-            ]),
             renderColumns(state, board, cardsByList, dropTargetId),
             ...(board.lists.length === 0
               ? [

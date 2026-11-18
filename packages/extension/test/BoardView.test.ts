@@ -174,6 +174,38 @@ test('searches connected boards by name and opens the selected result', async ()
   view.dispose?.()
 })
 
+test('keeps board actions in an accessible, keyboard-dismissible overflow menu', async () => {
+  const host = createHost()
+  jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
+  host.session.set('5k8NLHLh', { board })
+  const view = await createInstance(createContext(), host)
+
+  const closed = JSON.stringify(await view.render())
+  expect(closed).toContain('More board options')
+  expect(closed).not.toContain('board-chat')
+  expect(closed).not.toContain('board-ide')
+  expect(closed).not.toContain('Refresh board')
+
+  await view.handleEvent?.({ name: 'board-options', type: 'click' })
+  const open = JSON.stringify(await view.render())
+  expect(open).toContain('Board options')
+  expect(open).toContain('Refresh board')
+  expect(open).toContain('Connect another board')
+  expect(open).toContain('Forget board')
+  expect(open).toContain('Disconnect Trello')
+  expect(open).toContain('"ariaExpanded":true')
+
+  view.handleDialogKeyDown('Escape')
+  expect(JSON.stringify(await view.render())).not.toContain('Refresh board')
+
+  await view.handleEvent?.({ name: 'board-options', type: 'click' })
+  await view.handleEvent?.({ name: 'board-refresh', type: 'click' })
+  await flush()
+  expect(host.load).toHaveBeenCalledWith('5k8NLHLh', expect.any(AbortSignal))
+  expect(JSON.stringify(await view.render())).not.toContain('Refresh board')
+  view.dispose?.()
+})
+
 test('matches remembered short IDs with board summaries after reload', async () => {
   const host = createHost()
   jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])

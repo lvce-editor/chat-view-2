@@ -783,6 +783,7 @@ export const createInstance = async (
       editingCard: undefined,
       error: undefined,
       loading: false,
+      optionsOpen: false,
       providerSelected: false,
       savingCard: false,
       searchQuery: '',
@@ -840,6 +841,11 @@ export const createInstance = async (
     }
   }
   const handleClick = async (event: Readonly<ViewEvent>): Promise<void> => {
+    if (event.name === 'board-options') {
+      const { optionsOpen } = state
+      state = { ...state, optionsOpen: !optionsOpen }
+      return
+    }
     const providerAction = getProviderAction(event.name)
     if (providerAction) {
       const { error } = state
@@ -871,10 +877,6 @@ export const createInstance = async (
       closeEditor()
       return
     }
-    if (event.name === 'board-chat')
-      await host.execute('chat2.showAiNativeLayout')
-    else if (event.name === 'board-ide')
-      await host.execute('chat2.showIdeLayout')
     await changeBoard(event.name)
     if (event.name === 'board-disconnect') await disconnect()
   }
@@ -933,7 +935,11 @@ export const createInstance = async (
       void moveCard(name)
     },
     handleDialogKeyDown(key: unknown): void {
-      const { editingCard, savingCard } = state
+      const { editingCard, optionsOpen, savingCard } = state
+      if (key === 'Escape' && optionsOpen) {
+        state = { ...state, optionsOpen: false }
+        return
+      }
       if (key !== 'Escape' || !editingCard || savingCard) return
       cancel()
       closeEditor()
@@ -954,6 +960,7 @@ export const createInstance = async (
       ) {
         // View commands are serialized. Return so the loading frame and final
         // rerender are never queued behind the network request they await.
+        state = { ...state, optionsOpen: false }
         void connect()
         return
       }
@@ -975,6 +982,7 @@ export const createInstance = async (
         }
         const action = actions[event.name || '']
         if (action) {
+          state = { ...state, optionsOpen: false }
           void action()
           return
         }
