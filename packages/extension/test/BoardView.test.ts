@@ -770,10 +770,17 @@ test('updates automatically when browser consent completes', async () => {
 
 test('opens remembered boards after reload without requesting Trello credentials', async () => {
   const host = createHost()
+  jest.mocked(host.boards).mockResolvedValue([])
   jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
   const view = await createInstance(createContext(), host)
   await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
   await flush()
+  expect(await boardTile(view, '5k8NLHLh')).toMatchObject({
+    ariaLabel: 'Open remembered board 5k8NLHLh',
+    className: 'BoardTile',
+    disabled: false,
+  })
+  expect(JSON.stringify(await view.render())).toContain('Remembered boards')
   await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
   await flush()
   expect(JSON.stringify(await view.render())).toContain('A task')

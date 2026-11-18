@@ -132,11 +132,12 @@ const renderComposer = (
 const renderBoardTile = (
   board: TrelloBoardSummary,
   loading: boolean,
+  ariaLabel = `Open ${board.name}`,
 ): Dom.Node =>
   Dom.node(
     VirtualDomElements.Button,
     {
-      ariaLabel: `Open ${board.name}`,
+      ariaLabel,
       buttonType: 'button',
       className: 'BoardTile',
       disabled: loading,
@@ -364,7 +365,11 @@ const renderSetup = (state: BoardState): Dom.Node => {
                     const board = boards.find((item) => item.id === id)
                     return board
                       ? renderBoardTile({ ...board, id }, loading)
-                      : Dom.button(`board-select:${id}`, id, 'BoardButton')
+                      : renderBoardTile(
+                          { id, name: id },
+                          loading,
+                          `Open remembered board ${id}`,
+                        )
                   }),
                 ]),
               ]

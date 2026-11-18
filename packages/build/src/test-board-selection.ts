@@ -636,10 +636,45 @@ export const testBoardSelection = async (
       .getByRole('button', { name: 'Connect Trello', exact: true })
       .click()
     await page.getByText('No open boards found.', { exact: false }).waitFor()
-    assert.equal(
-      await page.locator('button[name="board-select:22222222"]').innerText(),
-      '22222222',
+    const rememberedTile = page.locator(
+      '.BoardRemembered button[name="board-select:22222222"]',
     )
+    assert.equal(await rememberedTile.innerText(), '22222222')
+    assert.equal(await rememberedTile.getAttribute('class'), 'BoardTile')
+    assert.equal(
+      await rememberedTile.getAttribute('aria-label'),
+      'Open remembered board 22222222',
+    )
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.locator('body').click({ position: { x: 5, y: 5 } })
+    let rememberedTileFocused = false
+    for (let index = 0; index < 100 && !rememberedTileFocused; index++) {
+      await page.keyboard.press('Tab')
+      rememberedTileFocused = await rememberedTile.evaluate(
+        (element) => globalThis.document.activeElement === element,
+      )
+    }
+    assert.equal(
+      rememberedTileFocused,
+      true,
+      'Remembered board is keyboard reachable',
+    )
+    assert.equal(
+      await rememberedTile.evaluate(
+        (element) => globalThis.getComputedStyle(element).outlineStyle,
+      ),
+      'solid',
+    )
+    const rememberedTileBox = await rememberedTile.boundingBox()
+    assert.ok(
+      rememberedTileBox &&
+        rememberedTileBox.x >= 0 &&
+        rememberedTileBox.x + rememberedTileBox.width <= 390,
+      'Remembered board tile fits a narrow viewport',
+    )
+    if (process.env.BOARD_REMEMBERED_SCREENSHOT)
+      await page.screenshot({ path: process.env.BOARD_REMEMBERED_SCREENSHOT })
+    await page.setViewportSize({ width: 1280, height: 720 })
     fail = true
     await page
       .getByRole('button', { name: 'Refresh boards', exact: true })
