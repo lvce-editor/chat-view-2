@@ -358,11 +358,36 @@
   background: var(--BoardSurface);
   border: 1px solid var(--BoardBorder);
 }
+.BoardColumnHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 12px 12px 16px;
+}
 .BoardColumnTitle {
+  flex: 1;
+  min-width: 0;
   margin: 0;
-  padding: 16px;
   font-size: 14px;
   overflow-wrap: anywhere;
+}
+.BoardListActionsButton {
+  flex: 0 0 auto;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 2px 7px 5px;
+  border: 0;
+  border-radius: 6px;
+  font-size: 20px;
+  line-height: 1;
+}
+.BoardListActionsButton:hover {
+  background: var(--BoardHover);
+}
+.BoardListActionsButton:focus-visible {
+  outline: 2px solid var(--BoardFocus);
+  outline-offset: 2px;
 }
 .BoardCards {
   flex: 1;

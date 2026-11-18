@@ -672,11 +672,22 @@ const renderColumns = (
         VirtualDomElements.Section,
         { ariaLabel: list.name, className: 'BoardColumn' },
         [
-          Dom.heading(
-            2,
-            'BoardColumnTitle',
-            `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
-          ),
+          Dom.div('BoardColumnHeader', [
+            Dom.heading(
+              2,
+              'BoardColumnTitle',
+              `${list.name} (${cardsByList.get(list.id)?.length || 0})`,
+            ),
+            Dom.button(
+              `list-actions:${list.id}`,
+              '…',
+              'BoardButton BoardListActionsButton',
+              {
+                ariaLabel: `List actions for ${list.name}`,
+                title: 'List actions',
+              },
+            ),
+          ]),
           Dom.div(
             `BoardCards${dropTargetId === list.id ? ' BoardCardsDropTarget' : ''}`,
             [

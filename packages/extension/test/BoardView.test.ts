@@ -117,6 +117,11 @@ test('shows setup, renders empty lists and saves only board IDs', async () => {
   expect(dom).toContain('In progress')
   expect(dom).toContain('Urgent')
   expect(dom).toContain('No cards')
+  expect(dom).toContain('list-actions:todo')
+  expect(dom).toContain('list-actions:empty')
+  expect(dom).toContain('List actions for Todo')
+  expect(dom).toContain('List actions for Empty')
+  expect(dom).toContain('"title":"List actions"')
   expect(host.execute).toHaveBeenCalledWith('WindowTitle.set', 'Work')
   expect(host.write).toHaveBeenCalledWith('chat2.connectedBoardIds', [
     '5k8NLHLh',
