@@ -1415,13 +1415,11 @@ test.each(['complete', 'leave'])(
     const colorIcon = 'data:image/svg+xml,color'
     const photoIcon = 'data:image/svg+xml,photo'
     jest.mocked(host.createFavicon).mockReturnValue(pending.promise)
-    jest
-      .mocked(host.load)
-      .mockResolvedValue({
-        ...board,
-        faviconBackground: { image: 'https://backgrounds.test/photo.png' },
-        faviconUrl: colorIcon,
-      })
+    jest.mocked(host.load).mockResolvedValue({
+      ...board,
+      faviconBackground: { image: 'https://backgrounds.test/photo.png' },
+      faviconUrl: colorIcon,
+    })
     const view = await createInstance(createContext(), host)
     try {
       await flush()
