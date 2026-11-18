@@ -330,13 +330,13 @@
   font: inherit;
 }
 .BoardRemembered {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 200px), 1fr));
+  gap: 12px;
   margin-top: 24px;
 }
 .BoardRememberedTitle {
-  width: 100%;
+  grid-column: 1 / -1;
   font-size: 14px;
 }
 .BoardColumns {
