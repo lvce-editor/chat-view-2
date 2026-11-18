@@ -964,6 +964,42 @@ test('adds a card to its list, prevents duplicate submissions and updates the ca
   expect(JSON.stringify(view.saveState?.())).not.toContain('New task')
 })
 
+test('dismisses a blurred card composer without interrupting a submit', async () => {
+  const host = createHost()
+  const pending =
+    Promise.withResolvers<Awaited<ReturnType<BoardHost['createCard']>>>()
+  jest.mocked(host.createCard).mockReturnValue(pending.promise)
+  const view = await openBoard(host)
+
+  await view.handleEvent?.({ name: 'board-add:todo', type: 'click' })
+  await view.handleEvent?.({ name: 'board-card-title', type: 'blur' })
+  await new Promise<void>((resolve) => setTimeout(resolve, 0))
+  await flush()
+  expect(JSON.stringify(await view.render())).not.toContain('BoardCardComposer')
+
+  await view.handleEvent?.({ name: 'board-add:todo', type: 'click' })
+  await view.handleEvent?.({
+    name: 'board-card-title',
+    type: 'input',
+    value: 'Submitted after blur',
+  })
+  await view.handleEvent?.({ name: 'board-card-title', type: 'blur' })
+  await view.handleEvent?.({ name: 'board-create-card', type: 'submit' })
+  await flush()
+
+  expect(host.createCard).toHaveBeenCalledTimes(1)
+  expect(JSON.stringify(await view.render())).toContain('Adding…')
+  pending.resolve({
+    desc: '',
+    id: 'new',
+    idList: 'todo',
+    name: 'Submitted after blur',
+    pos: 2,
+  })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('Submitted after blur')
+})
+
 test('retains failed card titles, supports cancel and ignores invalid lists', async () => {
   const host = createHost()
   jest.mocked(host.createCard).mockRejectedValue(
