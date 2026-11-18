@@ -107,7 +107,8 @@
   z-index: 2;
   top: calc(100% + 4px);
   left: 0;
-  width: min(520px, 80vw);
+  width: min(520px, calc(100vw - 32px));
+  box-sizing: border-box;
   max-height: 60vh;
   overflow: auto;
   padding: 8px;
@@ -118,6 +119,40 @@
 }
 .BoardSearchResults .BoardTileGrid {
   margin-top: 0;
+}
+.BoardSearchResult {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.45;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.BoardSearchResult:hover {
+  background: var(--BoardHover);
+}
+.BoardSearchResult:focus-visible {
+  outline: 2px solid var(--BoardFocus);
+  outline-offset: -2px;
+  background: var(--BoardHover);
+}
+.BoardSearchStatus,
+.BoardSearchError {
+  padding: 10px 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.BoardSearchStatus {
+  color: var(--BoardMutedForeground);
+}
+.BoardSearchError {
+  color: #8c1d18;
 }
 .BoardSearchEmpty {
   padding: 12px;
