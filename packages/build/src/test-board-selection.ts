@@ -203,6 +203,11 @@ export const testBoardSelection = async (
   })
   try {
     const page = await context.newPage()
+    const openBoardOptions = async (): Promise<void> => {
+      await page
+        .getByRole('button', { name: 'More board options', exact: true })
+        .click()
+    }
     const bootstrap = new URL('__board-test-bootstrap', baseUrl).href
     await context.route(bootstrap, (route) =>
       route.fulfill({
@@ -518,11 +523,16 @@ export const testBoardSelection = async (
         name: 'Refresh board',
         exact: true,
       })
+      await openBoardOptions()
       const refreshed = page.waitForResponse((response) =>
         response.url().startsWith('https://api.trello.com/1/boards/22222222?'),
       )
       await refreshButton.click()
       await refreshed
+      await page
+        .getByRole('button', { name: 'More board options', exact: true })
+        .waitFor({ state: 'visible' })
+      await openBoardOptions()
       await page.waitForFunction(() => {
         const button = globalThis.document.querySelector(
           'button[name="board-refresh"]',
@@ -540,6 +550,7 @@ export const testBoardSelection = async (
       await title.waitFor({ state: 'detached' })
     }
     process.stdout.write('Add card focuses title on open and reopen: pass\n')
+    await openBoardOptions()
     const refresh = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
@@ -551,6 +562,7 @@ export const testBoardSelection = async (
     await refresh
     assert.equal(directLoads.length, 6)
     assert.deepEqual(proxiedLoads, [])
+    await openBoardOptions()
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })
       .click()
