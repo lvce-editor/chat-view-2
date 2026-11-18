@@ -299,6 +299,8 @@ export const createInstance = async (
           }),
       }
     }
+    const { board: activeBoard } = state
+    if (!activeBoard) await syncFavicon('')
     await notify()
   }
   const saveCard = async (): Promise<void> => {
@@ -848,6 +850,7 @@ export const createInstance = async (
       loading: true,
       searchQuery: '',
     }
+    await syncFavicon('')
     await notify()
     try {
       const board = await host.load(

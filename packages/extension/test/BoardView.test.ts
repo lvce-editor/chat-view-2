@@ -1255,3 +1255,59 @@ test('an old workspace-title lookup cannot clear a reopened board favicon', asyn
   reopened.dispose?.()
   await flush()
 })
+
+test.each(['authorization', 'search'])(
+  'clears a departed board favicon when %s loading fails',
+  async (action) => {
+    const host = createHost()
+    const icon = 'data:image/svg+xml,previous'
+    jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
+    host.session.set('5k8NLHLh', { board: { ...board, faviconUrl: icon } })
+    const view = await createInstance(createContext(), host)
+    try {
+      jest
+        .mocked(host.load)
+        .mockRejectedValue(
+          new TrelloError({
+            code: 'TRELLO_CONNECTION_REQUIRED',
+            message: 'Reconnect Trello.',
+          }),
+        )
+      if (action === 'search') {
+        jest
+          .mocked(host.search)
+          .mockResolvedValue([
+            {
+              boardId: '12345678',
+              id: '507f1f77bcf86cd799439011',
+              kind: 'card',
+              name: 'Task',
+            },
+          ])
+        await view.handleEvent?.({
+          name: 'board-search',
+          type: 'input',
+          value: 'Task',
+        })
+        await new Promise((resolve) => setTimeout(resolve, 300))
+        await flush()
+        await view.handleEvent?.({
+          name: 'board-search-card:507f1f77bcf86cd799439011',
+          type: 'click',
+        })
+      } else {
+        await view.handleEvent?.({ name: 'board-refresh', type: 'click' })
+      }
+      await flush()
+      const faviconCalls = jest
+        .mocked(host.execute)
+        .mock.calls.filter(
+          (call: readonly unknown[]) => call[1] === 'Favicon.set',
+        )
+      expect(faviconCalls.at(-1)?.[2]).toBe('')
+    } finally {
+      view.dispose?.()
+      await flush()
+    }
+  },
+)
