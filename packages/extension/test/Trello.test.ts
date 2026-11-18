@@ -75,6 +75,12 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
           },
           id: '507f1f77bcf86cd799439012',
           idList: 'now',
+          labels: [
+            { color: 'yellow', id: 'label-yellow', name: 'In progress' },
+            { color: 'red', id: 'label-red', name: 'Urgent' },
+            { color: 'rgba(1, 2, 3)', id: 'label-other', name: 'Other' },
+            { color: 'green', id: '', name: 'Malformed' },
+          ],
           name: 'Cover',
           pos: 3,
         },
@@ -128,6 +134,11 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
   expect(
     result.cards.find((card) => card.name === 'No cover')?.coverDataUrl,
   ).toBeUndefined()
+  expect(result.cards.find((card) => card.name === 'Cover')?.labels).toEqual([
+    { color: 'yellow', id: 'label-yellow', name: 'In progress' },
+    { color: 'red', id: 'label-red', name: 'Urgent' },
+    { color: 'unknown', id: 'label-other', name: 'Other' },
+  ])
   expect(request).toHaveBeenNthCalledWith(
     1,
     'https://backend.test/api/integrations/trello/token',
@@ -150,6 +161,10 @@ test('loads source-ordered lists and cards directly from Trello with a scoped Tr
     typeof boardUrl === 'string' &&
       new URL(boardUrl).searchParams.get('fields'),
   ).toBe('name,prefs')
+  expect(
+    typeof boardUrl === 'string' &&
+      new URL(boardUrl).searchParams.get('card_fields'),
+  ).toBe('name,idList,pos,cover,labels')
   expect(JSON.stringify(request.mock.calls[1])).not.toContain('lvce-token')
   expect(request).toHaveBeenNthCalledWith(
     3,

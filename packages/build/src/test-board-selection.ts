@@ -175,6 +175,10 @@ export const testBoardSelection = async (
             },
             id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
             idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+            labels: [
+              { color: 'yellow', id: 'yellow-label', name: 'In progress' },
+              { color: 'red', id: 'red-label', name: 'Urgent' },
+            ],
             name: 'Card with cover',
             pos: 1,
             badges: { comments: 3, attachments: 1 },
@@ -352,7 +356,7 @@ export const testBoardSelection = async (
       'Long columns keep their cards in a scrollable list',
     )
     assert.deepEqual(directLoads, [
-      '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name%2Cprefs&list_fields=name%2Cpos&lists=open',
+      '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover%2Clabels&cards=open&fields=name%2Cprefs&list_fields=name%2Cpos&lists=open',
     ])
     assert.deepEqual(attachmentLoads, [
       '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/attachments/bbbbbbbbbbbbbbbbbbbbbbbb',
@@ -384,6 +388,42 @@ export const testBoardSelection = async (
     const coverSrc = await cover.getAttribute('src')
     assert.ok(coverSrc)
     assert.match(coverSrc, /^data:image\/png;base64,/u)
+    const labels = page.locator('.BoardCardLabels')
+    await labels.waitFor()
+    assert.equal(await labels.count(), 1)
+    assert.deepEqual(
+      await labels.getByRole('img').evaluateAll((elements) =>
+        elements.map((element) => ({
+          ariaLabel: element.getAttribute('aria-label'),
+          className: element.className,
+        })),
+      ),
+      [
+        {
+          ariaLabel: 'In progress',
+          className: 'BoardCardLabel BoardCardLabel-yellow',
+        },
+        { ariaLabel: 'Urgent', className: 'BoardCardLabel BoardCardLabel-red' },
+      ],
+    )
+    assert.equal(
+      await labels.locator('..').evaluate((element) => {
+        const children = [...element.children].map((child) => child.className)
+        return (
+          children.indexOf('BoardCardLabels') <
+          children.indexOf('BoardCardTitle')
+        )
+      }),
+      true,
+    )
+    assert.equal(
+      await page
+        .locator('.BoardCard')
+        .filter({ hasText: 'No activity' })
+        .locator('.BoardCardLabels')
+        .count(),
+      0,
+    )
     assert.deepEqual(coverLoads, [
       'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
       'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
