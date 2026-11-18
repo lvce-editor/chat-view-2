@@ -14,10 +14,8 @@ export const testBoardSelection = async (
   let empty = false
   let fail = false
   const discoveryLoads: string[] = []
-  const directLoads: string[] = []
-  const attachmentLoads: string[] = []
   const proxiedLoads: string[] = []
-  const coverLoads: string[] = []
+  const boardLoads: string[] = []
   const moveRequests: string[] = []
   await context.route(`${backend}/**`, async (route) => {
     const path = new URL(route.request().url()).pathname
@@ -31,10 +29,57 @@ export const testBoardSelection = async (
       body = { configured: true, connected: true }
     } else if (path.endsWith('/token')) {
       body = { accessToken: 'trello-test' }
+    } else if (/^\/api\/integrations\/trello\/boards\//u.test(path)) {
+      boardLoads.push(path)
+      const id = path.split('/').at(-1)
+      body = {
+        id,
+        name: 'Engineering',
+        prefs:
+          id === '33333333'
+            ? {
+                backgroundBottomColor: '#ff58b0',
+                backgroundTopColor: '#a82be0',
+              }
+            : {
+                backgroundImage:
+                  'https://trello-backgrounds.s3.amazonaws.com/engineering.jpg',
+              },
+        lists: [
+          { id: 'bbbbbbbbbbbbbbbbbbbbbbbb', name: 'Todo', pos: 1 },
+          { id: 'cccccccccccccccccccccccc', name: 'Doing', pos: 2 },
+          { id: 'dddddddddddddddddddddddd', name: 'Done', pos: 3 },
+        ],
+        cards: [
+          {
+            coverDataUrl:
+              'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
+            id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+            idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+            name: 'Card with cover',
+            pos: 1,
+            badges: { comments: 3, attachments: 1 },
+          },
+          {
+            id: 'card-2',
+            idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+            name: 'No activity',
+            pos: 2,
+            badges: { comments: 0, attachments: 0 },
+          },
+          ...Array.from({ length: 20 }, (_, index) => ({
+            id: `long-list-card-${index}`,
+            idList: 'dddddddddddddddddddddddd',
+            name: `Long list card ${index}`,
+            pos: index + 1,
+            badges: { comments: 0, attachments: 0 },
+          })),
+        ],
+      }
     } else {
       proxiedLoads.push(path)
-      status = 500
-      body = { error: 'Board content must be requested directly from Trello.' }
+      status = 404
+      body = { error: 'Unexpected backend request.' }
     }
     await route.fulfill({ status, json: body })
   })
@@ -128,100 +173,7 @@ export const testBoardSelection = async (
       })
       return
     }
-    if (
-      url.pathname ===
-      '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/attachments/bbbbbbbbbbbbbbbbbbbbbbbb'
-    ) {
-      attachmentLoads.push(`${url.pathname}${url.search}`)
-      await route.fulfill({
-        headers: { 'Access-Control-Allow-Origin': '*' },
-        json: {
-          previews: [
-            {
-              url: 'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
-              width: 300,
-            },
-          ],
-        },
-      })
-      return
-    }
-    directLoads.push(`${url.pathname}${url.search}`)
-    const id = url.pathname.split('/').at(-1)
-    await route.fulfill({
-      headers: { 'Access-Control-Allow-Origin': '*' },
-      json: {
-        id,
-        name: 'Engineering',
-        prefs:
-          id === '22222222'
-            ? {
-                backgroundImage:
-                  'https://trello-backgrounds.s3.amazonaws.com/engineering.jpg',
-              }
-            : {
-                backgroundBottomColor: '#ff58b0',
-                backgroundTopColor: '#a82be0',
-              },
-        lists: [
-          { id: 'bbbbbbbbbbbbbbbbbbbbbbbb', name: 'Todo', pos: 1 },
-          { id: 'cccccccccccccccccccccccc', name: 'Doing', pos: 2 },
-          { id: 'dddddddddddddddddddddddd', name: 'Done', pos: 3 },
-        ],
-        cards: [
-          {
-            cover: {
-              idAttachment: 'bbbbbbbbbbbbbbbbbbbbbbbb',
-            },
-            id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
-            idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
-            name: 'Card with cover',
-            pos: 1,
-            badges: { comments: 3, attachments: 1 },
-          },
-          {
-            id: 'card-2',
-            idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
-            name: 'No activity',
-            pos: 2,
-            badges: { comments: 0, attachments: 0 },
-          },
-          ...Array.from({ length: 20 }, (_, index) => ({
-            id: `long-list-card-${index}`,
-            idList: 'dddddddddddddddddddddddd',
-            name: `Long list card ${index}`,
-            pos: index + 1,
-            badges: { comments: 0, attachments: 0 },
-          })),
-        ],
-      },
-    })
-  })
-  await context.route('https://trello.com/**', async (route) => {
-    const request = route.request()
-    if (request.method() === 'OPTIONS') {
-      await route.fulfill({
-        status: 204,
-        headers: {
-          'Access-Control-Allow-Headers': 'authorization',
-          'Access-Control-Allow-Methods': 'GET',
-          'Access-Control-Allow-Origin': '*',
-        },
-      })
-      return
-    }
-    assert.equal(request.headers().authorization, 'Bearer trello-test')
-    coverLoads.push(request.url())
-    await route.fulfill({
-      body: Buffer.from(
-        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
-        'base64',
-      ),
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'image/png',
-      },
-    })
+    await route.abort('blockedbyclient')
   })
   try {
     const page = await context.newPage()
@@ -351,12 +303,7 @@ export const testBoardSelection = async (
         .evaluate((element) => element.scrollHeight > element.clientHeight),
       'Long columns keep their cards in a scrollable list',
     )
-    assert.deepEqual(directLoads, [
-      '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name%2Cprefs&list_fields=name%2Cpos&lists=open',
-    ])
-    assert.deepEqual(attachmentLoads, [
-      '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/attachments/bbbbbbbbbbbbbbbbbbbbbbbb',
-    ])
+    assert.deepEqual(boardLoads, ['/api/integrations/trello/boards/22222222'])
     assert.equal(
       await page.locator('.BoardViewTrello').evaluate(
         (element) =>
@@ -373,10 +320,9 @@ export const testBoardSelection = async (
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
     assert.equal(new URL(page.url()).hash, '#22222222')
-    assert.equal(directLoads.length, 2)
-    assert.deepEqual(attachmentLoads, [
-      '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/attachments/bbbbbbbbbbbbbbbbbbbbbbbb',
-      '/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/attachments/bbbbbbbbbbbbbbbbbbbbbbbb',
+    assert.deepEqual(boardLoads, [
+      '/api/integrations/trello/boards/22222222',
+      '/api/integrations/trello/boards/22222222',
     ])
     assert.deepEqual(proxiedLoads, [])
     const cover = page.locator('.BoardCardCover')
@@ -384,10 +330,6 @@ export const testBoardSelection = async (
     const coverSrc = await cover.getAttribute('src')
     assert.ok(coverSrc)
     assert.match(coverSrc, /^data:image\/png;base64,/u)
-    assert.deepEqual(coverLoads, [
-      'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
-      'https://trello.com/1/cards/aaaaaaaaaaaaaaaaaaaaaaaa/previews/card-cover',
-    ])
     await page.getByText('Card with cover', { exact: true }).waitFor()
     const badges = page.locator('.BoardCardBadges')
     await badges.waitFor()
@@ -574,7 +516,9 @@ export const testBoardSelection = async (
       })
       await openBoardOptions()
       const refreshed = page.waitForResponse((response) =>
-        response.url().startsWith('https://api.trello.com/1/boards/22222222?'),
+        response
+          .url()
+          .startsWith(`${backend}/api/integrations/trello/boards/22222222`),
       )
       await refreshButton.click()
       await refreshed
@@ -603,13 +547,15 @@ export const testBoardSelection = async (
     const refresh = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response.url().startsWith('https://api.trello.com/1/boards/22222222?'),
+        response
+          .url()
+          .startsWith(`${backend}/api/integrations/trello/boards/22222222`),
     )
     await page
       .getByRole('button', { name: 'Refresh board', exact: true })
       .click()
     await refresh
-    assert.equal(directLoads.length, 6)
+    assert.equal(boardLoads.length, 6)
     assert.deepEqual(proxiedLoads, [])
     await openBoardOptions()
     await page
