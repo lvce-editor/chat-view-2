@@ -147,6 +147,7 @@ export const testBoardSelection = async (
         lists: [
           { id: 'bbbbbbbbbbbbbbbbbbbbbbbb', name: 'Todo', pos: 1 },
           { id: 'cccccccccccccccccccccccc', name: 'Doing', pos: 2 },
+          { id: 'dddddddddddddddddddddddd', name: 'Done', pos: 3 },
         ],
         cards: [
           {
@@ -171,6 +172,13 @@ export const testBoardSelection = async (
             pos: 2,
             badges: { comments: 0, attachments: 0 },
           },
+          ...Array.from({ length: 20 }, (_, index) => ({
+            id: `long-list-card-${index}`,
+            idList: 'dddddddddddddddddddddddd',
+            name: `Long list card ${index}`,
+            pos: index + 1,
+            badges: { comments: 0, attachments: 0 },
+          })),
         ],
       },
     })
@@ -309,6 +317,26 @@ export const testBoardSelection = async (
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
     assert.equal(new URL(page.url()).hash, '#22222222')
+    const columns = page.locator('.BoardColumn')
+    const emptyColumn = columns.nth(1)
+    const longColumn = columns.nth(2)
+    const emptyColumnBox = await emptyColumn.boundingBox()
+    const shortColumnBox = await columns.nth(0).boundingBox()
+    const longColumnBox = await longColumn.boundingBox()
+    assert.ok(
+      emptyColumnBox &&
+        shortColumnBox &&
+        longColumnBox &&
+        emptyColumnBox.height < shortColumnBox.height &&
+        shortColumnBox.height < longColumnBox.height,
+      'Empty and short columns fit their contents independently of a longer neighbor',
+    )
+    assert.ok(
+      await longColumn
+        .locator('.BoardCards')
+        .evaluate((element) => element.scrollHeight > element.clientHeight),
+      'Long columns keep their cards in a scrollable list',
+    )
     assert.deepEqual(directLoads, [
       '/1/boards/22222222?card_fields=name%2CidList%2Cpos%2Ccover&cards=open&fields=name%2Cprefs&list_fields=name%2Cpos&lists=open',
     ])
