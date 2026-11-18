@@ -116,8 +116,6 @@ const boardUrlPattern =
   /^(?:https:\/\/trello\.com\/b\/)([\dA-Za-z]{8})(?:\/[^?#]*)?(?:[?#].*)?$/u
 export const boardIdPattern = /^(?:[\dA-Za-z]{8}|[\da-f]{24})$/u
 const cardIdPattern = /^[\da-f]{24}$/u
-const coverPreviewMaxBytes = 1_000_000
-const coverImageContentTypePattern = /^image\/(?:avif|gif|jpeg|png|webp)$/u
 
 export const parseBoardId = (input: string): string => {
   const value = input.trim()
@@ -245,108 +243,9 @@ const normalizeCount = (value: unknown): number =>
     ? value
     : 0
 
-const isTrelloImageUrl = (value: unknown): value is string => {
-  if (typeof value !== 'string' || !URL.canParse(value)) return false
-  const url = new URL(value)
-  return (
-    url.protocol === 'https:' &&
-    (url.hostname === 'trello.com' || url.hostname.endsWith('.trello.com')) &&
-    !url.port &&
-    !url.username &&
-    !url.password
-  )
-}
-
-type TrelloCoverPreview = Readonly<Record<string, unknown>> & {
-  readonly url: string
-  readonly width: number
-}
-
-const isTrelloCoverPreview = (value: unknown): value is TrelloCoverPreview =>
-  isRecord(value) &&
-  typeof value.width === 'number' &&
-  isTrelloImageUrl(value.url)
-
-const getCoverAttachmentId = (value: unknown): string | undefined => {
-  if (!isRecord(value)) return undefined
-  const id = value.idAttachment
-  return typeof id === 'string' && cardIdPattern.test(id) ? id : undefined
-}
-
-const getCoverPreviewUrl = (value: unknown): string | undefined => {
-  if (!isRecord(value)) return undefined
-  let rawPreviews: unknown[] = []
-  if (Array.isArray(value.scaled)) rawPreviews = value.scaled
-  else if (Array.isArray(value.previews)) rawPreviews = value.previews
-  const previews = rawPreviews.filter(isTrelloCoverPreview)
-  const selected =
-    previews.find((preview) => preview.width >= 300) ?? previews.at(-1)
-  return selected?.url
-}
-
-const toBase64 = (bytes: readonly number[]): string => {
-  let binary = ''
-  for (const byte of bytes) binary += String.fromCodePoint(byte)
-  return btoa(binary)
-}
-
-const loadCoverDataUrl = async (
-  value: unknown,
-  accessToken: string,
-  signal: Readonly<AbortSignal>,
-  request: typeof fetch,
-): Promise<string | undefined> => {
-  const url = getCoverPreviewUrl(value)
-  if (!url) return undefined
-  try {
-    const response = await request(url, {
-      credentials: 'omit',
-      headers: { Authorization: `Bearer ${accessToken}` },
-      redirect: 'error',
-      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
-    })
-    if (!response.ok) return undefined
-    const contentType = response.headers.get('content-type')?.split(';', 1)[0]
-    if (!contentType || !coverImageContentTypePattern.test(contentType))
-      return undefined
-    const reader = response.body?.getReader()
-    if (!reader) return undefined
-    const chunks: Uint8Array[] = []
-    let length = 0
-    try {
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        length += value.byteLength
-        if (length > coverPreviewMaxBytes) {
-          await reader.cancel()
-          return undefined
-        }
-        chunks.push(value)
-      }
-    } finally {
-      reader.releaseLock()
-    }
-    if (!length) return undefined
-    const bytes = new Uint8Array(length)
-    let offset = 0
-    for (const chunk of chunks) {
-      bytes.set(chunk, offset)
-      offset += chunk.byteLength
-    }
-    return `data:${contentType};base64,${toBase64([...bytes])}`
-  } catch {
-    if (signal.aborted) throw signal.reason
-    return undefined
-  }
-}
-
-const normalizeCard = (
-  value: unknown,
-  coverDataUrl?: string,
-): TrelloCard | undefined => {
+const normalizeCard = (value: unknown): TrelloCard | undefined => {
   if (!isCard(value)) return undefined
-  const normalizedCoverDataUrl = coverDataUrl ?? value.coverDataUrl
+  const normalizedCoverDataUrl = value.coverDataUrl
   const badges = isRecord(value.badges) ? value.badges : undefined
   return {
     attachmentCount: normalizeCount(badges?.attachments),
@@ -520,18 +419,7 @@ export const createTrelloClient = (
   ): Promise<TrelloBoard> => {
     const id = parseBoardId(input)
     try {
-      const accessToken = await getTrelloAccessToken(signal)
-      const data = await trelloRequest(
-        `boards/${id}?${new URLSearchParams({
-          card_fields: 'name,idList,pos,cover',
-          cards: 'open',
-          fields: 'name,prefs',
-          list_fields: 'name,pos',
-          lists: 'open',
-        })}`,
-        signal,
-        accessToken,
-      )
+      const { data } = await call(`boards/${id}`, signal)
       if (
         !isRecord(data) ||
         typeof data.id !== 'string' ||
@@ -546,44 +434,7 @@ export const createTrelloClient = (
           message: 'Trello returned an unreadable board. Try again shortly.',
         })
       }
-      const cards: (TrelloCard | undefined)[] = []
-      for (let index = 0; index < data.cards.length; index += 4) {
-        const batch = data.cards.slice(index, index + 4)
-        cards.push(
-          ...(await Promise.all(
-            batch.map(async (card) => {
-              const cover = isRecord(card) ? card.cover : undefined
-              const cardId = isRecord(card) ? card.id : undefined
-              let coverMetadata = cover
-              if (!getCoverPreviewUrl(cover)) {
-                const attachmentId = getCoverAttachmentId(cover)
-                if (
-                  attachmentId &&
-                  typeof cardId === 'string' &&
-                  cardIdPattern.test(cardId)
-                ) {
-                  try {
-                    coverMetadata = await trelloRequest(
-                      `cards/${cardId}/attachments/${attachmentId}`,
-                      signal,
-                      accessToken,
-                    )
-                  } catch (error) {
-                    if (signal.aborted) throw error
-                  }
-                }
-              }
-              const coverDataUrl = await loadCoverDataUrl(
-                coverMetadata,
-                accessToken,
-                signal,
-                request,
-              )
-              return normalizeCard(card, coverDataUrl)
-            }),
-          )),
-        )
-      }
+      const cards = data.cards.map((card) => normalizeCard(card))
       const prefs = isRecord(data.prefs) ? data.prefs : undefined
       const scaled = Array.isArray(prefs?.backgroundImageScaled)
         ? prefs.backgroundImageScaled
@@ -606,6 +457,7 @@ export const createTrelloClient = (
         signal,
         request,
       )
+
       return {
         ...normalizeBoardBackground(data),
         cards: cards

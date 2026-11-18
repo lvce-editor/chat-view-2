@@ -13,6 +13,7 @@ import type {
   TrelloSearchResult,
 } from './Trello.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
+import { renderDescriptionMarkdown } from './DescriptionMarkdown.ts'
 
 const primaryButtonClass = mergeClassNames('BoardButton', 'BoardPrimaryButton')
 const cardButtonClass = mergeClassNames('BoardCard', 'BoardCardButton')
@@ -44,6 +45,7 @@ export interface BoardState {
   readonly draggedCardId?: string | undefined
   readonly dropTargetId?: string | undefined
   readonly editDesc?: string
+  readonly editDescription?: boolean
   readonly editError?: string | undefined
   readonly editingCard?: TrelloCard | undefined
   readonly editName?: string
@@ -73,6 +75,7 @@ const input = (
       ...(disabled && { disabled: true }),
       inputType: 'text',
       name,
+      ...(name === 'board-card-title' && { onBlur: 'handleBlur' }),
       onInput: 'handleInput',
       spellcheck: false,
       ...(value !== undefined && { value }),
@@ -479,6 +482,7 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
     detailsError,
     detailsLoading,
     editDesc,
+    editDescription,
     editError,
     editingCard,
     editName,
@@ -516,17 +520,52 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
           Dom.form('board-card-edit', 'BoardDialogMain', [
             Dom.heading(2, 'BoardDialogTitle', 'Edit card'),
             input('edit-card-name', 'Title', editName, Boolean(savingCard)),
-            Dom.node(VirtualDomElements.Label, { className: 'BoardField' }, [
-              Dom.textNode('Description'),
-              Dom.node(VirtualDomElements.TextArea, {
+            Dom.node(
+              VirtualDomElements.Section,
+              {
                 ariaLabel: 'Description',
-                className: descriptionInputClass,
-                ...(disabled && { disabled: true }),
-                name: 'edit-card-desc',
-                onInput: 'handleInput',
-                value: editDesc || '',
-              }),
-            ]),
+                className: 'BoardDescriptionSection',
+              },
+              [
+                Dom.div('BoardDescriptionHeader', [
+                  Dom.heading(3, 'BoardDetailHeading', 'Description'),
+                  Dom.node(VirtualDomElements.Input, {
+                    ariaLabel: editDescription ? 'Preview' : 'Edit description',
+                    className: 'BoardButton',
+                    ...(disabled && { disabled: true }),
+                    inputType: 'button',
+                    name: 'board-description-edit',
+                    onClick: 'handleClick',
+                    value: editDescription ? 'Preview' : 'Edit description',
+                  }),
+                ]),
+                ...(editDescription
+                  ? [
+                      Dom.node(
+                        VirtualDomElements.Label,
+                        { className: 'BoardField' },
+                        [
+                          Dom.textNode('Markdown source'),
+                          Dom.node(VirtualDomElements.TextArea, {
+                            ariaLabel: 'Markdown source',
+                            className: descriptionInputClass,
+                            ...(disabled && { disabled: true }),
+                            name: 'edit-card-desc',
+                            onInput: 'handleInput',
+                            value: editDesc || '',
+                          }),
+                        ],
+                      ),
+                    ]
+                  : [
+                      editDesc
+                        ? renderDescriptionMarkdown(editDesc)
+                        : Dom.div('BoardDetailEmpty', [
+                            Dom.textNode('No description'),
+                          ]),
+                    ]),
+              ],
+            ),
             Dom.node(
               VirtualDomElements.Section,
               { ariaLabel: 'Attachments', className: 'BoardAttachments' },

@@ -29,6 +29,9 @@ import {
 export const viewId = 'chat2.views.board'
 export const connectionsPreference = 'chat2.connectedBoardIds'
 
+const isCardTitleBlur = (event: Readonly<ViewEvent>): boolean =>
+  event.type === 'blur' && event.name === 'board-card-title'
+
 export interface BoardHost {
   readonly authorize: typeof trelloClient.authorize
   readonly boards: typeof trelloClient.boards
@@ -663,6 +666,15 @@ export const createInstance = async (
     const { cardDraft } = state
     if (!cardDraft?.saving) state = { ...state, cardDraft: undefined }
   }
+  const dismissCardAfterBlur = (): void => {
+    const { cardDraft } = state
+    setTimeout(() => {
+      const { cardDraft: currentDraft } = state
+      if (currentDraft !== cardDraft || !cardDraft) return
+      cancelCard()
+      void notify()
+    }, 0)
+  }
   const handleInput = (name: string | undefined, value: string): void => {
     const { cardDraft } = state
     switch (name) {
@@ -736,6 +748,11 @@ export const createInstance = async (
         break
     }
   }
+  const handleInputEvent = (event: Readonly<ViewEvent>): boolean => {
+    if (event.type !== 'input' || typeof event.value !== 'string') return false
+    handleInput(event.name, event.value)
+    return true
+  }
   const loadCardDetails = async (): Promise<void> => {
     const { editingCard, savingCard } = state
     if (!editingCard || savingCard) return
@@ -752,6 +769,7 @@ export const createInstance = async (
         details,
         detailsLoading: false,
         editDesc: details.desc,
+        editDescription: false,
       }
     } catch {
       if (disposed || signal.aborted || generation !== requestGeneration) return
@@ -776,6 +794,7 @@ export const createInstance = async (
       details: undefined,
       detailsError: undefined,
       editDesc: card.desc || '',
+      editDescription: false,
       editError: undefined,
       editingCard: card,
       editName: card.name,
@@ -887,6 +906,11 @@ export const createInstance = async (
       void loadCardDetails()
       return
     }
+    if (event.name === 'board-description-edit') {
+      const { editDescription } = state
+      state = { ...state, editDescription: !editDescription }
+      return
+    }
     if (event.name === 'board-card-cancel') {
       const { savingCard } = state
       if (savingCard) return
@@ -962,8 +986,11 @@ export const createInstance = async (
       closeEditor()
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
-      if (event.type === 'input' && typeof event.value === 'string') {
-        handleInput(event.name, event.value)
+      if (handleInputEvent(event)) return
+      if (isCardTitleBlur(event)) {
+        // Let the focus transition finish before removing the composer. A
+        // submit click follows the input blur and marks the draft as saving.
+        dismissCardAfterBlur()
         return
       }
       if (event.type === 'submit' && event.name === 'board-create-card') {
