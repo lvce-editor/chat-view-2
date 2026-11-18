@@ -224,6 +224,7 @@ const renderBoardSearch = (state: BoardState): Dom.Node => {
       className: searchInputClass,
       inputType: 'search',
       name: 'board-search',
+      onBlur: 'handleBlur',
       onInput: 'handleInput',
       placeholder: 'Search boards and cards',
       spellcheck: false,

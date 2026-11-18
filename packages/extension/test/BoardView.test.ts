@@ -168,6 +168,8 @@ test('searches connected boards by name and opens the selected result', async ()
     type: 'input',
     value: 'personal',
   })
+  await view.handleEvent?.({ name: 'board-search', type: 'blur' })
+  expect(JSON.stringify(await view.render())).toContain('BoardSearchResults')
   await view.handleEvent?.({ name: 'board-select:12345678', type: 'click' })
   await flush()
   expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
@@ -258,6 +260,7 @@ test('searches Trello cards remotely and opens the owning board and card', async
   expect(JSON.stringify(await view.render())).toContain(
     'Card · Chat task — Personal',
   )
+  await view.handleEvent?.({ name: 'board-search', type: 'blur' })
   await view.handleEvent?.({
     name: `board-search-card:${cardId}`,
     type: 'click',
@@ -266,6 +269,42 @@ test('searches Trello cards remotely and opens the owning board and card', async
   expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
   expect(host.loadCard).toHaveBeenCalledWith(cardId, expect.any(AbortSignal))
   expect(JSON.stringify(await view.render())).toContain('BoardDialogOverlay')
+  view.dispose?.()
+})
+
+test('ignores late search results after blur and preserves the query', async () => {
+  const host = createHost()
+  let resolveSearch:
+    | ((results: Awaited<ReturnType<BoardHost['search']>>) => void)
+    | undefined
+  jest
+    .mocked(host.search)
+    .mockImplementation(
+      () => new Promise((resolve) => (resolveSearch = resolve)),
+    )
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({ name: 'board-search', type: 'click' })
+  await view.handleEvent?.({
+    name: 'board-search',
+    type: 'input',
+    value: 'chat',
+  })
+  await new Promise((resolve) => setTimeout(resolve, 275))
+  expect(host.search).toHaveBeenCalledTimes(1)
+  await view.handleEvent?.({ name: 'board-search', type: 'blur' })
+  await new Promise((resolve) => setTimeout(resolve, 1))
+  expect(JSON.stringify(await view.render())).toContain('BoardSearchResults')
+  expect(JSON.stringify(await view.render())).toContain('"value":"chat"')
+  resolveSearch?.([{ id: '12345678', kind: 'board', name: 'Chat Board' }])
+  await flush()
+  expect(JSON.stringify(await view.render())).not.toContain('Chat Board')
+  await view.handleEvent?.({
+    name: 'board-search',
+    type: 'input',
+    value: 'chats',
+  })
+  await new Promise((resolve) => setTimeout(resolve, 275))
+  expect(host.search).toHaveBeenCalledTimes(2)
   view.dispose?.()
 })
 

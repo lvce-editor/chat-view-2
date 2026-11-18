@@ -646,6 +646,49 @@ export const createInstance = async (
     const { cardDraft } = state
     if (!cardDraft?.saving) state = { ...state, cardDraft: undefined }
   }
+  const startSearch = (value: string): void => {
+    searchGeneration++
+    searchController?.abort()
+    if (searchTimer) clearTimeout(searchTimer)
+    if (!value.trim()) return
+    const currentGeneration = searchGeneration
+    searchTimer = setTimeout(() => {
+      searchController = new AbortController()
+      void host
+        .search(
+          value,
+          AbortSignal.any([
+            searchController.signal,
+            AbortSignal.timeout(45_000),
+          ]),
+        )
+        .then((searchResults) => {
+          if (disposed || currentGeneration !== searchGeneration) return
+          state = { ...state, searchLoading: false, searchResults }
+          void notify()
+        })
+        .catch((error: unknown) => {
+          if (
+            disposed ||
+            currentGeneration !== searchGeneration ||
+            searchController?.signal.aborted
+          )
+            return
+          state = {
+            ...state,
+            searchError:
+              error instanceof TrelloError
+                ? error.details
+                : {
+                    code: 'TRELLO_SEARCH_FAILED',
+                    message: 'Unable to search Trello. Try again.',
+                  },
+            searchLoading: false,
+          }
+          void notify()
+        })
+    }, 250)
+  }
   const handleInput = (name: string | undefined, value: string): void => {
     const { cardDraft } = state
     switch (name) {
@@ -668,48 +711,7 @@ export const createInstance = async (
           searchQuery: value,
           searchResults: [],
         }
-        searchGeneration++
-        searchController?.abort()
-        if (searchTimer) clearTimeout(searchTimer)
-        if (value.trim()) {
-          const currentGeneration = searchGeneration
-          searchTimer = setTimeout(() => {
-            searchController = new AbortController()
-            void host
-              .search(
-                value,
-                AbortSignal.any([
-                  searchController.signal,
-                  AbortSignal.timeout(45_000),
-                ]),
-              )
-              .then((searchResults) => {
-                if (disposed || currentGeneration !== searchGeneration) return
-                state = { ...state, searchLoading: false, searchResults }
-                void notify()
-              })
-              .catch((error: unknown) => {
-                if (
-                  disposed ||
-                  currentGeneration !== searchGeneration ||
-                  searchController?.signal.aborted
-                )
-                  return
-                state = {
-                  ...state,
-                  searchError:
-                    error instanceof TrelloError
-                      ? error.details
-                      : {
-                          code: 'TRELLO_SEARCH_FAILED',
-                          message: 'Unable to search Trello. Try again.',
-                        },
-                  searchLoading: false,
-                }
-                void notify()
-              })
-          }, 250)
-        }
+        startSearch(value)
         break
       case 'edit-card-desc':
         state = { ...state, editDesc: value, editError: undefined }
@@ -880,6 +882,66 @@ export const createInstance = async (
     await changeBoard(event.name)
     if (event.name === 'board-disconnect') await disconnect()
   }
+  const handleSearchBlur = (): void => {
+    searchGeneration++
+    searchController?.abort()
+    if (searchTimer) clearTimeout(searchTimer)
+    state = { ...state, searchLoading: false }
+    void notify()
+  }
+  const handleSearchEvent = async (
+    event: Readonly<ViewEvent>,
+  ): Promise<boolean> => {
+    if (event.type === 'blur' && event.name === 'board-search') {
+      handleSearchBlur()
+      return true
+    }
+    return false
+  }
+  const handleNonClickEvent = (event: Readonly<ViewEvent>): boolean => {
+    if (event.type === 'input' && typeof event.value === 'string') {
+      handleInput(event.name, event.value)
+      return true
+    }
+    if (event.type === 'submit' && event.name === 'board-create-card') {
+      void createCard()
+      return true
+    }
+    if (
+      (event.type === 'submit' && event.name === 'board-connect') ||
+      (event.type === 'click' &&
+        ['board-refresh', 'board-retry'].includes(event.name || ''))
+    ) {
+      // View commands are serialized. Return so the loading frame and final
+      // rerender are never queued behind the network request they await.
+      state = { ...state, optionsOpen: false }
+      void connect()
+      return true
+    }
+    if (event.type === 'submit' && event.name === 'board-card-edit') {
+      void saveCard()
+      return true
+    }
+    return false
+  }
+  const handleActionClick = (name: string | undefined): boolean => {
+    if (name?.startsWith('board-add:')) {
+      openNewCard(name.slice('board-add:'.length))
+      return true
+    }
+    const actions: Readonly<Record<string, () => void | Promise<void>>> = {
+      'board-authorize': authorize,
+      'board-cancel-authorization': cancel,
+      'board-cancel-card': cancelCard,
+      'board-check-account': checkAccount,
+      'board-disconnect-account': revoke,
+    }
+    const action = actions[name || '']
+    if (!action) return false
+    state = { ...state, optionsOpen: false }
+    void action()
+    return true
+  }
   const instance: BoardViewInstance = {
     dispose(): void {
       disposed = true
@@ -945,49 +1007,12 @@ export const createInstance = async (
       closeEditor()
     },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
-      if (event.type === 'input' && typeof event.value === 'string') {
-        handleInput(event.name, event.value)
-        return
-      }
-      if (event.type === 'submit' && event.name === 'board-create-card') {
-        void createCard()
-        return
-      }
-      if (
-        (event.type === 'submit' && event.name === 'board-connect') ||
-        (event.type === 'click' &&
-          ['board-refresh', 'board-retry'].includes(event.name || ''))
-      ) {
-        // View commands are serialized. Return so the loading frame and final
-        // rerender are never queued behind the network request they await.
-        state = { ...state, optionsOpen: false }
-        void connect()
-        return
-      }
-      if (event.type === 'submit' && event.name === 'board-card-edit') {
-        void saveCard()
-        return
-      }
+      if (await handleSearchEvent(event)) return
+      if (handleNonClickEvent(event)) return
       if (event.type === 'click') {
-        if (event.name?.startsWith('board-add:')) {
-          openNewCard(event.name.slice('board-add:'.length))
-          return
-        }
-        const actions: Readonly<Record<string, () => void | Promise<void>>> = {
-          'board-authorize': authorize,
-          'board-cancel-authorization': cancel,
-          'board-cancel-card': cancelCard,
-          'board-check-account': checkAccount,
-          'board-disconnect-account': revoke,
-        }
-        const action = actions[event.name || '']
-        if (action) {
-          state = { ...state, optionsOpen: false }
-          void action()
-          return
-        }
+        if (handleActionClick(event.name)) return
+        await handleClick(event)
       }
-      if (event.type === 'click') await handleClick(event)
     },
     render: () => render(state),
     renderFocus: (
