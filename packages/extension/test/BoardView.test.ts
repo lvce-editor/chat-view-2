@@ -461,6 +461,9 @@ test('opens a card editor and updates the board only after Trello confirms the s
   expect(JSON.stringify(await view.render())).toContain('Edit card')
   expect(JSON.stringify(await view.render())).not.toContain('"autoFocus":true')
   expect(JSON.stringify(await view.render())).toContain('Details')
+  expect(JSON.stringify(await view.render())).not.toContain('edit-card-desc')
+  await view.handleEvent?.({ name: 'board-description-edit', type: 'click' })
+  expect(JSON.stringify(await view.render())).toContain('edit-card-desc')
   await view.handleEvent?.({
     name: 'edit-card-name',
     type: 'input',
@@ -784,6 +787,33 @@ test('restores the board from its URL hash before saved view state', async () =>
   await flush()
   expect(host.load).toHaveBeenCalledWith('12345678', expect.any(AbortSignal))
   expect(JSON.stringify(await view.render())).toContain('A task')
+  view.dispose?.()
+})
+
+test('renders Markdown descriptions safely with images and safe links', async () => {
+  const host = createHost()
+  jest.mocked(host.loadCard).mockResolvedValue({
+    activities: [],
+    attachments: [],
+    desc: '# Summary\n\n**Bold** and [docs](https://example.com)\n\n![diagram](https://example.com/diagram.png) <script>alert(1)</script> [unsafe](javascript:alert(1))',
+  })
+  const view = await createInstance(createContext(), host)
+  await view.handleEvent?.({
+    name: 'board-id',
+    type: 'input',
+    value: '5k8NLHLh',
+  })
+  await view.handleEvent?.({ name: 'board-connect', type: 'submit' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-card:one', type: 'click' })
+  await flush()
+  const dom = JSON.stringify(await view.render())
+  expect(dom).toContain('BoardDescriptionMarkdown')
+  expect(dom).toContain('BoardDescriptionImage')
+  expect(dom).toContain('https://example.com/diagram.png')
+  expect(dom).toContain('https://example.com')
+  expect(dom).toContain(' <script>alert(1)</script> ')
+  expect(dom).not.toContain('"href":"javascript:')
   view.dispose?.()
 })
 

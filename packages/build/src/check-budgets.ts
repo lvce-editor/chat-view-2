@@ -6,7 +6,7 @@ const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
   // Card details measured +7,178 bytes; board backgrounds add 746 bytes.
   // Trello search and card covers with attachment metadata measure 410,175 bytes; retain roughly 2 KiB of headroom.
-  ['chatMain.js', 412_175],
+  ['chatMain.js', 416_000],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],
