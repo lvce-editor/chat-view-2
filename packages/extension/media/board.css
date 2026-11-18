@@ -339,7 +339,7 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: min(100%, 1080px);
+  width: min(100%, 1120px);
   max-height: 100%;
   overflow: hidden;
   border-radius: 12px;
@@ -353,7 +353,7 @@
   gap: 16px;
   padding: 12px 24px;
   border-bottom: 1px solid var(--BoardBorder);
-  background: var(--BoardHover);
+  background: var(--BoardBackground);
 }
 .BoardCardStatus {
   min-width: 0;
@@ -396,25 +396,25 @@
 }
 .BoardDialogBody {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  grid-template-columns: minmax(0, 1.15fr) minmax(min(100%, 320px), 0.85fr);
   min-height: 0;
   overflow: auto;
 }
 .BoardDialogMain {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 24px;
   min-width: 0;
-  padding: 28px 24px;
+  padding: 28px 32px;
 }
 .BoardDialogActivity {
   min-width: 0;
-  padding: 24px;
+  padding: 28px 24px;
   border-left: 1px solid var(--BoardBorder);
-  background: var(--BoardHover);
+  background: var(--BoardBackground);
 }
 .BoardDetailHeading {
-  margin: 0 0 16px;
+  margin: 0 0 20px;
   font-size: 16px;
   font-weight: 650;
 }
@@ -429,7 +429,7 @@
   overflow-wrap: anywhere;
 }
 .BoardActivity {
-  padding-block: 16px;
+  padding-block: 16px 20px;
   border-bottom: 1px solid var(--BoardBorder);
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -438,11 +438,15 @@
   font-weight: 600;
 }
 .BoardActivityText {
-  margin-block: 8px;
+  margin-block: 8px 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--BoardHover);
   white-space: pre-wrap;
 }
 .BoardActivityDate {
   font-size: 12px;
+  color: var(--BoardMutedForeground);
 }
 .BoardDetailsError .BoardButton {
   display: block;
@@ -450,7 +454,7 @@
 }
 .BoardDialogTitle {
   margin: 0;
-  font-size: 24px;
+  font-size: 26px;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
@@ -543,7 +547,7 @@
   }
   .BoardDialogMain,
   .BoardDialogActivity {
-    padding: 20px 18px;
+    padding: 22px 18px;
   }
   .BoardDialogActivity {
     border-left: none;
