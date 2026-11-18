@@ -1129,12 +1129,10 @@ test('synchronizes the favicon for cached, refreshed and closed boards', async (
     'Favicon.set',
     icon,
   )
-  jest
-    .mocked(host.load)
-    .mockResolvedValueOnce({
-      ...board,
-      faviconUrl: 'data:image/svg+xml,refreshed',
-    })
+  jest.mocked(host.load).mockResolvedValueOnce({
+    ...board,
+    faviconUrl: 'data:image/svg+xml,refreshed',
+  })
   await view.handleEvent?.({ name: 'board-refresh', type: 'click' })
   await flush()
   expect(host.execute).toHaveBeenCalledWith(
@@ -1164,4 +1162,30 @@ test('synchronizes the favicon for cached, refreshed and closed boards', async (
     'Favicon.set',
     '',
   )
+})
+
+test('an old workspace-title lookup cannot clear a reopened board favicon', async () => {
+  const host = createHost()
+  const icon = 'data:image/svg+xml,current'
+  const { promise: workspace, resolve: resolveWorkspace } =
+    Promise.withResolvers<string>()
+  jest
+    .mocked(host.execute)
+    .mockImplementation(async (command) =>
+      command === 'Workspace.getPath' ? workspace : undefined,
+    )
+  jest.mocked(host.read).mockResolvedValue(['5k8NLHLh'])
+  host.session.set('5k8NLHLh', { board: { ...board, faviconUrl: icon } })
+  const first = await createInstance(createContext(), host)
+  first.dispose?.()
+  await flush()
+  const reopened = await createInstance(createContext(), host)
+  resolveWorkspace('/workspace')
+  await flush()
+  const faviconCalls = jest
+    .mocked(host.execute)
+    .mock.calls.filter((call: readonly unknown[]) => call[1] === 'Favicon.set')
+  expect(faviconCalls.at(-1)?.[2]).toBe(icon)
+  reopened.dispose?.()
+  await flush()
 })

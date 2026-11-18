@@ -176,7 +176,7 @@ export const createInstance = async (
   let searchGeneration = 0
   let moveController: AbortController | undefined
   let disposed = false
-  const syncTab = async (title: string, faviconUrl = ''): Promise<void> => {
+  const syncFavicon = async (faviconUrl: string): Promise<void> => {
     try {
       await host.execute(
         'WebView.compatRendererProcessInvoke',
@@ -186,10 +186,17 @@ export const createInstance = async (
     } catch {
       // Older editor builds do not expose favicon commands.
     }
+  }
+  const syncTab = async (title: string, faviconUrl = ''): Promise<void> => {
+    await syncFavicon(faviconUrl)
     await host.execute('WindowTitle.set', title)
   }
-  const restoreTab = async (): Promise<void> =>
-    syncTab(await getWorkspaceTitle(host.execute))
+  const restoreTab = async (): Promise<void> => {
+    // Clear before the asynchronous workspace lookup so an old view's
+    // disposal cannot later clear a newly opened board's icon.
+    await syncFavicon('')
+    await host.execute('WindowTitle.set', await getWorkspaceTitle(host.execute))
+  }
   const { board: initialBoard } = state
   await syncTab(initialBoard?.name || 'Boards', initialBoard?.faviconUrl)
   let focusEditor = false
