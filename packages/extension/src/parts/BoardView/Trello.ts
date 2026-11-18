@@ -4,6 +4,7 @@ import {
   resolveBackendConfiguration,
   type BackendConfiguration,
 } from '../BackendConfiguration/BackendConfiguration.ts'
+import { createBoardFavicon, type FaviconBackground } from './BoardFavicon.ts'
 import { normalizeDetails, type CardDetails } from './CardDetails.ts'
 
 export interface TrelloCard {
@@ -51,6 +52,8 @@ export interface TrelloBoard {
   readonly backgroundGradient?: string
   readonly backgroundImage?: string
   readonly cards: readonly TrelloCard[]
+  readonly faviconBackground?: FaviconBackground
+  readonly faviconUrl?: string
   readonly id: string
   readonly lists: readonly TrelloList[]
   readonly name: string
@@ -484,11 +487,37 @@ export const createTrelloClient = (
         })
       }
       const cards = data.cards.map((card) => normalizeCard(card))
+      const prefs = isRecord(data.prefs) ? data.prefs : undefined
+      const scaled = Array.isArray(prefs?.backgroundImageScaled)
+        ? prefs.backgroundImageScaled
+        : []
+      const preview = scaled.find(
+        (item) =>
+          isRecord(item) && typeof item.width === 'number' && item.width >= 64,
+      )
+      const faviconBackground: FaviconBackground = {
+        bottomColor: safeBackgroundColor(prefs?.backgroundBottomColor),
+        color: safeBackgroundColor(prefs?.backgroundColor),
+        image: safeBackgroundImage(
+          (isRecord(preview) ? preview.url : undefined) ??
+            prefs?.backgroundImage,
+        ),
+        tiled: prefs?.backgroundTile === true,
+        topColor: safeBackgroundColor(prefs?.backgroundTopColor),
+      }
+      const faviconUrl = await createBoardFavicon(
+        { ...faviconBackground, image: undefined },
+        signal,
+        request,
+      )
+
       return {
         ...normalizeBoardBackground(data),
         cards: cards
           .filter((card): card is TrelloCard => Boolean(card))
           .toSorted((a, b) => a.pos - b.pos),
+        faviconBackground,
+        faviconUrl,
         id: data.id,
         lists: data.lists.toSorted((a, b) => a.pos - b.pos),
         name: data.name,

@@ -100,6 +100,20 @@ export const testBoardSelection = async (
     }
     await route.fulfill({ status, json: body })
   })
+  await context.route(
+    'https://trello-backgrounds.s3.amazonaws.com/**',
+    (route) =>
+      route.fulfill({
+        body: Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
+          'base64',
+        ),
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'image/png',
+        },
+      }),
+  )
   await context.route('https://api.trello.com/**', async (route) => {
     const request = route.request()
     if (request.method() === 'OPTIONS') {
@@ -252,6 +266,37 @@ export const testBoardSelection = async (
     }, backend)
     await page.goto(baseUrl)
     await page.locator('.Workbench').waitFor()
+    const originalIcons = await page
+      .locator('head link[rel~="icon"]')
+      .evaluateAll((icons) => icons.map((icon) => icon.getAttribute('href')))
+    const readBoardIcon = async (photo = false): Promise<string> => {
+      await page.waitForFunction(
+        (expectPhoto) =>
+          [
+            ...globalThis.document.querySelectorAll('head link[rel="icon"]'),
+          ].some((icon) => {
+            const href = icon.getAttribute('href') || ''
+            return (
+              href.startsWith('data:image/svg+xml,') &&
+              (!expectPhoto ||
+                decodeURIComponent(href).includes('<image href="data:image/'))
+            )
+          }),
+        photo,
+      )
+      const href = await page
+        .locator('head link[rel="icon"]')
+        .getAttribute('href')
+      assert.ok(href)
+      await page.evaluate(async (src) => {
+        const image = globalThis.document.createElement('img')
+        image.src = src
+        await image.decode()
+        if (image.naturalWidth !== 64)
+          throw new Error('Expected a 64px board favicon')
+      }, href)
+      return decodeURIComponent(href.slice(href.indexOf(',') + 1))
+    }
     await page.keyboard.press('Control+Shift+P')
     await page.getByRole('combobox').fill('>Open Board Layout')
     await page
@@ -310,6 +355,11 @@ export const testBoardSelection = async (
     await boardSearch.fill('')
     assert.equal(discoveryLoads.length, 1)
     assert.equal(new URL(page.url()).hash, '#22222222')
+    assert.ok(
+      (await readBoardIcon(true)).includes(
+        '<image href="data:image/png;base64,',
+      ),
+    )
     const columns = page.locator('.BoardColumn')
     const emptyColumn = columns.nth(1)
     const longColumn = columns.nth(2)
@@ -374,6 +424,11 @@ export const testBoardSelection = async (
       .getByRole('heading', { name: 'Engineering', exact: true })
       .waitFor()
     assert.equal(new URL(page.url()).hash, '#22222222')
+    assert.ok(
+      (await readBoardIcon(true)).includes(
+        '<image href="data:image/png;base64,',
+      ),
+    )
     assert.deepEqual(boardLoads, [
       '/api/integrations/trello/boards/22222222',
       '/api/integrations/trello/boards/22222222',
@@ -671,6 +726,20 @@ export const testBoardSelection = async (
     await page
       .getByRole('button', { name: 'Connect another board', exact: true })
       .click()
+    await page.waitForFunction(
+      () =>
+        ![
+          ...globalThis.document.querySelectorAll('head link[rel="icon"]'),
+        ].some((icon) =>
+          icon.getAttribute('href')?.startsWith('data:image/svg+xml,'),
+        ),
+    )
+    assert.deepEqual(
+      await page
+        .locator('head link[rel~="icon"]')
+        .evaluateAll((icons) => icons.map((icon) => icon.getAttribute('href'))),
+      originalIcons,
+    )
     empty = true
     await page
       .getByRole('button', { name: 'Connect Trello', exact: true })
@@ -767,8 +836,11 @@ export const testBoardSelection = async (
       ),
       'rgb(255, 88, 176)',
     )
+    const gradientIcon = await readBoardIcon()
+    assert.ok(gradientIcon.includes('stop-color="#a82be0"'))
+    assert.ok(gradientIcon.includes('stop-color="#ff58b0"'))
     process.stdout.write(
-      'static Trello discovery, clickable board tiles, empty state and retry: pass\n',
+      'static Trello discovery, board favicons, clickable board tiles, empty state and retry: pass\n',
     )
   } finally {
     await context.close()

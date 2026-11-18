@@ -107,6 +107,7 @@ try {
     `http://127.0.0.1:${address.port}${prefix}`
   assert.ok(URL.canParse(baseUrl))
   const origin = new URL(baseUrl).origin
+  const boardSelectionOnly = process.argv.includes('--board-selection-only')
   replay = await startEvaluationProxy({
     cacheDirectory: fileURLToPath(
       new URL('../../evaluation/cache/', import.meta.url),
@@ -117,7 +118,7 @@ try {
         apiKey: process.env.LVCE_ACCESS_TOKEN,
       }),
     model: 'gpt-5.4-mini',
-    port: 8787,
+    port: boardSelectionOnly ? 0 : 8787,
     workspaceUri: 'memfs:///recorded-workspace/',
     allowedOrigin: origin,
     scenarioId: 'static-ui',
@@ -127,7 +128,6 @@ try {
       process.env.EVALUATION_UPSTREAM_URL || 'http://127.0.0.1:1/api/v1',
   })
   const browserType = process.argv.includes('--firefox') ? firefox : chromium
-  const boardSelectionOnly = process.argv.includes('--board-selection-only')
   const browser = await browserType.launch({ headless: true })
   const testExported = async (evaluation: EvaluationProxy): Promise<void> => {
     await testBoardSelection(browser, baseUrl)
