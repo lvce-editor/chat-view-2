@@ -39,6 +39,7 @@ export interface BoardHost {
   readonly execute: typeof executeCommand
   readonly load: typeof trelloClient.load
   readonly loadCard: typeof trelloClient.loadCard
+  readonly loadCovers: typeof trelloClient.loadCovers
   readonly moveCard: typeof trelloClient.moveCard
   readonly read: typeof getPreference
   readonly revoke: typeof trelloClient.disconnect
@@ -87,6 +88,7 @@ const defaultHost: BoardHost = {
   execute: executeCommand,
   load: trelloClient.load,
   loadCard: trelloClient.loadCard,
+  loadCovers: trelloClient.loadCovers,
   moveCard: trelloClient.moveCard,
   read: getPreference,
   revoke: trelloClient.disconnect,
@@ -248,6 +250,38 @@ export const createInstance = async (
         connectedIds: ids,
         loading: false,
       }
+      await notify()
+      void host
+        .loadCovers(id, signal)
+        .then(async (covers) => {
+          if (
+            disposed ||
+            requestGeneration !== generation ||
+            covers.length === 0
+          )
+            return
+          const current = host.session.get(id)?.board
+          if (!current) return
+          const coverById = new Map(
+            covers.map(({ coverDataUrl, id: cardId }) => [
+              cardId,
+              coverDataUrl,
+            ]),
+          )
+          const enrichedBoard = {
+            ...current,
+            cards: current.cards.map((card) => {
+              const coverDataUrl = coverById.get(card.id)
+              return coverDataUrl ? { ...card, coverDataUrl } : card
+            }),
+          }
+          host.session.set(id, { board: enrichedBoard })
+          state = { ...state, board: enrichedBoard }
+          await notify()
+        })
+        .catch(() => {
+          // Covers are optional; the core board is already available.
+        })
       await syncTitle(board.name)
       try {
         await host.write(connectionsPreference, ids)

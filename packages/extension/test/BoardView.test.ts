@@ -1,3 +1,5 @@
+// cspell:words AQID
+
 import type { ViewContext, VirtualDomViewInstance } from '@lvce-editor/api'
 import { expect, jest, test } from '@jest/globals'
 import { createSession } from '../src/parts/BoardView/BoardSession.ts'
@@ -52,6 +54,7 @@ const createHost = (): BoardHost => ({
     attachments: [],
     desc: id === 'new' ? '' : 'Details',
   })),
+  loadCovers: jest.fn<BoardHost['loadCovers']>().mockResolvedValue([]),
   moveCard: jest.fn<BoardHost['moveCard']>().mockResolvedValue(undefined),
   read: jest.fn<BoardHost['read']>().mockResolvedValue([]),
   revoke: jest.fn<BoardHost['revoke']>().mockResolvedValue(undefined),
@@ -70,6 +73,49 @@ const createHost = (): BoardHost => ({
       pos: 1,
     })),
   write: jest.fn<BoardHost['write']>().mockResolvedValue(undefined),
+})
+
+test('renders board before cover loading finishes and merges successful covers', async () => {
+  const host = createHost()
+  const covers =
+    Promise.withResolvers<Awaited<ReturnType<BoardHost['loadCovers']>>>()
+  jest.mocked(host.loadCovers).mockReturnValue(covers.promise)
+  const view = await createInstance(createContext(), host)
+  await flush()
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('A task')
+  expect(
+    host.session.get('5k8NLHLh')?.board.cards[0]?.coverDataUrl,
+  ).toBeUndefined()
+  covers.resolve([{ coverDataUrl: 'data:image/png;base64,AQID', id: 'one' }])
+  await flush()
+  expect(host.session.get('5k8NLHLh')?.board.cards[0]?.coverDataUrl).toBe(
+    'data:image/png;base64,AQID',
+  )
+  expect(JSON.stringify(await view.render())).toContain('BoardCardCover')
+  view.dispose?.()
+})
+
+test('ignores cover failures after the core board has loaded', async () => {
+  const host = createHost()
+  jest
+    .mocked(host.loadCovers)
+    .mockRejectedValue(new Error('cover request failed'))
+  const view = await createInstance(createContext(), host)
+  await flush()
+  await view.handleEvent?.({ name: 'board-provider:trello', type: 'click' })
+  await flush()
+  await view.handleEvent?.({ name: 'board-select:5k8NLHLh', type: 'click' })
+  await flush()
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('A task')
+  expect(JSON.stringify(await view.render())).not.toContain(
+    'TRELLO_REQUEST_FAILED',
+  )
+  view.dispose?.()
 })
 const createContext = (): ViewContext => ({
   requestRerender: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),

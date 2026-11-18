@@ -19,6 +19,7 @@ export const testBoardSelection = async (
   const discoveryLoads: string[] = []
   const proxiedLoads: string[] = []
   const boardLoads: string[] = []
+  const coverLoads: string[] = []
   const moveRequests: string[] = []
   await context.route(`${backend}/**`, async (route) => {
     const path = new URL(route.request().url()).pathname
@@ -32,7 +33,18 @@ export const testBoardSelection = async (
       body = { configured: true, connected: true }
     } else if (path.endsWith('/token')) {
       body = { accessToken: 'trello-test' }
-    } else if (/^\/api\/integrations\/trello\/boards\//u.test(path)) {
+    } else if (
+      /^\/api\/integrations\/trello\/boards\/[^/]+\/covers$/u.test(path)
+    ) {
+      coverLoads.push(path)
+      body = [
+        {
+          coverDataUrl:
+            'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
+          id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
+        },
+      ]
+    } else if (/^\/api\/integrations\/trello\/boards\/[^/]+$/u.test(path)) {
       boardLoads.push(path)
       const id = path.split('/').at(-1)
       body = {
@@ -55,8 +67,6 @@ export const testBoardSelection = async (
         ],
         cards: [
           {
-            coverDataUrl:
-              'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+nmL8AAAAASUVORK5CYII=',
             id: 'aaaaaaaaaaaaaaaaaaaaaaaa',
             idList: 'bbbbbbbbbbbbbbbbbbbbbbbb',
             labels: [
@@ -344,6 +354,10 @@ export const testBoardSelection = async (
     assert.deepEqual(proxiedLoads, [])
     const cover = page.locator('.BoardCardCover')
     await cover.waitFor({ state: 'visible' })
+    assert.deepEqual(coverLoads, [
+      '/api/integrations/trello/boards/22222222/covers',
+      '/api/integrations/trello/boards/22222222/covers',
+    ])
     const coverSrc = await cover.getAttribute('src')
     assert.ok(coverSrc)
     assert.match(coverSrc, /^data:image\/png;base64,/u)
@@ -592,10 +606,10 @@ export const testBoardSelection = async (
         name: 'Refresh board',
         exact: true,
       })
-      const refreshed = page.waitForResponse((response) =>
-        response
-          .url()
-          .startsWith(`${backend}/api/integrations/trello/boards/22222222`),
+      const refreshed = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname ===
+          '/api/integrations/trello/boards/22222222',
       )
       await refreshButton.click()
       await refreshed
@@ -617,9 +631,8 @@ export const testBoardSelection = async (
     const refresh = page.waitForResponse(
       (response) =>
         response.request().method() === 'GET' &&
-        response
-          .url()
-          .startsWith(`${backend}/api/integrations/trello/boards/22222222`),
+        new URL(response.url()).pathname ===
+          '/api/integrations/trello/boards/22222222',
     )
     await page
       .getByRole('button', { name: 'Refresh board', exact: true })
