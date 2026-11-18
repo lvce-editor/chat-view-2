@@ -157,6 +157,7 @@ test('searches connected boards by name and opens the selected result', async ()
   await flush()
   const dom = JSON.stringify(await view.render())
   expect(dom).toContain('Personal Tasks')
+  expect(dom).toContain('BoardSearchResult')
   expect(dom).not.toContain('Lvce Editor')
   await view.handleEvent?.({ name: 'board-search', type: 'input', value: '' })
   expect(JSON.stringify(await view.render())).not.toContain(
