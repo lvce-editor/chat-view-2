@@ -1295,6 +1295,26 @@ test('a late detail response cannot replace the next card or reopen a closed dia
   )
 })
 
+test('clicking the card dialog backdrop closes it while interior clicks preserve it', async () => {
+  const host = createHost()
+  const view = await openBoard(host)
+  await view.handleEvent?.({ name: 'board-card:one', type: 'click' })
+  await flush()
+  const dialogView = view as VirtualDomViewInstance & {
+    handleDialogOverlayClick(className: unknown): void
+  }
+  dialogView.handleDialogOverlayClick('BoardDialog')
+  expect(JSON.stringify(await view.render())).toContain('BoardDialogOverlay')
+  dialogView.handleDialogOverlayClick('BoardDialogOverlay')
+  expect(JSON.stringify(await view.render())).not.toContain(
+    'BoardDialogOverlay',
+  )
+  expect(host.updateCard).not.toHaveBeenCalled()
+  await view.handleEvent?.({ name: 'board-card:one', type: 'click' })
+  await flush()
+  expect(JSON.stringify(await view.render())).toContain('BoardDialogOverlay')
+})
+
 test('synchronizes the favicon for cached, refreshed and closed boards', async () => {
   const host = createHost()
   const icon = 'data:image/svg+xml,cached'

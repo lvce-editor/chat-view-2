@@ -59,6 +59,7 @@ interface BoardDragHandlers {
 }
 interface BoardViewInstance extends VirtualDomViewInstance, BoardDragHandlers {
   readonly handleDialogKeyDown: (key: unknown) => void
+  readonly handleDialogOverlayClick: (className: unknown) => void
 }
 const getMoveTarget = (
   board: BoardState['board'],
@@ -1123,6 +1124,12 @@ export const createInstance = async (
       cancel()
       closeEditor()
     },
+    handleDialogOverlayClick(className: unknown): void {
+      const { savingCard } = state
+      if (className !== 'BoardDialogOverlay' || savingCard) return
+      cancel()
+      closeEditor()
+    },
     async handleEvent(event: Readonly<ViewEvent>): Promise<void> {
       if (await handleSearchEvent(event)) return
       if (handleNonClickEvent(event)) return
@@ -1190,6 +1197,10 @@ export const view: View<VirtualDomViewInstance> = {
     {
       name: 'handleBoardDragEnd',
       params: ['handleBoardDragEnd'],
+    },
+    {
+      name: 'handleDialogOverlayClick',
+      params: ['handleDialogOverlayClick', 'event.target.className'],
     },
     {
       name: 'handleDialogKeyDown',
