@@ -184,8 +184,14 @@
   outline-offset: -2px;
 }
 
-.ChatTaskFocused {
+.ChatTaskSelected {
   background: var(--ChatHoverBackground);
+  box-shadow: inset 2px 0 var(--ChatFocusBorder, var(--ChatForeground));
+}
+
+.ChatTaskFocused {
+  outline: 1px solid var(--ChatFocusBorder, var(--ChatForeground));
+  outline-offset: -1px;
 }
 
 .ChatTaskItem {
@@ -196,9 +202,13 @@
   border-radius: 5px;
 }
 
-.ChatTaskItem:hover,
+.ChatTaskItem:hover {
+  background: color-mix(in srgb, var(--ChatHoverBackground) 55%, transparent);
+}
+
 .ChatTaskItem:focus-within {
-  background: var(--ChatHoverBackground);
+  outline: 1px solid var(--ChatFocusBorder, var(--ChatForeground));
+  outline-offset: -1px;
 }
 
 .ChatTaskButton {

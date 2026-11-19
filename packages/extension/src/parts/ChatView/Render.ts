@@ -62,15 +62,18 @@ const renderTask = (
   task: ChatTask,
   taskOpenMode: ChatViewState['taskOpenMode'],
   focusedTaskId: ChatViewState['focusedTaskId'],
+  selectedTaskId: string | undefined,
 ): Dom.Node => {
   const status = getStatusLabel(task)
   const focused = task.id === focusedTaskId
+  const selected = task.id === selectedTaskId
   return Dom.node(
     VirtualDomElements.Div,
     {
       className: mergeClassNames(
         'ChatTaskItem',
         focused ? 'ChatTaskFocused' : '',
+        selected ? 'ChatTaskSelected' : '',
       ),
       role: 'treeitem',
     },
@@ -116,6 +119,7 @@ const renderTaskList = (
   fontSize: string,
   taskOpenMode: ChatViewState['taskOpenMode'],
   focusedTaskId: ChatViewState['focusedTaskId'],
+  selectedTaskId: string | undefined,
   ariaLabel: string,
 ): Dom.Node => {
   if (tasks.length === 0) {
@@ -143,7 +147,9 @@ const renderTaskList = (
       role: 'tree',
       tabIndex: 0,
     },
-    tasks.map((task) => renderTask(task, taskOpenMode, activeTaskId)),
+    tasks.map((task) =>
+      renderTask(task, taskOpenMode, activeTaskId, selectedTaskId),
+    ),
   )
 }
 
@@ -1356,6 +1362,7 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.Node => {
     focusedTaskId,
     fontFamily,
     fontSize,
+    selectedTask,
     taskOpenMode,
     tasks,
   } = state
@@ -1381,6 +1388,7 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.Node => {
         fontSize,
         taskOpenMode,
         focusedTaskId,
+        selectedTask?.id,
         'Tasks',
       ),
       renderComposer(state),
@@ -1658,6 +1666,7 @@ const renderAiNativeSessions = (
     focusedTaskId,
     fontFamily,
     fontSize,
+    selectedTask,
     sessionsListVisible,
     sessionsWidth,
     taskOpenMode,
@@ -1682,6 +1691,7 @@ const renderAiNativeSessions = (
         fontSize,
         taskOpenMode,
         focusedTaskId,
+        selectedTask?.id,
         'Chat sessions',
       ),
     ]),
