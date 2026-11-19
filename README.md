@@ -87,23 +87,4 @@ view after changing this setting.
 
 ## Board layout
 
-Run **View: Open Board Layout** and choose **Connect Trello**. Sign in to LVCE,
-select **Authorize Trello**, then follow **Continue to Trello** to grant read access
-in your browser. If prompted, sign in to the same LVCE account as the editor.
-The view updates automatically after consent. Enter a board URL
-or ID to display its open lists and cards in Trello order, including empty lists.
-Refresh to load changes; editing stays in Trello.
-
-The backend must configure a confidential Trello OAuth 2.0 client using
-`LVCE_TRELLO_CLIENT_ID` and `LVCE_TRELLO_CLIENT_SECRET`, with callback URL
-`https://lvce-editor.dev/auth/trello/callback` (or the configured backend origin
-followed by `/auth/trello/callback`). Enable `read:board:trello` in Trello; the
-backend also requests `offline_access` for refresh tokens. The client secret and
-Trello tokens stay in the backend. The editor uses its LVCE access token and
-never forwards it to a different `chat2.backendUrl` override.
-
-Board IDs are remembered in `chat2.connectedBoardIds`. **Forget board** removes
-an individual saved board; **Disconnect Trello** removes the backend connection
-and pending authorization. You can also revoke access in Trello. Board contents
-are cached only in memory across layout changes. After reload, select Trello
-and reopen a remembered board without entering credentials again.
+Boards are provided by the independent [board-view-worker](https://github.com/lvce-editor/board-view-worker), which LVCE Editor installs separately. That repository owns board setup, Trello connections, rendering and regression coverage. Existing board commands and saved board IDs remain compatible.
