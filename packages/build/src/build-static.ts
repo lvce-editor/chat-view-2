@@ -114,8 +114,6 @@ await cp(
   { recursive: true, force: true },
 )
 
-const boardPath = path.join(root, 'dist', 'board')
-await mkdir(boardPath, { recursive: true })
 const html = await readFile(path.join(root, 'dist', 'index.html'), 'utf8')
 // Select the board before view activation; the host otherwise restores Explorer.
 const configPattern =
@@ -135,6 +133,10 @@ const boardHtml = html.replace(
   (_, start: string, _content: string, end: string) =>
     `${start}\n${JSON.stringify(config, null, 2)}\n${end}`,
 )
-await writeFile(path.join(boardPath, 'index.html'), boardHtml)
+for (const route of ['boards', 'board']) {
+  const boardPath = path.join(root, 'dist', route)
+  await mkdir(boardPath, { recursive: true })
+  await writeFile(path.join(boardPath, 'index.html'), boardHtml)
+}
 
 await assertStaticChatExtension(commitHash)

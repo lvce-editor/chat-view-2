@@ -1,7 +1,7 @@
 const legacyChatTaskHashPrefix = '#chat-'
 const chatPathRegex = /(?:^|\/)chat\/?$/
-const boardPathRegex = /(?:^|\/)board\/?$/
-const layoutPathSuffixRegex = /\/(?:chat|board)\/?$/
+const boardPathRegex = /(?:^|\/)(?:boards|board)\/?$/
+const layoutPathSuffixRegex = /\/(?:chat|boards|board)\/?$/
 
 export type ChatTaskHash =
   | { readonly id: string; readonly type: 'task' }
@@ -45,7 +45,7 @@ export const getBoardPath = (href: string, assetDir: string): string => {
   const currentUrl = new URL(href)
   const assetPath = new URL(assetDir, currentUrl).pathname
   const pathPrefix = assetPath.slice(0, assetPath.lastIndexOf('/'))
-  return pathPrefix ? `${pathPrefix}/board` : '/board'
+  return pathPrefix ? `${pathPrefix}/boards` : '/boards'
 }
 
 export const getIdePath = (href: string): string => {
