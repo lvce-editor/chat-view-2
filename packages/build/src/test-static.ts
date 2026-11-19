@@ -266,20 +266,20 @@ try {
     const boardErrors: string[] = []
     boardPage.on('pageerror', (error) => boardErrors.push(error.message))
     try {
-      const response = await boardPage.goto(`${baseUrl}board`)
+      const response = await boardPage.goto(`${baseUrl}boards`)
       assert.equal(response?.status(), 200)
       await boardPage.locator('.BoardView').waitFor()
       await boardPage
         .getByRole('heading', { name: 'Boards', exact: true })
         .waitFor()
-      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
+      assert.ok(new URL(boardPage.url()).pathname.endsWith('/boards/'))
       const reloadResponse = await boardPage.reload()
       assert.equal(reloadResponse?.status(), 200)
       await boardPage.locator('.BoardView').waitFor()
       await boardPage
         .getByRole('heading', { name: 'Boards', exact: true })
         .waitFor()
-      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
+      assert.ok(new URL(boardPage.url()).pathname.endsWith('/boards/'))
       await boardPage.goto(`${baseUrl}board/`)
       await boardPage.locator('.BoardView').waitFor()
       await boardPage
