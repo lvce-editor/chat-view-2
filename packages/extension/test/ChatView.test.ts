@@ -656,6 +656,44 @@ test('renders a focused task list, model control, and composer', async () => {
   expect(modelIndex).toBeLessThan(submitIndex)
 })
 
+test('marks only the selected task as selected independently of keyboard focus', async () => {
+  const instance = await createTestInstance()
+  try {
+    const state = instance.getState()
+    instance.setState({
+      ...state,
+      focusMode: true,
+      selectedTask: state.tasks[1],
+      sessionsListVisible: true,
+    })
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+
+    let taskItems = getNodesByClass(instance.render(), 'ChatTaskItem')
+    expect(
+      taskItems.filter((node) => node.className.includes('ChatTaskSelected')),
+    ).toHaveLength(1)
+    expect(taskItems[0].className).toContain('ChatTaskFocused')
+    expect(taskItems[0].className).not.toContain('ChatTaskSelected')
+    expect(taskItems[1].className).toContain('ChatTaskSelected')
+    expect(taskItems[1].className).not.toContain('ChatTaskFocused')
+
+    instance.handleKeyDown('ArrowDown', false, false, false, 'task-list')
+    taskItems = getNodesByClass(instance.render(), 'ChatTaskItem')
+    expect(
+      taskItems.filter((node) => node.className.includes('ChatTaskSelected')),
+    ).toHaveLength(1)
+    expect(taskItems[1].className).toContain('ChatTaskSelected')
+    expect(taskItems[1].className).toContain('ChatTaskFocused')
+
+    await instance.newChat()
+    expect(getNodesByClass(instance.render(), 'ChatTaskSelected')).toHaveLength(
+      0,
+    )
+  } finally {
+    instance.dispose?.()
+  }
+})
+
 test('moves the active task through the task list with arrow keys', async () => {
   const instance = await createTestInstance()
 
