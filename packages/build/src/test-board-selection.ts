@@ -573,9 +573,11 @@ export const testBoardSelection = async (
       await page.screenshot({
         path: process.env.BOARD_DETAIL_MOBILE_SCREENSHOT,
       })
-    await dialog
-      .getByRole('button', { name: 'Close card', exact: true })
-      .click()
+    await dialog.getByRole('textbox', { name: 'Title' }).click()
+    await dialog.waitFor()
+    await page
+      .locator('.BoardDialogOverlay')
+      .click({ position: { x: 5, y: 5 } })
     await dialog.waitFor({ state: 'detached' })
     await page.setViewportSize({ width: 1280, height: 720 })
     await page

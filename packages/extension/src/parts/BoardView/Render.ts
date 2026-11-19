@@ -505,6 +505,7 @@ const renderCardDialog = (state: BoardState): Dom.Node | undefined => {
       ariaLabel: 'Edit Trello card',
       ariaModal: true,
       className: 'BoardDialogOverlay',
+      onClick: 'handleDialogOverlayClick',
       onKeyDown: 'handleDialogKeyDown',
       role: 'dialog',
       tabIndex: -1,
