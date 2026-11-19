@@ -12,6 +12,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { chromium, firefox } from 'playwright'
 import { testBoardSelection } from './test-board-selection.ts'
 import { testComposerPaste } from './test-composer-paste.ts'
+import { testLayoutTransition } from './test-layout-transition.ts'
 import {
   startEvaluationProxy,
   type EvaluationProxy,
@@ -107,6 +108,7 @@ try {
     `http://127.0.0.1:${address.port}${prefix}`
   assert.ok(URL.canParse(baseUrl))
   const origin = new URL(baseUrl).origin
+  const layoutTransitionOnly = process.argv.includes('--layout-transition-only')
   const boardSelectionOnly = process.argv.includes('--board-selection-only')
   replay = await startEvaluationProxy({
     cacheDirectory: fileURLToPath(
@@ -118,7 +120,7 @@ try {
         apiKey: process.env.LVCE_ACCESS_TOKEN,
       }),
     model: 'gpt-5.4-mini',
-    port: boardSelectionOnly ? 0 : 8787,
+    port: boardSelectionOnly || layoutTransitionOnly ? 0 : 8787,
     workspaceUri: 'memfs:///recorded-workspace/',
     allowedOrigin: origin,
     scenarioId: 'static-ui',
@@ -604,12 +606,19 @@ try {
     assert.deepEqual(failures, [], 'Exported e2e tests failed')
   }
   try {
-    if (boardSelectionOnly) {
+    if (layoutTransitionOnly) {
+      await testLayoutTransition(browser, baseUrl)
+    } else if (boardSelectionOnly) {
       await testBoardSelection(browser, baseUrl)
     } else {
       await testComposerPaste(browser, baseUrl)
     }
-    if (!boardSelectionOnly && !process.argv.includes('--paste-only')) {
+    if (
+      !boardSelectionOnly &&
+      !layoutTransitionOnly &&
+      !process.argv.includes('--paste-only')
+    ) {
+      await testLayoutTransition(browser, baseUrl)
       await testExported(replay)
     }
   } finally {
