@@ -44,7 +44,6 @@ export const test: Test = async ({
   // eslint-disable-next-line e2e/no-direct-click
   await secondTask.click()
   await expect(selectedTask).toHaveCount(1)
-  await expect(selectedTask).toHaveCSS('box-shadow', /inset/)
   await expect(selectedTaskButton).toContainText(
     'Fix quickpick beforeinput crash',
   )

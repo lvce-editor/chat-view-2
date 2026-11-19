@@ -189,6 +189,11 @@
   box-shadow: inset 2px 0 var(--ChatFocusBorder, var(--ChatForeground));
 }
 
+.ChatTaskFocused {
+  outline: 1px solid var(--ChatFocusBorder, var(--ChatForeground));
+  outline-offset: -1px;
+}
+
 .ChatTaskItem {
   display: flex;
   flex: 0 0 auto;
@@ -202,11 +207,6 @@
 }
 
 .ChatTaskItem:focus-within {
-  outline: 1px solid var(--ChatFocusBorder, var(--ChatForeground));
-  outline-offset: -1px;
-}
-
-.ChatTaskList:focus-visible .ChatTaskFocused {
   outline: 1px solid var(--ChatFocusBorder, var(--ChatForeground));
   outline-offset: -1px;
 }
