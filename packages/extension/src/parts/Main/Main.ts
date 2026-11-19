@@ -4,14 +4,9 @@ import {
   registerCommand,
   registerView,
 } from '@lvce-editor/api'
-import {
-  view as boardView,
-  viewId as boardViewId,
-} from '../BoardView/BoardView.ts'
 import { showChatLayout } from '../ChatLayout/ChatLayout.ts'
 import {
   getUrl,
-  isBoardPath,
   isChatPath,
   parseChatTaskHash,
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
@@ -21,7 +16,6 @@ import {
   getActiveChatQuickPickItems,
   newChatInActiveChatViewInstance,
   openActiveChatQuickPickItem,
-  setWorkbenchLayoutUrl,
   submitActiveChatViewInstance,
   toggleActiveChatViewFocusMode,
   toggleActiveChatViewSessionsList,
@@ -42,16 +36,6 @@ export const activate = (): Promise<void> => {
 const activateMain = async (): Promise<void> => {
   await activateExtensionApi()
   registerView(view)
-  registerView(boardView)
-  registerCommand({
-    async execute() {
-      await executeCommand('Layout.leaveSideBarFocusMode')
-      await setWorkbenchLayoutUrl(executeCommand, 'board')
-      await executeCommand('SideBar.show', boardViewId, true)
-      await executeCommand('Layout.enterSideBarFocusMode', 'primary', true)
-    },
-    id: 'chat2.showBoardLayout',
-  })
   registerCommand({
     execute() {
       return showChatLayout('ai-native')
@@ -116,7 +100,8 @@ const activateMain = async (): Promise<void> => {
       async execute() {
         if (
           !(await executeCommand('Layout.getSideBarFocusMode')) ||
-          (await executeCommand('Layout.getActiveSideBarView')) === boardViewId
+          (await executeCommand('Layout.getActiveSideBarView')) ===
+            'chat2.views.board'
         ) {
           await executeCommand('SideBar.show', viewId, true)
         }
@@ -153,13 +138,6 @@ const activateMain = async (): Promise<void> => {
     const href = await executeCommand('Layout.getHref')
     const url = typeof href === 'string' ? getUrl(href) : undefined
     if (
-      typeof href === 'string' &&
-      url !== undefined &&
-      isBoardPath(url.pathname)
-    ) {
-      await executeCommand('SideBar.show', boardViewId, true)
-      await executeCommand('Layout.enterSideBarFocusMode', 'primary', true)
-    } else if (
       typeof href === 'string' &&
       (parseChatTaskHash(href).type === 'task' ||
         (url !== undefined && isChatPath(url.pathname)))

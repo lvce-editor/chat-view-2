@@ -10,9 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { loadEnvFile } from 'node:process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { chromium, firefox } from 'playwright'
-import { testBoardSelection } from './test-board-selection.ts'
 import { testComposerPaste } from './test-composer-paste.ts'
-import { testLayoutTransition } from './test-layout-transition.ts'
 import {
   startEvaluationProxy,
   type EvaluationProxy,
@@ -108,8 +106,6 @@ try {
     `http://127.0.0.1:${address.port}${prefix}`
   assert.ok(URL.canParse(baseUrl))
   const origin = new URL(baseUrl).origin
-  const layoutTransitionOnly = process.argv.includes('--layout-transition-only')
-  const boardSelectionOnly = process.argv.includes('--board-selection-only')
   replay = await startEvaluationProxy({
     cacheDirectory: fileURLToPath(
       new URL('../../evaluation/cache/', import.meta.url),
@@ -120,7 +116,7 @@ try {
         apiKey: process.env.LVCE_ACCESS_TOKEN,
       }),
     model: 'gpt-5.4-mini',
-    port: boardSelectionOnly || layoutTransitionOnly ? 0 : 8787,
+    port: 8787,
     workspaceUri: 'memfs:///recorded-workspace/',
     allowedOrigin: origin,
     scenarioId: 'static-ui',
@@ -132,7 +128,6 @@ try {
   const browserType = process.argv.includes('--firefox') ? firefox : chromium
   const browser = await browserType.launch({ headless: true })
   const testExported = async (evaluation: EvaluationProxy): Promise<void> => {
-    await testBoardSelection(browser, baseUrl)
     const startup = await browser.newContext()
     const startupPage = await startup.newPage()
     try {
@@ -262,48 +257,6 @@ try {
       throw error
     } finally {
       await savedIdeLayout.close()
-    }
-    const board = await browser.newContext()
-    const boardPage = await board.newPage()
-    const boardErrors: string[] = []
-    boardPage.on('pageerror', (error) => boardErrors.push(error.message))
-    try {
-      const response = await boardPage.goto(`${baseUrl}boards`)
-      assert.equal(response?.status(), 200)
-      await boardPage.locator('.BoardView').waitFor()
-      await boardPage
-        .getByRole('heading', { name: 'Boards', exact: true })
-        .waitFor()
-      assert.ok(new URL(boardPage.url()).pathname.endsWith('/boards/'))
-      const reloadResponse = await boardPage.reload()
-      assert.equal(reloadResponse?.status(), 200)
-      await boardPage.locator('.BoardView').waitFor()
-      await boardPage
-        .getByRole('heading', { name: 'Boards', exact: true })
-        .waitFor()
-      assert.ok(new URL(boardPage.url()).pathname.endsWith('/boards/'))
-      await boardPage.goto(`${baseUrl}board/`)
-      await boardPage.locator('.BoardView').waitFor()
-      await boardPage
-        .getByRole('heading', { name: 'Boards', exact: true })
-        .waitFor()
-      assert.ok(new URL(boardPage.url()).pathname.endsWith('/board/'))
-      assert.deepEqual(
-        boardErrors,
-        [],
-        'Direct board load or reload raised an exception',
-      )
-      process.stdout.write('fresh direct board route and reload: pass\n')
-    } catch (error) {
-      console.error(
-        'Direct board route state:',
-        boardPage.url(),
-        (await boardPage.locator('body').innerText()).slice(0, 5000),
-        boardErrors,
-      )
-      throw error
-    } finally {
-      await board.close()
     }
     for (const preserveStartupFocus of [false, true]) {
       const context = await browser.newContext()
@@ -606,19 +559,8 @@ try {
     assert.deepEqual(failures, [], 'Exported e2e tests failed')
   }
   try {
-    if (layoutTransitionOnly) {
-      await testLayoutTransition(browser, baseUrl)
-    } else if (boardSelectionOnly) {
-      await testBoardSelection(browser, baseUrl)
-    } else {
-      await testComposerPaste(browser, baseUrl)
-    }
-    if (
-      !boardSelectionOnly &&
-      !layoutTransitionOnly &&
-      !process.argv.includes('--paste-only')
-    ) {
-      await testLayoutTransition(browser, baseUrl)
+    await testComposerPaste(browser, baseUrl)
+    if (!process.argv.includes('--paste-only')) {
       await testExported(replay)
     }
   } finally {
