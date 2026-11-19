@@ -8,6 +8,7 @@ import {
   view as boardView,
   viewId as boardViewId,
 } from '../BoardView/BoardView.ts'
+import { showChatLayout } from '../ChatLayout/ChatLayout.ts'
 import {
   getUrl,
   isBoardPath,
@@ -52,19 +53,14 @@ const activateMain = async (): Promise<void> => {
     id: 'chat2.showBoardLayout',
   })
   registerCommand({
-    async execute() {
-      await executeCommand('Layout.leaveSideBarFocusMode')
-      await setWorkbenchLayoutUrl(executeCommand, 'ai-native')
-      await executeCommand('SideBar.show', viewId, true)
-      await toggleActiveChatViewFocusMode()
+    execute() {
+      return showChatLayout('ai-native')
     },
     id: 'chat2.showAiNativeLayout',
   })
   registerCommand({
-    async execute() {
-      await executeCommand('Layout.leaveSideBarFocusMode')
-      await setWorkbenchLayoutUrl(executeCommand, 'ide')
-      await executeCommand('SideBar.show', viewId, true)
+    execute() {
+      return showChatLayout('ide')
     },
     id: 'chat2.showIdeLayout',
   })
