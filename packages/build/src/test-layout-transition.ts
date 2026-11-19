@@ -74,8 +74,8 @@ export const testLayoutTransition = async (
       await chat.waitFor()
       await board.waitFor({ state: 'detached' })
       await page.waitForFunction((native) => {
-        const workbench = document.querySelector('.Workbench')
-        const chat = document.querySelector('.ChatView')
+        const workbench = globalThis.document.querySelector('.Workbench')
+        const chat = globalThis.document.querySelector('.ChatView')
         return (
           workbench?.classList.contains('AiNativeLayout') === native &&
           chat?.classList.contains('ChatAiNativeLayout') === native
