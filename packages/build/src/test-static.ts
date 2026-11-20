@@ -160,6 +160,14 @@ try {
         'Cold startup or direct chat reload raised an exception',
       )
       process.stdout.write('cold startup and signed-out chat reload: pass\n')
+      await page.keyboard.press('Control+Shift+P')
+      await page.getByRole('combobox').fill('>Open Board Layout')
+      await page
+        .getByRole('option', { name: 'View: Open Board Layout', exact: true })
+        .click()
+      await page.waitForURL((url) => url.pathname === `${prefix}boards`)
+      await page.locator('.BoardView').waitFor()
+      process.stdout.write('command palette opens the board view: pass\n')
     } catch (error) {
       console.error(
         'Startup state:',
