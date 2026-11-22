@@ -1001,13 +1001,15 @@ const renderImagePreview = (
     ],
   )
 
+// Saved sessions can contain the raw fetch message from different browsers.
+const fetchFailureMessages = [
+  'Failed to fetch',
+  'NetworkError when attempting to fetch resource.',
+  'Load failed',
+]
+
 const getChatErrorText = (message: string): string => {
-  // Saved sessions can contain the raw fetch message from different browsers.
-  if (
-    message === 'Failed to fetch' ||
-    message === 'NetworkError when attempting to fetch resource.' ||
-    message === 'Load failed'
-  ) {
+  if (fetchFailureMessages.includes(message)) {
     return 'Could not reach the chat server. Check your connection and try again.'
   }
   return message
