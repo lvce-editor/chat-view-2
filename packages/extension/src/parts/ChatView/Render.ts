@@ -1001,12 +1001,28 @@ const renderImagePreview = (
     ],
   )
 
+const getChatErrorText = (message: string): string => {
+  // Saved sessions can contain the raw fetch message from different browsers.
+  if (
+    message === 'Failed to fetch' ||
+    message === 'NetworkError when attempting to fetch resource.' ||
+    message === 'Load failed'
+  ) {
+    return 'Could not reach the chat server. Check your connection and try again.'
+  }
+  return message
+}
+
 const renderErrorBanners = (
   summaryErrorMessage: string,
   errorMessage: string,
 ): readonly Dom.Node[] => [
   ...(summaryErrorMessage
-    ? [Dom.div('ChatErrorBanner', [Dom.textNode(summaryErrorMessage)])]
+    ? [
+        Dom.div('ChatErrorBanner', [
+          Dom.textNode(getChatErrorText(summaryErrorMessage)),
+        ]),
+      ]
     : []),
   ...(errorMessage
     ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
