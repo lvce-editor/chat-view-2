@@ -12,9 +12,9 @@
     "@types/node": "^26.6.6"
   },
   "dependencies": {
-    "@lvce-editor/rpc": "^6.23.0"
+    "@lvce-editor/rpc": "^6.24.0"
   },
   "optionalDependencies": {
-    "@agent-sh/computer-use-linux": "0.7.47"
+    "@agent-sh/computer-use-linux": "0.7.60"
   }
 }

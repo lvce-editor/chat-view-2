@@ -32,9 +32,9 @@
   "author": "Lvce Editor",
   "license": "MIT",
   "devDependencies": {
-    "@lvce-editor/eslint-config": "^18.16.0",
-    "eslint": "10.13.0",
-    "katex": "^0.16.22",
+    "@lvce-editor/eslint-config": "^18.17.0",
+    "eslint": "10.15.0",
+    "katex": "^0.16.47",
     "prettier": "^4.0.0-alpha.10",
     "typescript": "^6.0.3"
   },
