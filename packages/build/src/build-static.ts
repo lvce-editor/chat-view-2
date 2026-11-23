@@ -142,6 +142,7 @@ const exportChatAndBoard = async (): Promise<{ commitHash: string }> => {
     )
     return await exportStatic({
       extensionPath: 'packages/extension',
+      page: 'chat',
       extensionPaths: [boardExtensionPath],
       testPath: 'packages/e2e',
       root,
@@ -167,6 +168,16 @@ if (!configMatch) {
   throw new Error('Expected static HTML to contain the runtime Config script')
 }
 const config = JSON.parse(configMatch[2])
+if (
+  !Array.isArray(config.preloadWorkers) ||
+  config.preloadWorkers.some((worker: string) =>
+    ['editorWorker', 'fileSystemWorker', 'syntaxHighlightingWorker'].includes(
+      worker,
+    ),
+  )
+) {
+  throw new Error('Expected the application page preload configuration')
+}
 config.initialLayout = {
   ...config.initialLayout,
   sideBarView: 'chat2.views.board',
