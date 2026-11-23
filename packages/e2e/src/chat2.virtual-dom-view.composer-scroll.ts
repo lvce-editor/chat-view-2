@@ -22,7 +22,7 @@ const getScrollTop = async (
     { key: 'scrollTop' },
   )
   if (typeof actual !== 'number') {
-    throw new Error('Expected the chat message scroll position')
+    throw new TypeError('Expected the chat message scroll position')
   }
   return actual
 }
@@ -65,7 +65,8 @@ export const test: Test = async ({ Command, expect, Locator }) => {
     Command,
     '.ChatMessageUser .ChatMessageTable tbody tr:last-child',
   )
-  await expect(Locator('.ChatAiNativeLayout')).toBeVisible()
+  const aiLayout = Locator('.ChatAiNativeLayout')
+  await expect(aiLayout).toBeVisible()
   const scrollTop = await getScrollTop(Command, messages)
   if (scrollTop <= initialScrollTop) {
     throw new Error(
