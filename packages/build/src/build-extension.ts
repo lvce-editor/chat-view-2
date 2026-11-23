@@ -1,6 +1,7 @@
 import * as esbuild from 'esbuild'
 import fs from 'node:fs'
 import path from 'node:path'
+import { buildMathAssets } from './buildMathAssets.ts'
 import { root } from './root.ts'
 
 const extension = path.join(root, 'packages', 'extension')
@@ -25,11 +26,6 @@ const chatMathWorkerEntryPoint = path.join(
   'dist',
   'chatMathWorkerMain.js',
 )
-const chatMathCssWorkerEntryPoint = path.join(
-  extension,
-  'src',
-  'chatMathCssWorkerMain.ts',
-)
 const outdir = path.join(extension, 'dist')
 
 fs.rmSync(outdir, { recursive: true, force: true })
@@ -46,15 +42,7 @@ await esbuild.build({
   target: 'esnext',
 })
 
-await esbuild.build({
-  bundle: true,
-  entryPoints: [chatMathCssWorkerEntryPoint],
-  external: ['electron', 'node:*'],
-  format: 'esm',
-  outfile: path.join(outdir, 'chatMathCssWorkerMain.js'),
-  platform: 'browser',
-  target: 'esnext',
-})
+await buildMathAssets(extension)
 
 await esbuild.build({
   bundle: true,

@@ -2,6 +2,7 @@ import * as esbuild from 'esbuild'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
 import { root } from './root.ts'
+import './build-extension.ts'
 
 const extension = path.join(root, 'packages', 'extension')
 const entryPoint = path.join(extension, 'src', 'chatMain.ts')
