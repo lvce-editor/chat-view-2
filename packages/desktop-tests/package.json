@@ -1,0 +1,8 @@
+{
+  "name": "desktop-tests",
+  "version": "0.0.0-dev",
+  "description": "End-to-end tests for Chat 2 in the Lvce Editor desktop application",
+  "private": true,
+  "type": "module",
+  "license": "MIT"
+}
