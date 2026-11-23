@@ -30,8 +30,8 @@
     }
   },
   "dependencies": {
-    "@babel/standalone": "7.29.12",
-    "@lvce-editor/rpc": "6.23.0"
+    "@babel/standalone": "7.29.15",
+    "@lvce-editor/rpc": "6.24.0"
   },
   "devDependencies": {
     "jest": "^30.5.2",
