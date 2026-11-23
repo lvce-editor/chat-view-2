@@ -11,7 +11,9 @@ import { root } from './root.ts'
 const extension = path.join(root, 'packages', 'extension')
 const node = path.join(root, 'packages', 'node')
 const workerEntryPoint = join(
-  extension,
+  root,
+  'packages',
+  'typescript-evaluation-worker',
   'src',
   'typeScriptEvaluationWorkerMain.ts',
 )

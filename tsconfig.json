@@ -6,6 +6,7 @@
     { "path": "./packages/evaluation" },
     { "path": "./packages/extension" },
     { "path": "./packages/chat-tool-worker" },
+    { "path": "./packages/typescript-evaluation-worker" },
     { "path": "./packages/node" },
     { "path": "./packages/build" }
   ]

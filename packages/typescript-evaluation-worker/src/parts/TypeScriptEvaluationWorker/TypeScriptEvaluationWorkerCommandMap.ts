@@ -4,7 +4,7 @@ import type {
   TypeScriptExecutionFailure,
   TypeScriptExecutionResult,
   TypeScriptExecutionSuccess,
-} from './TypeScriptEvaluationWorker.ts'
+} from '../../TypeScriptExecutionResult.ts'
 
 interface MockFileSystem {
   readonly readFile: (uri: string) => Promise<string>

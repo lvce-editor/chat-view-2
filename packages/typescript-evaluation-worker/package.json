@@ -1,0 +1,40 @@
+{
+  "name": "@lvce-editor/typescript-evaluation-worker",
+  "version": "0.0.0-dev",
+  "description": "Chat 2 TypeScript evaluation worker",
+  "main": "dist/typeScriptEvaluationWorkerMain.js",
+  "type": "module",
+  "exports": {
+    "./TypeScriptExecutionResult.ts": "./src/TypeScriptExecutionResult.ts"
+  },
+  "scripts": {
+    "test": "node --unhandled-rejections=warn --experimental-vm-modules ../../node_modules/jest/bin/jest.js --detectOpenHandles --forceExit"
+  },
+  "author": "Lvce Editor",
+  "license": "MIT",
+  "jest": {
+    "injectGlobals": false,
+    "extensionsToTreatAsEsm": [
+      ".ts"
+    ],
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    },
+    "transform": {
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "useESM": true
+        }
+      ]
+    }
+  },
+  "dependencies": {
+    "@babel/standalone": "7.29.12",
+    "@lvce-editor/rpc": "6.23.0"
+  },
+  "devDependencies": {
+    "jest": "^30.5.2",
+    "ts-jest": "^29.4.15"
+  }
+}
