@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.new-chat'
 
@@ -18,8 +19,7 @@ export const test: Test = async ({
   const detailView = Locator('.ChatDetailView')
   const listView = Locator('.ChatListView')
   await composer.type('Start the first chat')
-  // eslint-disable-next-line e2e/no-direct-click
-  await submit.click()
+  await runChatAction(Command, 'submit')
   await expect(detailView).toBeVisible()
   await expect(composer).toHaveValue('')
 

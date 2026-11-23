@@ -32,8 +32,13 @@ export const test: Test = async ({
   await expect(card).toBeVisible()
   await expect(cardTitle).toHaveText('Chat 2 (extension)')
   await expect(cardStatus).toHaveText('Open JSON state')
-  // eslint-disable-next-line e2e/no-direct-click -- the card click and live editor subscription are the behavior under test
-  await card.click()
+  const { uid } = await ComponentState.getComponent('ComponentState')
+  await Command.execute(
+    'Viewlet.executeViewletCommand',
+    uid,
+    'handleClick',
+    String(component.uid),
+  )
 
   const selectedTabTitle = Locator('.MainTabSelected .TabTitle')
   await expect(selectedTabTitle).toHaveText(`${component.uid}.json`)

@@ -1,6 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
-
-/* eslint-disable e2e/no-direct-click */
+import { runChatAction } from './_ChatCommands.ts'
 
 const prepareChat = async (api: TestApi): Promise<void> => {
   await api.Main.closeAllEditors()
@@ -8,7 +7,7 @@ const prepareChat = async (api: TestApi): Promise<void> => {
     'chat2.selectedModelId': 'gpt-5.4',
     'chat2.useMockBackend': true,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
 }
 
 export const name = 'chat2.additional.changed-files-expand'
@@ -16,11 +15,11 @@ export const name = 'chat2.additional.changed-files-expand'
 export const test: Test = async (api) => {
   await prepareChat(api)
   await api.Locator('textarea[name="composer"]').type('Make a scoped change')
-  await api.Locator('button[name="submit"]').click()
+  await runChatAction(api.Command, 'submit')
   const changes = api.Locator('.ChatChanges')
   await api.expect(changes).toContainText('Edited 5 files')
   const toggle = api.Locator('button[name="toggle-changes"]').first()
-  await toggle.click()
+  await runChatAction(api.Command, 'toggle-changes')
   await api.expect(toggle).toHaveAttribute('aria-expanded', 'true')
   await api.expect(api.Locator('.ChatChangedFile')).toHaveCount(5)
 }

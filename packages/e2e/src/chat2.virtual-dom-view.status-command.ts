@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.status-command'
 
@@ -49,8 +50,7 @@ export const test: Test = async ({
   await expect(popup).toContainText('mock-task-')
   await expect(userMessages).toHaveCount(1)
   const close = Locator('button[name="close-status"]')
-  // eslint-disable-next-line e2e/no-direct-click -- exercise the status close control
-  await close.click()
+  await runChatAction(Command, close)
   await expect(popup).toHaveCount(0)
   await expect(composer).toBeFocused()
   await composer.type('/status')
@@ -58,13 +58,11 @@ export const test: Test = async ({
   await KeyBoard.press('Enter')
   await expect(popup).toBeVisible()
   const modelToggle = Locator('button[name="model-picker"]')
-  // eslint-disable-next-line e2e/no-direct-click -- exercise model changes while status is open
-  await modelToggle.click()
+  await runChatAction(Command, modelToggle)
   const modelOption = Locator(
     'button[name="model:openrouter/test/api-bad-response"]',
   )
   await expect(modelOption).toBeVisible()
-  // eslint-disable-next-line e2e/no-direct-click -- exercise model changes while status is open
-  await modelOption.click()
+  await runChatAction(Command, 'model:openrouter/test/api-bad-response')
   await expect(popup).toHaveCount(0)
 }

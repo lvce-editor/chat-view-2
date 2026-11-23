@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.model-selection'
 
@@ -17,31 +18,26 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(hiddenPicker).toHaveCount(0)
   await expect(picker).toHaveCount(0)
-  // eslint-disable-next-line e2e/no-direct-click
-  await toggle.click()
+  await runChatAction(Command, 'model-picker')
 
   const option = Locator('button[name="model:gpt-5.4-mini"]')
   await expect(option).toContainText('GPT-5.4 Mini')
-  // eslint-disable-next-line e2e/no-direct-click
-  await option.click()
+  await runChatAction(Command, 'model:gpt-5.4-mini')
 
   await expect(toggle).toContainText('GPT-5.4 Mini')
   const thinkingToggle = Locator('button[name="thinking-mode-picker"]')
   const thinkingPopup = Locator('.ChatThinkingModePopup')
   await expect(thinkingToggle).toContainText('Medium')
   await expect(thinkingPopup).toHaveCount(0)
-  // eslint-disable-next-line e2e/no-direct-click
-  await thinkingToggle.click()
+  await runChatAction(Command, 'thinking-mode-picker')
   await expect(thinkingPopup).toHaveCount(1)
   const highThinking = Locator('button[name="thinking-mode:high"]')
   const thinkingOptions = Locator('.ChatThinkingModeOption')
   await expect(thinkingOptions).toHaveCount(3)
-  // eslint-disable-next-line e2e/no-direct-click
-  await highThinking.click()
+  await runChatAction(Command, 'thinking-mode:high')
   await expect(thinkingToggle).toContainText('High')
   await expect(thinkingPopup).toHaveCount(0)
-  // eslint-disable-next-line e2e/no-direct-click
-  await thinkingToggle.click()
+  await runChatAction(Command, 'thinking-mode-picker')
   await expect(highThinking).toHaveAttribute('aria-pressed', 'true')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(picker).toHaveCount(0)

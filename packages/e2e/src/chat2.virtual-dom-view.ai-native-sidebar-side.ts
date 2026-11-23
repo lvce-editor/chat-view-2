@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { openChatTask, runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.ai-native-sidebar-side'
 
@@ -79,8 +80,7 @@ export const test: Test = async ({
         pointerId: 1,
       } as unknown as string)
       const task = Locator('.ChatTaskButton').first()
-      // eslint-disable-next-line e2e/no-direct-click
-      await task.click()
+      await openChatTask(Command, task)
       await expect(taskTitle).toBeVisible()
       await KeyBoard.press('Control+B')
       await expect(sessions).toHaveCount(0)
@@ -110,8 +110,7 @@ export const test: Test = async ({
       await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
       const submit = Locator('button[name="submit"]')
       const messageContent = Locator('.ChatMessagesContent')
-      // eslint-disable-next-line e2e/no-direct-click
-      await submit.click()
+      await runChatAction(Command, 'submit')
       // The next layout iteration needs the completed task's submit button.
       await expect(messageContent).toContainText(message.trim())
       await expect(submit).toBeVisible()

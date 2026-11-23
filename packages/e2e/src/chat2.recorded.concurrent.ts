@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 const workspace = 'memfs:///recorded-workspace/'
 
@@ -127,8 +128,7 @@ export const test: Test = async (api) => {
       'Replace first original in a.txt with first updated. Keep the change scoped to that file. Preserve all other content and the existing single trailing newline.',
     )
     await api.expect(api.Locator('.ChatTaskStatus-running')).toHaveCount(1)
-    // eslint-disable-next-line e2e/no-direct-click
-    await api.Locator('.ChatSessions .ChatNewTaskButton').click()
+    await runChatAction(api.Command, 'new-task')
     await api.expect(api.Locator('.ChatMessageUser')).toHaveCount(0)
     await api.expect(api.Locator('.ChatMessageAssistant')).toHaveCount(0)
     await api.expect(api.Locator('textarea[name="composer"]')).toHaveValue('')

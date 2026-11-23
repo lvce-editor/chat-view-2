@@ -14,7 +14,7 @@ const prepare = async (api: TestApi): Promise<void> => {
     'quickpick file search',
   )
   await api.Workspace.setPath(workspace)
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
 }
 
 export const name = 'chat2.additional.quickpick-search-task'

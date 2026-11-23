@@ -16,6 +16,30 @@ export default defineConfig([
     },
   },
   {
+    files: ['packages/e2e/src/chat2.*.ts'],
+    rules: {
+      // The browser runner and static export can load this shared test helper.
+      'e2e/no-imports': 'off',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@lvce-editor/test-with-playwright',
+              allowTypeImports: true,
+            },
+          ],
+          patterns: [
+            {
+              regex:
+                '^(?!@lvce-editor/test-with-playwright$|\\./_ChatCommands\\.ts$)',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/test/**/*.ts'],
     rules: {
       'virtual-dom/no-object-attribute-values': 'off',

@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 const workspace = 'memfs:///recorded-workspace/'
 
@@ -131,12 +132,10 @@ export const test: Test = async (api) => {
     await api
       .expect(api.Locator('button[name="submit"]'))
       .toHaveAttribute('disabled', null)
-    // eslint-disable-next-line e2e/no-direct-click
-    await api.Locator('button[name="submit"]').click()
+    await runChatAction(api.Command, 'submit')
     await api.expect(api.Locator('.ChatQueuedMessage')).toHaveCount(1)
     await api.expect(api.Locator('.ChatTaskStatus-running')).toHaveCount(1)
-    // eslint-disable-next-line e2e/no-direct-click
-    await api.Locator('button[name="stop"]').click()
+    await runChatAction(api.Command, 'stop')
     await api.expect(api.Locator('.ChatTaskStatus-stopped')).toHaveCount(1)
     await api
       .expect(api.Locator('.ChatTaskStatus-running, .ChatTaskStatus-stopping'))
@@ -145,8 +144,7 @@ export const test: Test = async (api) => {
   } finally {
     await controlReplay(api, 'resume')
   }
-  // eslint-disable-next-line e2e/no-direct-click
-  await api.Locator('.ChatSessions .ChatNewTaskButton').click()
+  await runChatAction(api.Command, 'new-task')
   await startMessage(
     api,
     'What is the weather forecast for Berlin, Germany on November 4, 2026? Use web search and cite your sources.',

@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { openChatTask, runChatViewCommand } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.rename-task'
 
@@ -20,15 +21,19 @@ export const test: Test = async ({
   await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
 
   const firstTask = Locator('.ChatTaskButton').first()
-  // eslint-disable-next-line e2e/no-direct-click
-  await firstTask.click()
+  await openChatTask(Command, firstTask)
   const title = Locator('.ChatDetailTitle')
   await expect(title).toContainText('Add worker memory usage')
   const titleMenuButton = Locator('button[name="title-menu"]')
   await expect(titleMenuButton).toBeVisible()
   const renameMenuItem = Locator('.MenuItem')
-  // eslint-disable-next-line e2e/no-direct-click -- exercise the visible title menu trigger
-  await titleMenuButton.click()
+  await runChatViewCommand(
+    Command,
+    'handleViewCommand',
+    'handleTitleMenuClick',
+    0,
+    0,
+  )
   await expect(renameMenuItem).toContainText('Rename')
   await ContextMenu.selectItem('Rename')
   const input = Locator('input[name="QuickPickInput"]')
@@ -40,10 +45,8 @@ export const test: Test = async ({
   await expect(firstTask).toHaveText('Memory usage notes')
 
   const secondTask = Locator('.ChatTaskButton').nth(1)
-  // eslint-disable-next-line e2e/no-direct-click
-  await secondTask.click()
+  await openChatTask(Command, secondTask)
   await expect(title).toContainText('Fix quickpick beforeinput crash')
-  // eslint-disable-next-line e2e/no-direct-click
-  await firstTask.click()
+  await openChatTask(Command, firstTask)
   await expect(title).toHaveText('Memory usage notes')
 }

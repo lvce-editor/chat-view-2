@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 const workspace = 'memfs:///recorded-workspace/'
 
@@ -107,8 +108,7 @@ export const test: Test = async (api) => {
     await composer.type('Explain the forecast')
     const send = api.Locator('button[name="submit"]')
     await api.expect(send).toHaveAttribute('disabled', null)
-    // eslint-disable-next-line e2e/no-direct-click
-    await send.click()
+    await runChatAction(api.Command, 'submit')
     await api.expect(api.Locator('.ChatQueuedMessage')).toHaveCount(1)
     await api
       .expect(api.Locator('.ChatQueuedMessage'))
@@ -126,8 +126,10 @@ export const test: Test = async (api) => {
     await api.expect(api.Locator('button[name="stop"]')).toHaveCount(1)
     // Archive the paused task so the queued request is discarded, without
     // requiring an unrelated model response in the recorded weather fixture.
-    // eslint-disable-next-line e2e/no-direct-click
-    await api.Locator('.ChatSessions .ChatTaskArchiveButton').nth(0).click()
+    await runChatAction(
+      api.Command,
+      api.Locator('.ChatSessions .ChatTaskArchiveButton').nth(0),
+    )
   } finally {
     await controlReplay(api, 'resume')
   }

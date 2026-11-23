@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.ai-native-atomic-layout'
 
@@ -66,17 +67,11 @@ export const test: Test = async ({ Command, expect, Locator }) => {
         await expect(contentArea).toHaveCSS('animation-name', 'none')
         await expect(main).toBeVisible()
 
-        await Locator('.ActivityBarLayout').dispatchEvent('wheel', {
-          bubbles: true,
-          deltaY: -100,
-        } as unknown as string)
+        await Command.execute('Layout.handleActivityBarWheel', -100)
         await expect(workbench).toHaveCount(1)
         await expectAiNativeLayout({ expect, Locator }, theme, side)
         await expect(composer).toHaveValue(`Preserve the ${theme} draft`)
-        await Locator('.ActivityBarLayout').dispatchEvent('wheel', {
-          bubbles: true,
-          deltaY: 100,
-        } as unknown as string)
+        await Command.execute('Layout.handleActivityBarWheel', 100)
         await expect(workbench).toHaveCount(0)
         await expect(chat).toHaveCount(0)
         await expect(main).toBeVisible()
@@ -97,8 +92,7 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   await expect(titleBar).toHaveCount(0)
   await expect(statusBar).toHaveCount(0)
   await expect(composer).toHaveValue('Start a conversation in AI-native layout')
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
   const userMessage = Locator('.ChatMessageUser')
   await expect(userMessage).toContainText(
     'Start a conversation in AI-native layout',
@@ -107,16 +101,14 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   const newChatButton = Locator('.ChatSessions .ChatNewTaskButton')
   const emptyTitle = Locator('.ChatDetailView .ChatEmptyTitle')
   await expect(newChatButton).toHaveText('New chat')
-  // eslint-disable-next-line e2e/no-direct-click
-  await newChatButton.click()
+  await runChatAction(Command, 'new-task')
   await expect(emptyTitle).toBeVisible()
   await expect(composer).toHaveValue('')
   await expect(composer).toBeFocused()
   await composer.type('Type immediately in AI-native layout')
   await expect(composer).toHaveValue('Type immediately in AI-native layout')
-  // Repeated clicks on an empty conversation still clear and focus the composer.
-  // eslint-disable-next-line e2e/no-direct-click
-  await newChatButton.click()
+  // Starting a new chat twice still clears and focuses the composer.
+  await runChatAction(Command, 'new-task')
   await expect(emptyTitle).toBeVisible()
   await expect(composer).toHaveValue('')
   await expect(composer).toBeFocused()

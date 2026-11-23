@@ -6,7 +6,7 @@ const prepareChat = async (api: TestApi): Promise<void> => {
     'chat2.selectedModelId': 'gpt-5.4',
     'chat2.useMockBackend': true,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
 }
 
 export const name = 'chat2.additional.ai-native-layout-class'

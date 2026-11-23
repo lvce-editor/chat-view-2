@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { openChatTask } from './_ChatCommands.ts'
 
 const prepareChat = async (api: TestApi): Promise<void> => {
   await api.Main.closeAllEditors()
@@ -6,15 +7,14 @@ const prepareChat = async (api: TestApi): Promise<void> => {
     'chat2.selectedModelId': 'gpt-5.4',
     'chat2.useMockBackend': true,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
 }
 
 export const name = 'chat2.additional.task-model-label'
 
 export const test: Test = async (api) => {
   await prepareChat(api)
-  // eslint-disable-next-line e2e/no-direct-click -- open the visible seeded task
-  await api.Locator('.ChatTaskButton').first().click()
+  await openChatTask(api.Command, api.Locator('.ChatTaskButton').first())
   await api.expect(api.Locator('.ChatDetailView')).toBeVisible()
   await api
     .expect(api.Locator('button[name="model-picker"]'))
