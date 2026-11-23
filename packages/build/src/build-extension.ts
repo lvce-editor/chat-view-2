@@ -7,7 +7,9 @@ import { root } from './root.ts'
 const extension = path.join(root, 'packages', 'extension')
 const entryPoint = path.join(extension, 'src', 'chatMain.ts')
 const workerEntryPoint = path.join(
-  extension,
+  root,
+  'packages',
+  'typescript-evaluation-worker',
   'src',
   'typeScriptEvaluationWorkerMain.ts',
 )
