@@ -1,5 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
-import { openChatTask, runChatViewCommand } from './fixtures/ChatCommands.ts'
+import { openChatTask, runChatViewCommand } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.rename-task'
 

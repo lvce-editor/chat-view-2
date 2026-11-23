@@ -18,7 +18,7 @@ export default defineConfig([
   {
     files: ['packages/e2e/src/chat2.*.ts'],
     rules: {
-      // The browser runner can load this fixture from the same test root.
+      // The browser runner and static export can load this shared test helper.
       'e2e/no-imports': 'off',
       'no-restricted-imports': [
         'error',
@@ -32,7 +32,7 @@ export default defineConfig([
           patterns: [
             {
               regex:
-                '^(?!@lvce-editor/test-with-playwright$|\\./fixtures/ChatCommands\\.ts$)',
+                '^(?!@lvce-editor/test-with-playwright$|\\./_ChatCommands\\.ts$)',
             },
           ],
         },

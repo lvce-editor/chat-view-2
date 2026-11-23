@@ -4,10 +4,7 @@ import type {
   Test,
   TestApi,
 } from '@lvce-editor/test-with-playwright'
-import {
-  runChatAction,
-  scrollChatContentIntoView,
-} from './fixtures/ChatCommands.ts'
+import { runChatAction, scrollChatContentIntoView } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.composer-scroll'
 

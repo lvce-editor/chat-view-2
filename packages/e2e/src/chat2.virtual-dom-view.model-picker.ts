@@ -1,5 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
-import { runChatAction, runChatViewCommand } from './fixtures/ChatCommands.ts'
+import { runChatAction, runChatViewCommand } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.model-picker'
 

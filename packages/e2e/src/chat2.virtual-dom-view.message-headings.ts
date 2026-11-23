@@ -1,5 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
-import { runChatAction } from './fixtures/ChatCommands.ts'
+import { runChatAction } from './_ChatCommands.ts'
 
 // cspell:ignore João Gonçalves Zarco
 export const name = 'chat2.virtual-dom-view.message-headings'

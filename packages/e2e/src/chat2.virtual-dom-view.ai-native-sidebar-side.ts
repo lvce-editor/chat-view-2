@@ -1,5 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
-import { openChatTask, runChatAction } from './fixtures/ChatCommands.ts'
+import { openChatTask, runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.ai-native-sidebar-side'
 

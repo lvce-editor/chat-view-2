@@ -1,5 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
-import { runChatAction } from './fixtures/ChatCommands.ts'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.ai-native-atomic-layout'
 

@@ -1,5 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
-import { openChatTask } from './fixtures/ChatCommands.ts'
+import { openChatTask } from './_ChatCommands.ts'
 
 const prepareChat = async (api: TestApi): Promise<void> => {
   await api.Main.closeAllEditors()
