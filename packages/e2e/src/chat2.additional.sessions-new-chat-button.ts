@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { openChatTask, runChatAction } from './fixtures/ChatCommands.ts'
 
 const prepareChat = async (api: TestApi): Promise<void> => {
   await api.Main.closeAllEditors()
@@ -6,7 +7,7 @@ const prepareChat = async (api: TestApi): Promise<void> => {
     'chat2.selectedModelId': 'gpt-5.4',
     'chat2.useMockBackend': true,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
 }
 
 export const name = 'chat2.additional.sessions-new-chat-button'
@@ -14,11 +15,9 @@ export const name = 'chat2.additional.sessions-new-chat-button'
 export const test: Test = async (api) => {
   await prepareChat(api)
   await api.Command.executeExtensionCommand('chat2.toggleAiNativeLayout')
-  // eslint-disable-next-line e2e/no-direct-click -- select the visible mock session
-  await api.Locator('.ChatTaskButton').first().click()
+  await openChatTask(api.Command, api.Locator('.ChatTaskButton').first())
   await api.expect(api.Locator('.ChatDetailView')).toBeVisible()
-  // eslint-disable-next-line e2e/no-direct-click -- exercise the sessions New chat button
-  await api.Locator('.ChatSessions .ChatNewTaskButton').click()
+  await runChatAction(api.Command, 'new-task')
   await api.expect(api.Locator('.ChatDetailTitle')).toHaveCount(0)
   await api.expect(api.Locator('textarea[name="composer"]')).toHaveValue('')
 }

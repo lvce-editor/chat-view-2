@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { openChatTask } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.session-url'
 
@@ -25,8 +26,7 @@ export const test: Test = async ({
   const taskList = Locator('.ChatTaskList')
   await expect(detailView).toBeVisible()
   await expect(firstTask).toBeVisible()
-  // eslint-disable-next-line e2e/no-direct-click
-  await firstTask.click()
+  await openChatTask(Command, firstTask)
   await expect(detailView).toBeVisible()
   await expect(detailTitle).toContainText('Add worker memory usage')
   await expect(selectedTask).toHaveCount(1)
@@ -41,8 +41,7 @@ export const test: Test = async ({
   await secondTask.hover()
   await expect(selectedTask).toHaveCount(1)
   await expect(selectedTaskButton).toContainText('Add worker memory usage')
-  // eslint-disable-next-line e2e/no-direct-click
-  await secondTask.click()
+  await openChatTask(Command, secondTask)
   await expect(selectedTask).toHaveCount(1)
   await expect(selectedTaskButton).toContainText(
     'Fix quickpick beforeinput crash',

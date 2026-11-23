@@ -1,6 +1,31 @@
-import type { Test } from '@lvce-editor/test-with-playwright'
+import type {
+  ILocator,
+  ILocatorExternal,
+  Test,
+  TestApi,
+} from '@lvce-editor/test-with-playwright'
+import {
+  runChatAction,
+  scrollChatContentIntoView,
+} from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.composer-scroll'
+
+const getScrollTop = async (
+  Command: TestApi['Command'],
+  messages: ILocatorExternal,
+): Promise<number> => {
+  const { actual } = await Command.execute(
+    'TestFrameWork.checkConditionError',
+    'toHaveJSProperty',
+    (messages as ILocator)._parsed,
+    { key: 'scrollTop' },
+  )
+  if (typeof actual !== 'number') {
+    throw new Error('Expected the chat message scroll position')
+  }
+  return actual
+}
 
 export const test: Test = async ({ Command, expect, Locator }) => {
   await Command.execute('Preferences.update', {
@@ -11,7 +36,6 @@ export const test: Test = async ({ Command, expect, Locator }) => {
   await Command.executeExtensionCommand('chat2.toggleFocusMode')
 
   const composer = Locator('textarea[name="composer"]')
-  const submit = Locator('button[name="submit"]')
   const messages = Locator('.ChatMessages')
   const conversationBody = Locator('.ChatConversationBody')
   const composerArea = Locator('.ChatConversationBody > .ChatComposerArea')
@@ -28,18 +52,25 @@ export const test: Test = async ({ Command, expect, Locator }) => {
     ),
   ].join('\n')
   await composer.type(longMessage)
-  // eslint-disable-next-line e2e/no-direct-click
-  await submit.click()
+  await runChatAction(Command, 'submit')
 
   await expect(messages).toHaveCSS('overflow-y', 'auto')
   await expect(conversationBody).toHaveCSS('flex-direction', 'column')
   await expect(messageTable).toHaveCount(1)
   await expect(composerArea).toHaveCSS('position', 'relative')
   await expect(composerArea).toBeVisible()
-  await messages.dispatchEvent('wheel', {
-    bubbles: true,
-    deltaY: 1000,
-  } as unknown as string)
-  await expect(messages).not.toHaveJSProperty('scrollTop', 0)
+  await scrollChatContentIntoView(Command, '.ChatMessageUser')
+  const initialScrollTop = await getScrollTop(Command, messages)
+  await scrollChatContentIntoView(
+    Command,
+    '.ChatMessageUser .ChatMessageTable tbody tr:last-child',
+  )
+  await expect(Locator('.ChatAiNativeLayout')).toBeVisible()
+  const scrollTop = await getScrollTop(Command, messages)
+  if (scrollTop <= initialScrollTop) {
+    throw new Error(
+      `Expected chat messages to scroll down from ${initialScrollTop}, got ${scrollTop}`,
+    )
+  }
   await expect(composerArea).toBeVisible()
 }

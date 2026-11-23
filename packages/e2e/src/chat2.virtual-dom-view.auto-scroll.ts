@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.auto-scroll'
 
@@ -14,8 +15,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Locator('textarea[name="composer"]').type(
     'Keep this message at the top',
   )
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
 
   const messages = Locator('.ChatMessages')
   const latestTurn = Locator('.ChatTurnLatest')

@@ -1,6 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
-
-/* eslint-disable e2e/no-direct-click */
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 const prepareChat = async (api: TestApi): Promise<void> => {
   await api.Main.closeAllEditors()
@@ -8,7 +7,7 @@ const prepareChat = async (api: TestApi): Promise<void> => {
     'chat2.selectedModelId': 'gpt-5.4',
     'chat2.useMockBackend': true,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
 }
 
 export const name = 'chat2.additional.model-picker-opens'
@@ -16,7 +15,7 @@ export const name = 'chat2.additional.model-picker-opens'
 export const test: Test = async (api) => {
   await prepareChat(api)
   const toggle = api.Locator('button[name="model-picker"]')
-  await toggle.click()
+  await runChatAction(api.Command, 'model-picker')
   await api.expect(toggle).toHaveAttribute('aria-expanded', 'true')
   await api.expect(api.Locator('.Chat2ModelPicker')).toBeVisible()
 }

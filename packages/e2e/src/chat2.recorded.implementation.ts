@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 const workspace = 'memfs:///recorded-workspace/'
 
@@ -115,8 +116,7 @@ export const test: Test = async (api) => {
     'Fix the obvious bug in this Node.js project so that npm test passes. Keep the change scoped to the bug.',
   )
   await waitForTasks(api)
-  // eslint-disable-next-line e2e/no-direct-click
-  await api.Locator('button[name="toggle-changes"]').click()
+  await runChatAction(api.Command, 'toggle-changes')
   await api
     .expect(api.Locator('.ChatFileDiff'))
     .toContainText('--- a/src/add.js')

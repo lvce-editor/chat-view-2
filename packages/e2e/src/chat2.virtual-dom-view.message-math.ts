@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.message-math'
 
@@ -10,8 +11,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Locator('textarea[name="composer"]').type(
     'Prime: \\(2^{136,279,841}-1\\)\n\nDisplay: \\[\\frac{1}{2}\\]\n\n```tex\n$x^2$\n```',
   )
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
 
   const math = Locator('.ChatMessageUser .katex')
   const displayMath = Locator('.ChatMessageUser .katex-display')

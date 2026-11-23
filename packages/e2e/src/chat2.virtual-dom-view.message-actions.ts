@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.message-actions'
 
@@ -16,8 +17,7 @@ export const test: Test = async ({
   })
   await Command.executeExtensionCommand('chat2.show')
   await Locator('textarea[name="composer"]').type('Copy this message')
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
 
   const metadata = Locator('.ChatMessageUser .ChatMessageMetadata')
   const timestamp = Locator('.ChatMessageUser .ChatMessageTimestamp')
@@ -38,14 +38,12 @@ export const test: Test = async ({
     'aria-label',
     'Copy message',
   )
-  // eslint-disable-next-line e2e/no-direct-click
-  await copyButton.click()
+  await runChatAction(Command, copyButton)
   await expect(copyButton).toHaveClass('ChatMessageCopyButtonCopied')
   await expect(copyButton).toHaveAttribute('aria-label', 'Copied')
   await ClipBoard.shouldHaveText('Copy this message')
 
-  // eslint-disable-next-line e2e/no-direct-click
-  await assistantCopyButton.click()
+  await runChatAction(Command, assistantCopyButton)
   await expect(assistantCopyButton).toHaveClass('ChatMessageCopyButtonCopied')
   await expect(assistantCopyButton).toHaveAttribute('aria-label', 'Copied')
   await ClipBoard.shouldHaveText(

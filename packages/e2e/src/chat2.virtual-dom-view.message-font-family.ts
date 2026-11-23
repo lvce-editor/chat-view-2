@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.message-font-family'
 
@@ -14,8 +15,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
 
   const composer = Locator('textarea[name="composer"]')
   await composer.type('Show this JSON:\n```json\n{"jsonrpc":"2.0"}\n```')
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
 
   const userMessage = Locator('.ChatMessageUser .ChatMessageText')
   const assistantMessage = Locator('.ChatMessageAssistant .ChatMessageText')

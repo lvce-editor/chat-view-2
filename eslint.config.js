@@ -16,6 +16,30 @@ export default defineConfig([
     },
   },
   {
+    files: ['packages/e2e/src/chat2.*.ts'],
+    rules: {
+      // The browser runner can load this fixture from the same test root.
+      'e2e/no-imports': 'off',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@lvce-editor/test-with-playwright',
+              allowTypeImports: true,
+            },
+          ],
+          patterns: [
+            {
+              regex:
+                '^(?!@lvce-editor/test-with-playwright$|\\./fixtures/ChatCommands\\.ts$)',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['**/test/**/*.ts'],
     rules: {
       'virtual-dom/no-object-attribute-values': 'off',

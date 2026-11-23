@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.message-tables'
 
@@ -19,8 +20,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
     'A literal <img src=x onerror=alert(1)> stays text.',
   ].join('\n')
   await Locator('textarea[name="composer"]').type(tableText)
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
 
   const table = Locator('.ChatMessageUser .ChatMessageTable')
   const container = Locator('.ChatMessageUser .ChatMessageTableContainer')

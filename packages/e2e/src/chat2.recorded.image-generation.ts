@@ -20,7 +20,7 @@ export const test: Test = async (api) => {
     'chat2.selectedModelId': 'gpt-5.4-mini',
     'chat2.useMockBackend': false,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
   const components = await api.ComponentState.getComponents()
   const view = components.find(
     (component) => component.moduleId === 'ExtensionView',
@@ -78,7 +78,7 @@ export const test: Test = async (api) => {
   await api.expect(api.Locator('.ChatError, .ChatErrorBanner')).toHaveCount(0)
 
   await api.Main.closeAllEditors()
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
   await api.expect(image).toBeVisible()
   const restoredComponents = await api.ComponentState.getComponents()
   const restoredView = restoredComponents.find(

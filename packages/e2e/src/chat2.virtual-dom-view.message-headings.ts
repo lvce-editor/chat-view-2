@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 // cspell:ignore João Gonçalves Zarco
 export const name = 'chat2.virtual-dom-view.message-headings'
@@ -11,8 +12,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Locator('textarea[name="composer"]').type(
     '# Heading one\n## Heading two\n### João Gonçalves Zarco\n#### Heading four\n##### Heading five\n###### Heading six\n\n```md\n### Literal code heading\n```',
   )
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
 
   const headings = Locator('.ChatMessageUser .ChatMessageHeading')
   const thirdHeading = Locator('.ChatMessageUser h3')

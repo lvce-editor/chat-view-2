@@ -7,7 +7,7 @@ export const test: Test = async (api) => {
   await api.Command.execute('Preferences.update', {
     'chat2.useMockBackend': true,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
   const components = await api.ComponentState.getComponents()
   const view = components.find(
     (component) => component.moduleId === 'ExtensionView',

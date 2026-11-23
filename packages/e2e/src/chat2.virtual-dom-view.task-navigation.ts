@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.task-navigation'
 
@@ -21,8 +22,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(messages).toHaveCount(2)
 
   const back = Locator('button[name="back"]')
-  // eslint-disable-next-line e2e/no-direct-click
-  await back.click()
+  await runChatAction(Command, back)
   await expect(list).toBeVisible()
   await expect(tasks).toHaveCount(20)
 }

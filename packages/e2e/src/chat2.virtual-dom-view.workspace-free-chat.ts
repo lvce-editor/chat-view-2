@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.workspace-free-chat'
 
@@ -16,15 +17,13 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await composer.type('whats json')
   // Typing dispatches input asynchronously; wait for the view's draft update.
   await expect(submit).toHaveAttribute('disabled', null)
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
   await expect(userMessages).toHaveCount(1)
   await expect(assistantMessages).toHaveCount(1)
 
   await composer.type('Can I ask another question?')
   await expect(submit).toHaveAttribute('disabled', null)
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
   await expect(userMessages).toHaveCount(2)
   await expect(assistantMessages).toHaveCount(2)
   await expect(detail).toBeVisible()

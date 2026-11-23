@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { openChatTask, runChatAction } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.focus-mode'
 
@@ -57,8 +58,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   const composerInput = Locator('textarea[name="composer"]')
   await composerInput.type('Center the new chat composer')
   await expect(composerInput).toHaveValue('Center the new chat composer')
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
   await expect(browserTabTitle).toHaveText(
     'Center the new chat composer - Lvce Editor',
   )
@@ -76,8 +76,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(newConversationMessages).toHaveCSS('overflow-y', 'auto')
   await expect(newConversationBody).toHaveCSS('justify-content', 'flex-start')
   const task = Locator('.ChatTaskButton').nth(2)
-  // eslint-disable-next-line e2e/no-direct-click
-  await task.click()
+  await openChatTask(Command, task)
   await expect(browserTabTitle).toHaveText(
     'Fix quickpick beforeinput crash - Lvce Editor',
   )
@@ -89,8 +88,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(newConversationBody).toHaveCSS('justify-content', 'flex-start')
   const tasks = Locator('.ChatTaskButton')
   await expect(tasks).toHaveCount(20)
-  // eslint-disable-next-line e2e/no-direct-click
-  await newChatButton.click()
+  await runChatAction(Command, 'new-task')
   await expect(browserTabTitle).toHaveText('New Chat - Lvce Editor')
   await expect(detailHeader).toHaveCount(0)
   await expect(emptyTitle).toBeVisible()
@@ -101,8 +99,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
     'Type immediately after starting a new chat',
   )
   // Repeated requests must still focus the input when already on a new chat.
-  // eslint-disable-next-line e2e/no-direct-click
-  await newChatButton.click()
+  await runChatAction(Command, 'new-task')
   await expect(composerInput).toHaveValue('')
   await expect(composerInput).toBeFocused()
   await composerInput.type('Another new chat')

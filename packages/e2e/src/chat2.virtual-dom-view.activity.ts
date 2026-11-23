@@ -1,29 +1,23 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.activity'
 
-export const test: Test = async ({
-  ChatView2,
-  Command,
-  expect,
-  Locator,
-  Main,
-}) => {
+export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Main.closeAllEditors()
   await Command.execute('Preferences.update', { 'chat2.useMockBackend': true })
-  await ChatView2.show()
+  await Command.execute('SideBar.show', 'chat2.views.chat', true)
 
-  await ChatView2.typeComposer('Inspect the workspace')
+  await Locator('textarea[name="composer"]').type('Inspect the workspace')
   // Submit through the view event queue so the preceding input is handled first.
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
 
-  const toggle = ChatView2.activityToggleButton()
+  const toggle = Locator('button[name="toggle-activity"]')
   await expect(toggle).toContainText('Worked for')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
-  await ChatView2.expandActivity()
+  await runChatAction(Command, 'toggle-activity')
 
-  const activity = ChatView2.activityItems()
+  const activity = Locator('.ChatActivityItem')
   await expect(toggle).toHaveAttribute('aria-expanded', 'true')
   await expect(activity).toHaveCount(1)
   await expect(activity).toContainText('Inspecting workspace')

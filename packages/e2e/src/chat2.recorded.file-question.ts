@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './fixtures/ChatCommands.ts'
 
 const workspace = 'memfs:///recorded-workspace/'
 
@@ -113,7 +114,9 @@ export const test: Test = async (api) => {
     .expect(api.Locator('.ChatMessageAssistant'))
     .toContainText('session-cookie')
   await api.FileSystem.shouldHaveFile(`${workspace}src/auth.ts`, original)
-  // eslint-disable-next-line e2e/no-direct-click
-  await api.Locator('.ChatFileLink[name*="auth.ts"]').first().click()
+  await runChatAction(
+    api.Command,
+    api.Locator('.ChatFileLink[name*="auth.ts"]').first(),
+  )
   await api.Editor.shouldHaveText(unsaved)
 }
