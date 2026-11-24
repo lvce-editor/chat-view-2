@@ -24,9 +24,9 @@ const serverRequire = createRequire(serverPackagePath)
 const { exportStatic } = serverRequire('@lvce-editor/shared-process')
 
 const boardExtensionUrl =
-  'https://github.com/lvce-editor/board-view-worker/releases/download/v0.4.1/board-view-worker-v0.4.1.tar.br'
+  'https://github.com/lvce-editor/board-view-worker/releases/download/v0.5.1/board-view-worker-v0.5.1.tar.br'
 const boardExtensionSha256 =
-  'fc06736f88375759326f620b98e20b08e9bfeafbbb13a5b84e2bfc3719beba0c'
+  'e7e6aae310e4742a48efae815997c2fc3395e29084a47e1d92eb0b657afe6a20'
 
 const assertFileExists = async (file: string): Promise<void> => {
   try {
