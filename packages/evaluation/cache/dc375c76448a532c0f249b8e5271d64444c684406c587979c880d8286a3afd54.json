@@ -1,0 +1,7 @@
+{
+  "body": "{\"id\":\"response-title-dc375c76448a\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Simple Hello World HTML Page for index.html\"}]}]}",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "status": 200
+}

@@ -1,0 +1,7 @@
+{
+  "body": "{\"id\":\"response-title-03f6ad5a3134\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Fix Obvious Bug in Node.js Project to Pass npm test\"}]}]}",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "status": 200
+}

@@ -230,90 +230,99 @@ test('runs a multi-step tool loop and records a compact event history', async ()
   ])
 })
 
-test('generates the title asynchronously and preserves it through later task saves', async () => {
-  const step =
-    Promise.withResolvers<Awaited<ReturnType<AgentBackend['runStep']>>>()
-  const stepPromise = step.promise
-  const titleUpdated = Promise.withResolvers<void>()
-  const generateTitle = jest
-    .fn<NonNullable<AgentBackend['generateTitle']>>()
-    .mockResolvedValue('fix the chat title')
-  const runStep = jest.fn<AgentBackend['runStep']>(() => stepPromise)
-  const backend: AgentBackend = {
-    generateTitle,
-    async listModels() {
-      return []
-    },
-    runStep,
-  }
-  const store = createMemoryTaskStore()
-  const updates: string[] = []
-  const toolHost: AgentToolHost = {
-    beginTurn() {},
-    async execute() {
-      return { content: '', isError: false }
-    },
-    getChangedFiles() {
-      return []
-    },
-    getDefinitions() {
-      return []
-    },
-    async getWorkspaceContext() {
-      return 'Workspace unavailable'
-    },
-    async revert() {
-      return []
-    },
-  }
-  const api = createAgentChatApi({
-    backend,
-    store,
-    titleModelId: 'gpt-5.6-luna',
-    toolHost,
-  })
-  const taskPromise = api.createTask(
-    'über please fix the titlte of this chat',
-    'gpt-test',
-    {
+test.each([
+  {
+    finalTitle: 'Fix the chat title',
+    initialTitle: 'Über please fix the titlte of this chat',
+    message: 'über please fix the titlte of this chat',
+    modelTitle: 'fix the chat title',
+  },
+  {
+    finalTitle: 'Cat image',
+    initialTitle: 'Image of a cat',
+    message: 'image of a cat',
+    modelTitle: 'cat image',
+  },
+] as const)(
+  'generates and persists an asynchronous title for "$message"',
+  async ({ finalTitle, initialTitle, message, modelTitle }) => {
+    const step =
+      Promise.withResolvers<Awaited<ReturnType<AgentBackend['runStep']>>>()
+    const stepPromise = step.promise
+    const titleUpdated = Promise.withResolvers<void>()
+    const generateTitle = jest
+      .fn<NonNullable<AgentBackend['generateTitle']>>()
+      .mockResolvedValue(modelTitle)
+    const runStep = jest.fn<AgentBackend['runStep']>(() => stepPromise)
+    const backend: AgentBackend = {
+      generateTitle,
+      async listModels() {
+        return []
+      },
+      runStep,
+    }
+    const store = createMemoryTaskStore()
+    const updates: string[] = []
+    const toolHost: AgentToolHost = {
+      beginTurn() {},
+      async execute() {
+        return { content: '', isError: false }
+      },
+      getChangedFiles() {
+        return []
+      },
+      getDefinitions() {
+        return []
+      },
+      async getWorkspaceContext() {
+        return 'Workspace unavailable'
+      },
+      async revert() {
+        return []
+      },
+    }
+    const api = createAgentChatApi({
+      backend,
+      store,
+      titleModelId: 'gpt-5.6-luna',
+      toolHost,
+    })
+    const taskPromise = api.createTask(message, 'gpt-test', {
       onUpdate(task) {
         updates.push(task.title)
-        if (task.title === 'Fix the chat title') {
+        if (task.title === finalTitle) {
           titleUpdated.resolve()
         }
       },
-    },
-  )
+    })
 
-  await titleUpdated.promise
-  expect(generateTitle).toHaveBeenCalledWith(
-    'über please fix the titlte of this chat',
-    'gpt-5.6-luna',
-  )
-  expect(updates[0]).toBe('Über please fix the titlte of this chat')
-  step.resolve({ responseId: 'response-1', text: 'Done.', toolCalls: [] })
+    await titleUpdated.promise
+    expect(generateTitle).toHaveBeenCalledWith(message, 'gpt-5.6-luna')
+    expect(updates[0]).toBe(initialTitle)
+    step.resolve({ responseId: 'response-1', text: 'Done.', toolCalls: [] })
 
-  const task = await taskPromise
-  expect(task).toMatchObject({
-    status: 'completed',
-    title: 'Fix the chat title',
-    titleGenerated: true,
-  })
-  expect(task.events).toEqual(
-    expect.arrayContaining([
-      expect.objectContaining({
-        text: 'über please fix the titlte of this chat',
-        type: 'user-message',
-      }),
-      expect.objectContaining({ text: 'Done.', type: 'assistant-message' }),
-    ]),
-  )
-  await expect(store.get(task.id)).resolves.toMatchObject({
-    title: 'Fix the chat title',
-    titleGenerated: true,
-  })
-  expect(updates).toContain('Fix the chat title')
-})
+    const task = await taskPromise
+    expect(task).toMatchObject({
+      status: 'completed',
+      title: finalTitle,
+      titleGenerated: true,
+    })
+    expect(task.events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: message,
+          type: 'user-message',
+        }),
+        expect.objectContaining({ text: 'Done.', type: 'assistant-message' }),
+      ]),
+    )
+    await expect(store.get(task.id)).resolves.toMatchObject({
+      title: finalTitle,
+      titleGenerated: true,
+    })
+    expect(updates).toContain(finalTitle)
+  },
+)
 
 test('answers a general question and follow-up when no workspace is open', async () => {
   const runStep = jest

@@ -1,0 +1,7 @@
+{
+  "body": "{\"id\":\"response-title-999784fd72f2\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Update a.txt Content with apply_patch\"}]}]}",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "status": 200
+}
