@@ -162,7 +162,7 @@ test('generates a title with the selected model, a single message, and no tools'
     baseUrl: 'https://backend.example.com',
     fetch: fetchMock,
     openAiWebSearch: true,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
 
   await expect(
@@ -396,7 +396,7 @@ test('uses the Responses WebSocket for streamed text and function calls', async 
     baseUrl: 'https://backend.example.com',
     createWebSocket,
     fetch: fetchMock,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
 
   const resultPromise = backend.runStep({
@@ -487,7 +487,7 @@ test('omits web search from Responses WebSocket requests when disabled', async (
     baseUrl: 'https://backend.example.com',
     createWebSocket: () => socket,
     openAiWebSearch: false,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
   const resultPromise = backend.runStep({
     input: [{ content: 'Answer from model knowledge.', role: 'user' }],
@@ -571,7 +571,7 @@ test('falls back to the realtime route when the responses upgrade fails', async 
     accessToken: 'access-token-123',
     baseUrl: 'https://backend.example.com',
     createWebSocket,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
 
   const result = backend.runStep({
@@ -797,7 +797,7 @@ test('surfaces backend WebSocket error messages', async () => {
   const backend = createResponsesBackend({
     baseUrl: 'https://backend.example.com',
     createWebSocket,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
 
   const result = backend.runStep({
@@ -872,7 +872,7 @@ test('routes OpenRouter through backend HTTP and preserves tool history across t
     baseUrl: 'https://backend.example.com',
     createWebSocket,
     fetch: fetchMock,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
   const first = await backend.runStep({
     input: [{ content: 'Read the file', role: 'user' }],
@@ -996,7 +996,7 @@ test('recovers a rejected WebSocket handshake without duplicating response.creat
     createWebSocket,
     fetch: fetchMock,
     refreshAccessToken,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
   await expect(
     backend.runStep({
@@ -1021,7 +1021,7 @@ test('does not refresh or resubmit after an opened stream fails', async () => {
     createWebSocket: () => socket,
     fetch: fetchMock,
     refreshAccessToken,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
   const result = backend.runStep({
     input: [{ content: 'hello', role: 'user' }],
@@ -1139,7 +1139,7 @@ test('does not refresh on non-authentication WebSocket connection failures', asy
       .fn<typeof fetch>()
       .mockResolvedValue(Response.json({ models: [] })),
     refreshAccessToken,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
   await expect(
     backend.runStep({
@@ -1278,7 +1278,7 @@ test('cancelling a stream drains the current delta before releasing its turn', a
   const backend = createResponsesBackend({
     baseUrl: 'https://backend.example.com',
     createWebSocket: () => socket,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
   let settled = false
   const request = backend.runStep({
@@ -1502,7 +1502,7 @@ test('retains provider context usage from WebSocket responses', async () => {
   const backend = createResponsesBackend({
     baseUrl: 'https://backend.example.com',
     createWebSocket: () => socket,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
   const pending = backend.runStep({
     input: [{ content: 'Hello', role: 'user' }],
@@ -1529,7 +1529,7 @@ test('returns generated images from completed WebSocket Responses', async () => 
   const backend = createResponsesBackend({
     baseUrl: 'https://backend.example.com',
     createWebSocket: () => socket,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
   const pending = backend.runStep({
     input: [{ content: 'Draw a cat', role: 'user' }],
@@ -1564,12 +1564,60 @@ test('returns generated images from completed WebSocket Responses', async () => 
   expect(JSON.parse(socket.sent[0])).not.toHaveProperty('reasoning')
 })
 
+test('reports the start of streamed image generation once', async () => {
+  const socket = new MockResponsesWebSocket()
+  const onImageGenerationStart = jest.fn<() => void>()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    createWebSocket: () => socket,
+    responseMethod: 'websocket',
+  })
+  const pending = backend.runStep({
+    input: [{ content: 'Draw a cat', role: 'user' }],
+    modelId: 'gpt-5-test',
+    onImageGenerationStart,
+    onTextDelta() {},
+    tools: [],
+  })
+  socket.open()
+  socket.receive({
+    item: { type: 'image_generation_call' },
+    type: 'response.output_item.added',
+  })
+  socket.receive({
+    response: { id: 'response-image' },
+    type: 'response.completed',
+  })
+  await pending
+
+  expect(onImageGenerationStart).toHaveBeenCalledTimes(1)
+})
+
+test('reports a bounded image generation fallback for non-streaming responses', async () => {
+  const onImageGenerationStart = jest.fn<() => void>()
+  const backend = createResponsesBackend({
+    baseUrl: 'https://backend.example.com',
+    fetch: jest
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json({ id: 'response-image', output: [] })),
+  })
+  await backend.runStep({
+    input: [{ content: 'Draw a cat', role: 'user' }],
+    modelId: 'gpt-5-test',
+    onImageGenerationStart,
+    onTextDelta() {},
+    tools: [],
+  })
+
+  expect(onImageGenerationStart).toHaveBeenCalledTimes(1)
+})
+
 test('reports image generation calls that are still running when WebSocket Responses complete', async () => {
   const socket = new MockResponsesWebSocket()
   const backend = createResponsesBackend({
     baseUrl: 'https://backend.example.com',
     createWebSocket: () => socket,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   })
   const pending = backend.runStep({
     input: [{ content: 'Draw a cat', role: 'user' }],

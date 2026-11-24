@@ -56,10 +56,27 @@
       "default": true,
       "description": "Allow OpenAI models to search the web for current information."
     },
+    "chat2.responseMethod": {
+      "type": "string",
+      "enum": ["default", "http", "websocket"],
+      "default": "default",
+      "description": "Choose how Chat 2 sends requests and receives responses. Default uses HTTP and takes precedence over the legacy chat2.supportsStreaming setting."
+    },
+    "chat2.supportsStreaming": {
+      "type": "boolean",
+      "default": false,
+      "description": "Deprecated. Use chat2.responseMethod instead; this setting no longer selects the transport."
+    },
     "chat2.selectedModelId": {
       "type": "string",
       "default": "",
       "description": "The preferred model for new Chat 2 tasks."
+    },
+    "chat2.followUpBehavior": {
+      "type": "string",
+      "enum": ["queue", "steer"],
+      "default": "queue",
+      "description": "Queue follow-up messages until the current task finishes, or steer by cancelling the current task and sending the follow-up."
     },
     "chat2.thinkingModeEnabled": {
       "type": "boolean",
@@ -71,11 +88,6 @@
       "enum": ["gpt-6-luna", "gpt-5.6-luna"],
       "default": "gpt-6-luna",
       "description": "The model used to generate titles for new chats."
-    },
-    "chat2.supportsStreaming": {
-      "type": "boolean",
-      "default": false,
-      "description": "Use the Responses WebSocket streaming protocol for a custom chat backend. The editor backend enables it automatically."
     },
     "chat2.taskOpenMode": {
       "type": "string",
@@ -104,7 +116,12 @@
     "onCommand:chat2.submit",
     "onCommand:chat2.toggleFocusMode",
     "onCommand:chat2.toggleAiNativeLayout",
-    "onCommand:chat2.toggleSessionsList"
+    "onCommand:chat2.toggleSessionsList",
+    "onCommand:chat2.copyComponentState",
+    "onCommand:chat2.showAiNativeLayout",
+    "onCommand:chat2.showIdeLayout",
+    "onCommand:chat2.getQuickPickItems",
+    "onCommand:chat2.openQuickPickItem"
   ],
   "rpc": [
     {
@@ -187,6 +204,28 @@
     {
       "id": "chat2.toggleSessionsList",
       "label": "Chat 2: Toggle Sessions List"
+    },
+    {
+      "id": "chat2.copyComponentState",
+      "label": "Chat 2: Copy Component State"
+    },
+    {
+      "id": "chat2.showAiNativeLayout",
+      "label": "View: Open AI-Native Chat Layout"
+    },
+    {
+      "id": "chat2.showIdeLayout",
+      "label": "View: Open IDE Layout"
+    },
+    {
+      "id": "chat2.getQuickPickItems",
+      "label": "Chat 2: Get Quick Pick Items",
+      "internal": true
+    },
+    {
+      "id": "chat2.openQuickPickItem",
+      "label": "Chat 2: Open Quick Pick Item",
+      "internal": true
     }
   ],
   "views": [

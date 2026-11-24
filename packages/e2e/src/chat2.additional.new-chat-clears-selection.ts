@@ -1,6 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
-
-/* eslint-disable e2e/no-direct-click */
+import { openChatTask } from './_ChatCommands.ts'
 
 const prepareChat = async (api: TestApi): Promise<void> => {
   await api.Main.closeAllEditors()
@@ -8,11 +7,11 @@ const prepareChat = async (api: TestApi): Promise<void> => {
     'chat2.selectedModelId': 'gpt-5.4',
     'chat2.useMockBackend': true,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
 }
 
 const openTask = async (api: TestApi, index: number): Promise<void> => {
-  await api.Locator('.ChatTaskButton').nth(index).click()
+  await openChatTask(api.Command, api.Locator('.ChatTaskButton').nth(index))
   await api.expect(api.Locator('.ChatDetailView')).toBeVisible()
 }
 

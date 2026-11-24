@@ -28,6 +28,7 @@ export interface ChatImageAttachment {
   readonly dataUrl: string
   readonly mimeType: string
   readonly name: string
+  readonly objectUrl?: string
 }
 
 interface ChatTaskEventBase {
@@ -151,10 +152,12 @@ export interface ChatTask {
   readonly createdAt: string
   readonly events: readonly ChatTaskEvent[]
   readonly id: string
+  readonly imageGenerationActive?: boolean
   readonly modelId: string
   readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]
   readonly responseId?: string
   readonly status: ChatTaskStatus
+  readonly storageRevision?: number
   readonly streamingText?: string
   readonly title: string
   readonly titleGenerated?: boolean

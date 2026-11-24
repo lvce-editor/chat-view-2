@@ -1,6 +1,20 @@
-import { access, cp, readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import {
+  access,
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from 'node:fs/promises'
 import { createRequire } from 'node:module'
+import { tmpdir } from 'node:os'
 import path, { join } from 'node:path'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import { createBrotliDecompress } from 'node:zlib'
+import tar from 'tar-fs'
 import './build.ts'
 import { root } from './root.ts'
 
@@ -8,6 +22,11 @@ const extensionId = 'builtin.chat-view-2'
 const serverPackagePath = join(root, 'packages', 'server', 'package.json')
 const serverRequire = createRequire(serverPackagePath)
 const { exportStatic } = serverRequire('@lvce-editor/shared-process')
+
+const boardExtensionUrl =
+  'https://github.com/lvce-editor/board-view-worker/releases/download/v0.5.1/board-view-worker-v0.5.1.tar.br'
+const boardExtensionSha256 =
+  'e7e6aae310e4742a48efae815997c2fc3395e29084a47e1d92eb0b657afe6a20'
 
 const assertFileExists = async (file: string): Promise<void> => {
   try {
@@ -102,16 +121,77 @@ await cp(path.join(root, 'dist'), path.join(root, 'dist2'), {
 
 process.env.PATH_PREFIX ??= 'auto'
 
-const { commitHash } = await exportStatic({
-  extensionPath: 'packages/extension',
-  testPath: 'packages/e2e',
-  root,
-})
+const exportChatAndBoard = async (): Promise<{ commitHash: string }> => {
+  const boardExtensionPath = await mkdtemp(join(tmpdir(), 'chat2-board-view-'))
+  try {
+    const response = await fetch(boardExtensionUrl)
+    if (!response.ok) {
+      throw new Error(`Board extension download failed: ${response.status}`)
+    }
+    const archive = Buffer.from(await response.arrayBuffer())
+    if (
+      createHash('sha256').update(archive).digest('hex') !==
+      boardExtensionSha256
+    ) {
+      throw new Error('Board extension archive SHA-256 mismatch')
+    }
+    await pipeline(
+      Readable.from(archive),
+      createBrotliDecompress(),
+      tar.extract(boardExtensionPath),
+    )
+    return await exportStatic({
+      extensionPath: 'packages/extension',
+      page: 'chat',
+      extensionPaths: [boardExtensionPath],
+      testPath: 'packages/e2e',
+      root,
+    })
+  } finally {
+    await rm(boardExtensionPath, { recursive: true, force: true })
+  }
+}
+const { commitHash } = await exportChatAndBoard()
 
 await cp(
   path.join(root, 'dist2'),
   path.join(root, 'dist', commitHash, 'extensions', extensionId),
   { recursive: true, force: true },
 )
+
+const html = await readFile(path.join(root, 'dist', 'index.html'), 'utf8')
+// Select the board before view activation; the host otherwise restores Explorer.
+const configPattern =
+  /(<script id="Config" type="application\/json">)([\s\S]*?)(<\/script>)/
+const configMatch = configPattern.exec(html)
+if (!configMatch) {
+  throw new Error('Expected static HTML to contain the runtime Config script')
+}
+const config = JSON.parse(configMatch[2])
+if (
+  !Array.isArray(config.preloadWorkers) ||
+  config.preloadWorkers.some((worker: string) =>
+    ['editorWorker', 'fileSystemWorker', 'syntaxHighlightingWorker'].includes(
+      worker,
+    ),
+  )
+) {
+  throw new Error('Expected the application page preload configuration')
+}
+config.initialLayout = {
+  ...config.initialLayout,
+  sideBarView: 'chat2.views.board',
+  sideBarVisible: true,
+}
+const boardHtml = html.replace(
+  configPattern,
+  (_, start: string, _content: string, end: string) =>
+    `${start}\n${JSON.stringify(config, null, 2)}\n${end}`,
+)
+for (const route of ['boards', 'board']) {
+  const boardPath = path.join(root, 'dist', route)
+  await mkdir(boardPath, { recursive: true })
+  await writeFile(path.join(boardPath, 'index.html'), boardHtml)
+}
 
 await assertStaticChatExtension(commitHash)

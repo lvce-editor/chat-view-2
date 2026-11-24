@@ -1,9 +1,14 @@
 const legacyChatTaskHashPrefix = '#chat-'
 const chatPathRegex = /(?:^|\/)chat\/?$/
-const chatPathSuffixRegex = /\/chat\/?$/
+const boardPathRegex = /(?:^|\/)(?:boards|board)\/?$/
+const layoutPathSuffixRegex = /\/(?:chat|boards|board)\/?$/
 
 export type ChatTaskHash =
   | { readonly id: string; readonly type: 'task' }
+  | { readonly type: 'invalid' | 'none' }
+
+export type BoardHash =
+  | { readonly id: string; readonly type: 'board' }
   | { readonly type: 'invalid' | 'none' }
 
 export const getUrl = (href: string): URL | undefined => {
@@ -17,8 +22,16 @@ export const getChatTaskHash = (id: string): string => {
   return `#${encodeURIComponent(id)}`
 }
 
+export const getBoardHash = (id: string): string => {
+  return `#${encodeURIComponent(id)}`
+}
+
 export const isChatPath = (pathname: string): boolean => {
   return chatPathRegex.test(pathname)
+}
+
+export const isBoardPath = (pathname: string): boolean => {
+  return boardPathRegex.test(pathname)
 }
 
 export const getChatPath = (href: string, assetDir: string): string => {
@@ -28,14 +41,21 @@ export const getChatPath = (href: string, assetDir: string): string => {
   return pathPrefix ? `${pathPrefix}/chat` : '/chat'
 }
 
+export const getBoardPath = (href: string, assetDir: string): string => {
+  const currentUrl = new URL(href)
+  const assetPath = new URL(assetDir, currentUrl).pathname
+  const pathPrefix = assetPath.slice(0, assetPath.lastIndexOf('/'))
+  return pathPrefix ? `${pathPrefix}/boards` : '/boards'
+}
+
 export const getIdePath = (href: string): string => {
   const currentUrl = new URL(href)
   const path = currentUrl.pathname
-  if (!isChatPath(path)) {
+  if (!isChatPath(path) && !isBoardPath(path)) {
     return path
   }
-  const withoutChat = path.replace(chatPathSuffixRegex, '')
-  return withoutChat ? `${withoutChat}/` : '/'
+  const withoutLayout = path.replace(layoutPathSuffixRegex, '')
+  return withoutLayout ? `${withoutLayout}/` : '/'
 }
 
 export const parseChatTaskHash = (href: string): ChatTaskHash => {
@@ -56,6 +76,22 @@ export const parseChatTaskHash = (href: string): ChatTaskHash => {
   try {
     const id = decodeURIComponent(encodedId)
     return id ? { id, type: 'task' } : { type: 'invalid' }
+  } catch {
+    return { type: 'invalid' }
+  }
+}
+
+export const parseBoardHash = (href: string): BoardHash => {
+  if (!URL.canParse(href)) {
+    return { type: 'none' }
+  }
+  const { hash, pathname } = new URL(href)
+  if (!isBoardPath(pathname) || !hash) {
+    return { type: 'none' }
+  }
+  try {
+    const id = decodeURIComponent(hash.slice(1))
+    return id ? { id, type: 'board' } : { type: 'invalid' }
   } catch {
     return { type: 'invalid' }
   }

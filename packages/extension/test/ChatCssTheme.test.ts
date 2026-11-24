@@ -35,3 +35,17 @@ test('chat styles use single class selectors without structural nesting', async 
     }
   }
 })
+
+test('selected sessions keep a persistent visual marker across hover and focus', async () => {
+  const css = await readChatCss()
+
+  expect(css).toContain('.ChatTaskSelected {')
+  expect(css).toContain(
+    'box-shadow: inset 2px 0 var(--ChatFocusBorder, var(--ChatForeground));',
+  )
+  expect(css).toContain(
+    '.ChatTaskItem:hover {\n  background: color-mix(in srgb, var(--ChatHoverBackground) 55%, transparent);',
+  )
+  expect(css).toContain('.ChatTaskFocused {')
+  expect(css).toContain('.ChatTaskItem:focus-within {')
+})

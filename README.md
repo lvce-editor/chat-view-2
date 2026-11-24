@@ -76,3 +76,15 @@ npm test
 npm run type-check
 npm run lint
 ```
+
+### Follow-up messages
+
+`chat2.followUpBehavior` defaults to `"queue"`. Messages sent while a task is
+running appear at the bottom of the conversation with a Queued label and run
+in order after the current response finishes. Set it to `"steer"` to cancel the
+current task and send the follow-up once cancellation finishes. Reopen the chat
+view after changing this setting.
+
+## Board layout
+
+Boards are provided by the independent [board-view-worker](https://github.com/lvce-editor/board-view-worker), which LVCE Editor installs separately. That repository owns board setup, Trello connections, rendering and regression coverage. Existing board commands and saved board IDs remain compatible.

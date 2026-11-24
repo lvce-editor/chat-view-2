@@ -105,7 +105,7 @@ export const test = async ({ Command, Workspace, Locator, expect, KeyBoard }) =>
     'chat2.computerUseEnabled': false,
     'chat2.backendUrl': configuration.backendOrigin,
     'chat2.selectedModelId': configuration.model,
-    'chat2.supportsStreaming': true,
+    'chat2.responseMethod': 'websocket',
     'chat2.useMockBackend': false,
   })
   await Command.executeExtensionCommand('chat2.toggleAiNativeLayout')

@@ -4,6 +4,7 @@ import {
   registerCommand,
   registerView,
 } from '@lvce-editor/api'
+import { showChatLayout } from '../ChatLayout/ChatLayout.ts'
 import {
   getUrl,
   isChatPath,
@@ -11,7 +12,10 @@ import {
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
 import { view, viewId } from '../ChatView/ChatView.ts'
 import {
+  copyActiveChatViewComponentState,
+  getActiveChatQuickPickItems,
   newChatInActiveChatViewInstance,
+  openActiveChatQuickPickItem,
   submitActiveChatViewInstance,
   toggleActiveChatViewFocusMode,
   toggleActiveChatViewSessionsList,
@@ -19,16 +23,31 @@ import {
 import { headlessChatCommands } from '../HeadlessChat/HeadlessChat.ts'
 
 const state = {
-  activated: false,
+  activationPromise: undefined as Promise<void> | undefined,
 }
 
-export const activate = async (): Promise<void> => {
-  if (state.activated) {
-    return
+export const activate = (): Promise<void> => {
+  if (!state.activationPromise) {
+    state.activationPromise = activateMain()
   }
-  state.activated = true
+  return state.activationPromise
+}
+
+const activateMain = async (): Promise<void> => {
   await activateExtensionApi()
   registerView(view)
+  registerCommand({
+    execute() {
+      return showChatLayout('ai-native')
+    },
+    id: 'chat2.showAiNativeLayout',
+  })
+  registerCommand({
+    execute() {
+      return showChatLayout('ide')
+    },
+    id: 'chat2.showIdeLayout',
+  })
   registerCommand({
     async execute(modelId?: unknown) {
       return headlessChatCommands.createSession(modelId)
@@ -79,7 +98,11 @@ export const activate = async (): Promise<void> => {
   for (const id of ['chat2.toggleFocusMode', 'chat2.toggleAiNativeLayout']) {
     registerCommand({
       async execute() {
-        if (!(await executeCommand('Layout.getSideBarFocusMode'))) {
+        if (
+          !(await executeCommand('Layout.getSideBarFocusMode')) ||
+          (await executeCommand('Layout.getActiveSideBarView')) ===
+            'chat2.views.board'
+        ) {
           await executeCommand('SideBar.show', viewId, true)
         }
         await toggleActiveChatViewFocusMode()
@@ -92,6 +115,24 @@ export const activate = async (): Promise<void> => {
       return toggleActiveChatViewSessionsList()
     },
     id: 'chat2.toggleSessionsList',
+  })
+  registerCommand({
+    execute() {
+      return copyActiveChatViewComponentState()
+    },
+    id: 'chat2.copyComponentState',
+  })
+  registerCommand({
+    execute() {
+      return getActiveChatQuickPickItems()
+    },
+    id: 'chat2.getQuickPickItems',
+  })
+  registerCommand({
+    async execute(id: unknown) {
+      await openActiveChatQuickPickItem(id)
+    },
+    id: 'chat2.openQuickPickItem',
   })
   try {
     const href = await executeCommand('Layout.getHref')

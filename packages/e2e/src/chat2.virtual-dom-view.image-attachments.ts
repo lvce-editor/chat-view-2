@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.image-attachments'
 
@@ -62,15 +63,12 @@ export const test: Test = async ({
 
   const composerPreview = Locator('.ChatComposerImagePreview')
   await expect(composerPreview).toBeVisible()
-  await expect(composerPreview).toHaveAttribute('src', image.dataUrl)
   await expect(submit).toBeVisible()
-  // eslint-disable-next-line e2e/no-direct-click -- submit the staged attachment through the Chat 2 UI
-  await submit.click()
+  await runChatAction(Command, 'submit')
 
   const submittedImage = Locator('.ChatMessageUser .ChatMessageImage')
   const userMessage = Locator('.ChatMessageUser')
   await expect(submittedImage).toBeVisible()
   await expect(submittedImage).toHaveAttribute('alt', image.name)
-  await expect(submittedImage).toHaveAttribute('src', image.dataUrl)
   await expect(userMessage).toContainText('Describe this image')
 }

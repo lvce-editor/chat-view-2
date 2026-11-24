@@ -5,10 +5,35 @@
 import type { AgentToolHost } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { expect, jest, test } from '@jest/globals'
 import type { AgentBackend } from '../src/parts/AgentBackend/AgentBackend.ts'
+import type { ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createAgentChatApi } from '../src/parts/AgentChatApi/AgentChatApi.ts'
 import { summarizeTask } from '../src/parts/ChatTask/ChatTask.ts'
 import { createResponsesBackend } from '../src/parts/ResponsesBackend/ResponsesBackend.ts'
 import { createMemoryTaskStore } from '../src/parts/TaskStore/TaskStore.ts'
+
+// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
+const runImageGenerationStep: AgentBackend['runStep'] = async (options) => {
+  await options.onImageGenerationStart?.()
+  await options.onImageGenerationStart?.()
+  return {
+    images: [
+      {
+        dataUrl: 'data:image/png;base64,aGVsbG8=',
+        mimeType: 'image/png',
+        name: 'Generated image 1.png',
+      },
+    ],
+    responseId: 'response-image',
+    text: '',
+    toolCalls: [],
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/prefer-readonly-parameter-types
+const failImageGenerationStep: AgentBackend['runStep'] = async (options) => {
+  await options.onImageGenerationStart?.()
+  throw new Error('Image generation failed')
+}
 
 test('runs a multi-step tool loop and records a compact event history', async () => {
   const trace: unknown[] = []
@@ -442,6 +467,91 @@ test('records a failed task when the backend rejects the request', async () => {
 
   expect(task.status).toBe('failed')
   expect(summarizeTask(task).errorMessage).toBe('Backend unavailable')
+})
+
+test('shows and clears image generation activity during a response', async () => {
+  const updates: ChatTask[] = []
+  const backend: AgentBackend = {
+    async listModels() {
+      return []
+    },
+    runStep: runImageGenerationStep,
+  }
+  const toolHost: AgentToolHost = {
+    beginTurn() {},
+    async execute() {
+      return { content: '', isError: false }
+    },
+    getChangedFiles() {
+      return []
+    },
+    getDefinitions() {
+      return []
+    },
+    async getWorkspaceContext() {
+      return 'Workspace'
+    },
+    async revert() {
+      return []
+    },
+  }
+  const api = createAgentChatApi({
+    backend,
+    store: createMemoryTaskStore(),
+    toolHost,
+  })
+  const task = await api.createTask('Draw a cat', 'gpt-test', {
+    onUpdate(taskUpdate: Readonly<ChatTask>) {
+      updates.push(taskUpdate)
+    },
+  })
+
+  expect(updates.filter((update) => update.imageGenerationActive)).toHaveLength(
+    1,
+  )
+  expect(task.imageGenerationActive).toBeUndefined()
+  expect(
+    task.events.some(
+      (event) => event.type === 'assistant-message' && event.images?.length,
+    ),
+  ).toBe(true)
+})
+
+test('clears the image placeholder when image generation fails', async () => {
+  const backend: AgentBackend = {
+    async listModels() {
+      return []
+    },
+    runStep: failImageGenerationStep,
+  }
+  const toolHost: AgentToolHost = {
+    beginTurn() {},
+    async execute() {
+      return { content: '', isError: false }
+    },
+    getChangedFiles() {
+      return []
+    },
+    getDefinitions() {
+      return []
+    },
+    async getWorkspaceContext() {
+      return 'Workspace'
+    },
+    async revert() {
+      return []
+    },
+  }
+  const api = createAgentChatApi({
+    backend,
+    store: createMemoryTaskStore(),
+    toolHost,
+  })
+
+  const task = await api.createTask('Draw a cat', 'gpt-test')
+
+  expect(task.status).toBe('failed')
+  expect(task.imageGenerationActive).toBeUndefined()
 })
 
 test.each(['verification', 'completion notification'])(

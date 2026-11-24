@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.archive-task'
 
@@ -20,8 +21,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   const archiveIcon = firstArchiveButton.locator('.ChatTaskArchiveIcon')
   await expect(archiveIcon).toHaveCount(1)
 
-  // eslint-disable-next-line e2e/no-direct-click
-  await firstArchiveButton.click()
+  await runChatAction(Command, firstArchiveButton)
 
   await expect(tasks).toHaveCount(19)
   await expect(archiveButtons).toHaveCount(19)

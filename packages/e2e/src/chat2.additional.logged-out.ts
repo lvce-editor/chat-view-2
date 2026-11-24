@@ -8,7 +8,7 @@ export const test: Test = async (api) => {
     'chat2.backendUrl': '',
     'chat2.useMockBackend': false,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
   await api
     .expect(api.Locator('.ChatLoginTitle'))
     .toHaveText('Log in to Chat 2')

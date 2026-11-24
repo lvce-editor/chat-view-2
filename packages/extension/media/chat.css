@@ -179,6 +179,21 @@
   padding: 0 6px 8px;
 }
 
+.ChatTaskList:focus-visible {
+  outline: 2px solid var(--ChatFocusBorder, var(--ChatForeground));
+  outline-offset: -2px;
+}
+
+.ChatTaskSelected {
+  background: var(--ChatHoverBackground);
+  box-shadow: inset 2px 0 var(--ChatFocusBorder, var(--ChatForeground));
+}
+
+.ChatTaskFocused {
+  outline: 1px solid var(--ChatFocusBorder, var(--ChatForeground));
+  outline-offset: -1px;
+}
+
 .ChatTaskItem {
   display: flex;
   flex: 0 0 auto;
@@ -187,9 +202,13 @@
   border-radius: 5px;
 }
 
-.ChatTaskItem:hover,
+.ChatTaskItem:hover {
+  background: color-mix(in srgb, var(--ChatHoverBackground) 55%, transparent);
+}
+
 .ChatTaskItem:focus-within {
-  background: var(--ChatHoverBackground);
+  outline: 1px solid var(--ChatFocusBorder, var(--ChatForeground));
+  outline-offset: -1px;
 }
 
 .ChatTaskButton {
@@ -370,6 +389,34 @@
   border-radius: 6px;
   background: transparent;
   cursor: zoom-in;
+}
+
+.ChatImageGenerationPlaceholder {
+  width: min(100%, 320px);
+  aspect-ratio: 4 / 3;
+  margin: 8px;
+  border: 1px solid var(--ChatBorder);
+  border-radius: 8px;
+  background: linear-gradient(
+    110deg,
+    var(--ChatInputBackground) 8%,
+    var(--ChatBorder) 18%,
+    var(--ChatInputBackground) 33%
+  );
+  background-size: 200% 100%;
+  animation: ChatImageGenerationShimmer 1.5s linear infinite;
+}
+
+@keyframes ChatImageGenerationShimmer {
+  to {
+    background-position-x: -200%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ChatImageGenerationPlaceholder {
+    animation: none;
+  }
 }
 
 .ChatImagePreviewOverlay {
@@ -1482,6 +1529,10 @@
     display: inline-flex;
     flex: 0 0 auto;
   }
+  .ChatWelcomeSessionsToggleButton {
+    align-self: flex-start;
+    margin: 12px;
+  }
   .ChatDetailHeaderFocus {
     padding-inline: 12px;
   }
@@ -1580,4 +1631,17 @@
   min-width: 0;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
+}
+
+.ChatQueuedMessage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0.8;
+}
+
+.ChatQueuedMessageLabel {
+  text-align: end;
+  font-size: 0.9em;
+  margin-block: 4px 12px;
 }

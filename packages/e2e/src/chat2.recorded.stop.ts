@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 const workspace = 'memfs:///recorded-workspace/'
 
@@ -45,8 +46,8 @@ const prepareChat = async (
   await api.Command.execute('Preferences.update', {
     'chat2.backendUrl': replayUrl,
     'chat2.computerUseEnabled': false,
+    'chat2.responseMethod': 'websocket',
     'chat2.selectedModelId': 'gpt-5.4-mini',
-    'chat2.supportsStreaming': true,
     'chat2.useMockBackend': false,
   })
 }
@@ -123,16 +124,27 @@ export const test: Test = async (api) => {
       api,
       'What is the weather forecast for Berlin, Germany on November 4, 2026? Use web search and cite your sources.',
     )
+    const composer = api.Locator('textarea[name="composer"]')
+    await api
+      .expect(composer)
+      .toHaveAttribute('placeholder', 'Queue a follow-up message')
+    await composer.type('Update the image for year 2200')
+    await api
+      .expect(api.Locator('button[name="submit"]'))
+      .toHaveAttribute('disabled', null)
+    await runChatAction(api.Command, 'submit')
+    await api.expect(api.Locator('.ChatQueuedMessage')).toHaveCount(1)
     await api.expect(api.Locator('.ChatTaskStatus-running')).toHaveCount(1)
-    // eslint-disable-next-line e2e/no-direct-click
-    await api.Locator('button[name="stop"]').click()
+    await runChatAction(api.Command, 'stop')
     await api.expect(api.Locator('.ChatTaskStatus-stopped')).toHaveCount(1)
-    await api.expect(api.Locator('.ChatTaskStatus-running')).toHaveCount(0)
+    await api
+      .expect(api.Locator('.ChatTaskStatus-running, .ChatTaskStatus-stopping'))
+      .toHaveCount(0)
+    await api.expect(api.Locator('.ChatQueuedMessage')).toHaveCount(0)
   } finally {
     await controlReplay(api, 'resume')
   }
-  // eslint-disable-next-line e2e/no-direct-click
-  await api.Locator('.ChatSessions .ChatNewTaskButton').click()
+  await runChatAction(api.Command, 'new-task')
   await startMessage(
     api,
     'What is the weather forecast for Berlin, Germany on November 4, 2026? Use web search and cite your sources.',

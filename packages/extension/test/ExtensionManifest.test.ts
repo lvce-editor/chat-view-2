@@ -125,6 +125,17 @@ test('makes AI-native layout switching available by default', async () => {
   expect(manifest.activation).toContain('onCommand:chat2.toggleSessionsList')
 })
 
+test('contributes the Chat 2 component state copy command', async () => {
+  const manifestUrl = new URL('../extension.json', import.meta.url)
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
+
+  expect(manifest.commands).toContainEqual({
+    id: 'chat2.copyComponentState',
+    label: 'Chat 2: Copy Component State',
+  })
+  expect(manifest.activation).toContain('onCommand:chat2.copyComponentState')
+})
+
 test('contributes selectable AI-native theme presets', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
@@ -137,14 +148,17 @@ test('contributes selectable AI-native theme presets', async () => {
   })
 })
 
-test('keeps backend streaming disabled by default', async () => {
+test('contributes the response method preference with an HTTP default', async () => {
   const manifestUrl = new URL('../extension.json', import.meta.url)
   const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'))
 
-  expect(manifest.configuration['chat2.supportsStreaming']).toEqual(
+  expect(manifest.configuration['chat2.responseMethod']).toEqual(
     expect.objectContaining({
-      default: false,
-      type: 'boolean',
+      default: 'default',
+      description:
+        'Choose how Chat 2 sends requests and receives responses. Default uses HTTP and takes precedence over the legacy chat2.supportsStreaming setting.',
+      enum: ['default', 'http', 'websocket'],
+      type: 'string',
     }),
   )
 })
@@ -175,10 +189,12 @@ test('contributes every preference read by Chat 2', async () => {
       'chat2.assistantMessageFontFamily',
       'chat2.computerUseEnabled',
       'chat2.experimentalFocusMode',
+      'chat2.followUpBehavior',
       'chat2.fontFamily',
       'chat2.fontSize',
       'chat2.openAiWebSearch',
       'chat2.selectedModelId',
+      'chat2.responseMethod',
       'chat2.supportsStreaming',
       'chat2.taskOpenMode',
       'chat2.thinkingModeEnabled',

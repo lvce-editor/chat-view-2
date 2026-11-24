@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.message-code-blocks'
 
@@ -10,8 +11,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Locator('textarea[name="composer"]').type(
     'Show this JSON:\n```json\n{"jsonrpc":"2.0","id":1}\n```',
   )
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
 
   const codeBlock = Locator('.ChatMessageUser .ChatCodeBlock')
   const copyButton = Locator('.ChatMessageUser .ChatCodeCopyButton')

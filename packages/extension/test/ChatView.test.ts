@@ -9,8 +9,10 @@ import type { ChatRunOptions, ChatTask } from '../src/parts/ChatApi/ChatApi.ts'
 import { createEvent } from '../src/parts/ChatTask/ChatTask.ts'
 import { view } from '../src/parts/ChatView/ChatView.ts'
 import {
+  copyChatViewComponentState,
   createInstance,
   newChatInActiveChatViewInstance,
+  setWorkbenchLayoutUrl,
   submitActiveChatViewInstance,
 } from '../src/parts/ChatView/CreateInstance.ts'
 import {
@@ -53,6 +55,24 @@ const getPathByClass = (
   }
   return visit([])
 }
+
+test('board hashes do not become chat task hashes during layout transitions', async () => {
+  const execute = jest.fn(async (command: string) => {
+    if (command === 'Layout.getHref')
+      return 'https://example.com/board?workspace=one#22222222'
+    if (command === 'Layout.getAssetDir') return '/assets'
+    return undefined
+  }) as unknown as Parameters<typeof setWorkbenchLayoutUrl>[0]
+
+  await setWorkbenchLayoutUrl(execute, 'ai-native')
+  expect(execute).toHaveBeenCalledWith(
+    'Layout.setPathName',
+    '/chat?workspace=one',
+  )
+
+  await setWorkbenchLayoutUrl(execute, 'ide')
+  expect(execute).toHaveBeenCalledWith('Layout.setPathName', '/?workspace=one')
+})
 
 const dispatch = async (
   instance: Awaited<ReturnType<typeof createInstance>>,
@@ -141,74 +161,191 @@ test('reserves a pending submission before draft persistence can yield to anothe
   instance.dispose?.()
 })
 
-test('an older turn finishing cannot release a newer pending steering submission', async () => {
-  const started = Promise.withResolvers<void>()
-  const finish = Promise.withResolvers<void>()
-  const steeringStarted = Promise.withResolvers<void>()
-  const steeringFinished = Promise.withResolvers<void>()
-  const api = createMockChatApi()
-  jest
-    .spyOn(api, 'createTask')
-    .mockImplementation(
-      async (
-        message,
-        modelId,
-        options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
-      ) => {
-        const task: ChatTask = {
-          createdAt: new Date().toISOString(),
-          events: [createEvent({ text: message, type: 'user-message' })],
-          id: 'pending-reservation-task',
+test.each(['queue', 'steer', 'invalid'])(
+  'serializes follow-ups with %s behavior and preserves their order across navigation',
+  async (behavior) => {
+    const started = Promise.withResolvers<void>()
+    const finish = Promise.withResolvers<void>()
+    const api = createMockChatApi()
+    const createTask = jest
+      .spyOn(api, 'createTask')
+      .mockImplementation(
+        async (
+          message,
           modelId,
-          status: 'running',
-          title: 'Pending reservation',
-          updatedAt: new Date().toISOString(),
-        }
-        await options?.onUpdate?.(task)
-        started.resolve()
-        await finish.promise
-        const completed = { ...task, status: 'completed' as const }
-        await options?.onUpdate?.(completed)
-        return completed
-      },
+          options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+        ) => {
+          const task: ChatTask = {
+            createdAt: new Date().toISOString(),
+            events: [createEvent({ text: message, type: 'user-message' })],
+            id: 'queued-task',
+            modelId,
+            status: 'running',
+            title: 'Queue',
+            updatedAt: new Date().toISOString(),
+          }
+          await options?.onUpdate?.(task)
+          started.resolve()
+          await finish.promise
+          const completed = {
+            ...task,
+            events: [
+              ...task.events,
+              createEvent({
+                text: 'First response',
+                type: 'assistant-message',
+              }),
+            ],
+            status: 'completed' as const,
+          }
+          await options?.onUpdate?.(completed)
+          return completed
+        },
+      )
+    const sendMessage = jest.spyOn(api, 'sendMessage')
+    const steer = jest.spyOn(api, 'steer')
+    const instance = await createInstance(undefined, api, async (key) =>
+      key === 'chat2.followUpBehavior' ? behavior : undefined,
     )
+    const submissions: Promise<void>[] = []
+    try {
+      await dispatch(instance, {
+        name: 'composer',
+        type: 'input',
+        value: 'First',
+      })
+      submissions.push(instance.submit())
+      await started.promise
+      for (const message of ['Second', 'Third']) {
+        await dispatch(instance, {
+          name: 'composer',
+          type: 'input',
+          value: message,
+        })
+        submissions.push(instance.submit())
+        await flushPromises()
+      }
+      expect(sendMessage).not.toHaveBeenCalled()
+      expect(steer).not.toHaveBeenCalled()
+      expect(createTask.mock.calls[0][2]?.signal?.aborted).toBe(
+        behavior === 'steer',
+      )
+      expect(instance.getState().draft).toBe('')
+      const queued = getNodesByClass(instance.render(), 'ChatQueuedMessage')
+      expect(queued).toHaveLength(2)
+      expect(getText(instance.render())).toContain('Queued')
+      await instance.newChat()
+      expect(
+        getNodesByClass(instance.render(), 'ChatQueuedMessage'),
+      ).toHaveLength(0)
+      finish.resolve()
+      await Promise.all(submissions)
+      expect(sendMessage).toHaveBeenCalledTimes(2)
+      expect(sendMessage.mock.calls[0][1]).toBe('Second')
+      expect(sendMessage.mock.calls[1][1]).toBe('Third')
+      expect(
+        sendMessage.mock.calls[1][0].events.some(
+          (event) => event.type === 'user-message' && event.text === 'Second',
+        ),
+      ).toBe(true)
+      expect(
+        sendMessage.mock.calls[0][0].events.some(
+          (event) =>
+            event.type === 'assistant-message' &&
+            event.text === 'First response',
+        ),
+      ).toBe(true)
+      expect(instance.getState().selectedTask).toBeUndefined()
+      expect(instance.getState().queuedMessages).toHaveLength(0)
+    } finally {
+      finish.resolve()
+      await Promise.all(submissions)
+      instance.dispose?.()
+    }
+  },
+)
+
+test('stopping a turn cancels its queued follow-up before it starts', async () => {
+  const firstStarted = Promise.withResolvers<void>()
+  const finishFirst = Promise.withResolvers<void>()
+  const api = {
+    ...createMockChatApi(),
+    async createTask(
+      message: string,
+      modelId: string,
+      options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+    ) {
+      const task: ChatTask = {
+        createdAt: new Date().toISOString(),
+        events: [createEvent({ text: message, type: 'user-message' })],
+        id: 'image-task',
+        modelId,
+        status: 'running',
+        title: 'Image task',
+        updatedAt: new Date().toISOString(),
+      }
+      await options?.onUpdate?.(task)
+      firstStarted.resolve()
+      await finishFirst.promise
+      const stopped = {
+        ...task,
+        events: [
+          ...task.events,
+          createEvent({ text: 'Stopped.', type: 'assistant-message' }),
+        ],
+        status: 'stopped' as const,
+      }
+      await options?.onUpdate?.(stopped)
+      return stopped
+    },
+    async sendMessage(
+      task: ChatTask,
+      message: string,
+      options?: Readonly<Pick<ChatRunOptions, 'onUpdate'>>,
+    ) {
+      const completed = {
+        ...task,
+        events: [
+          ...task.events,
+          createEvent({ text: message, type: 'user-message' }),
+          createEvent({
+            text: 'Follow-up response',
+            type: 'assistant-message',
+          }),
+        ],
+        status: 'completed' as const,
+      }
+      await options?.onUpdate?.(completed)
+      return completed
+    },
+  }
   const sendMessage = jest.spyOn(api, 'sendMessage')
-  const steer = jest.spyOn(api, 'steer').mockImplementation(async () => {
-    steeringStarted.resolve()
-    await steeringFinished.promise
-  })
   const instance = await createInstance(undefined, api)
   try {
     await dispatch(instance, {
       name: 'composer',
       type: 'input',
-      value: 'Start this turn',
+      value: 'Generate an image of Switzerland',
     })
     const first = instance.submit()
-    await started.promise
+    await firstStarted.promise
     await dispatch(instance, {
       name: 'composer',
       type: 'input',
-      value: 'Steer this turn',
+      value: 'Update the image for year 2200',
     })
-    const second = instance.submit()
-    await steeringStarted.promise
-    finish.resolve()
-    await first
-    await dispatch(instance, {
-      name: 'composer',
-      type: 'input',
-      value: 'Preserve this draft',
-    })
-    await instance.submit()
+    const followUp = instance.submit()
+    await flushPromises()
+
+    await dispatch(instance, { name: 'stop', type: 'click' })
+    finishFirst.resolve()
+    await Promise.all([first, followUp])
+
     expect(sendMessage).not.toHaveBeenCalled()
-    expect(steer).toHaveBeenCalledTimes(1)
-    expect(instance.getState().draft).toBe('Preserve this draft')
-    steeringFinished.resolve()
-    await second
+    expect(instance.getState().selectedTask?.status).toBe('stopped')
+    expect(instance.getState().queuedMessages).toHaveLength(0)
   } finally {
-    finish.resolve()
-    steeringFinished.resolve()
+    finishFirst.resolve()
     instance.dispose?.()
   }
 })
@@ -452,6 +589,20 @@ test('renders a focused task list, model control, and composer', async () => {
 
   expect(getNodesByClass(dom, 'ChatTaskButton')).toHaveLength(20)
   expect(getNodesByClass(dom, 'ChatTaskArchiveButton')).toHaveLength(20)
+  expect(getNodesByClass(dom, 'ChatTaskList')[0]).toEqual(
+    expect.objectContaining({
+      'aria-activedescendant': 'chat-task-mock-task-1',
+      ariaLabel: 'Tasks',
+      name: 'task-list',
+      role: 'tree',
+      tabIndex: 0,
+    }),
+  )
+  expect(getNodesByClass(dom, 'ChatTaskButton')[0]).toEqual(
+    expect.objectContaining({ id: 'chat-task-mock-task-1', tabIndex: -1 }),
+  )
+  expect(getNodesByClass(dom, 'ChatTaskArchiveButton')[0].tabIndex).toBe(0)
+  expect(getNodesByClass(dom, 'ChatTaskArchiveButton')[1].tabIndex).toBe(-1)
   expect(dom).toContainEqual(
     expect.objectContaining({
       ariaLabel: 'Archive Add worker memory usage',
@@ -503,6 +654,65 @@ test('renders a focused task list, model control, and composer', async () => {
   const submitIndex = dom.findIndex((node) => node.name === 'submit')
   expect(spacerIndex).toBeLessThan(modelIndex)
   expect(modelIndex).toBeLessThan(submitIndex)
+})
+
+test('marks only the selected task as selected independently of keyboard focus', async () => {
+  const instance = await createTestInstance()
+  try {
+    const state = instance.getState()
+    instance.setState({
+      ...state,
+      focusMode: true,
+      selectedTask: state.tasks[1],
+      sessionsListVisible: true,
+    })
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+
+    let taskItems = getNodesByClass(instance.render(), 'ChatTaskItem')
+    expect(
+      taskItems.filter((node) => node.className.includes('ChatTaskSelected')),
+    ).toHaveLength(1)
+    expect(taskItems[0].className).toContain('ChatTaskFocused')
+    expect(taskItems[0].className).not.toContain('ChatTaskSelected')
+    expect(taskItems[1].className).toContain('ChatTaskSelected')
+    expect(taskItems[1].className).not.toContain('ChatTaskFocused')
+
+    instance.handleKeyDown('ArrowDown', false, false, false, 'task-list')
+    taskItems = getNodesByClass(instance.render(), 'ChatTaskItem')
+    expect(
+      taskItems.filter((node) => node.className.includes('ChatTaskSelected')),
+    ).toHaveLength(1)
+    expect(taskItems[1].className).toContain('ChatTaskSelected')
+    expect(taskItems[1].className).toContain('ChatTaskFocused')
+
+    await instance.newChat()
+    expect(getNodesByClass(instance.render(), 'ChatTaskSelected')).toHaveLength(
+      0,
+    )
+  } finally {
+    instance.dispose?.()
+  }
+})
+
+test('moves the active task through the task list with arrow keys', async () => {
+  const instance = await createTestInstance()
+
+  instance.handleKeyDown('ArrowDown', false, false, false, 'task-list')
+  expect(instance.getState().focusedTaskId).toBe('mock-task-2')
+  expect(getNodesByClass(instance.render(), 'ChatTaskList')[0]).toEqual(
+    expect.objectContaining({
+      'aria-activedescendant': 'chat-task-mock-task-2',
+    }),
+  )
+  expect(
+    getNodesByClass(instance.render(), 'ChatTaskArchiveButton')[0].tabIndex,
+  ).toBe(-1)
+  expect(
+    getNodesByClass(instance.render(), 'ChatTaskArchiveButton')[1].tabIndex,
+  ).toBe(0)
+
+  instance.handleKeyDown('ArrowUp', false, false, false, 'task-list')
+  expect(instance.getState().focusedTaskId).toBe('mock-task-1')
 })
 
 test('opens a task on primary mousedown by default', async () => {
@@ -582,6 +792,21 @@ test('opens a task on click when configured', async () => {
     await instance.newChat()
     await instance.handleTaskClick('task:mock-task-2', 0, 0)
     expect(instance.getState().selectedTask?.id).toBe('mock-task-2')
+  } finally {
+    instance.dispose?.()
+  }
+})
+
+test('rerenders after opening a quick pick item', async () => {
+  const requestRerender = jest.fn(async () => {})
+  const instance = await createInstance(
+    { ...createViewContext(undefined), requestRerender },
+    createMockChatApi(),
+  )
+  try {
+    await instance.openQuickPickItem('mock-task-1')
+    expect(instance.getState().selectedTask?.id).toBe('mock-task-1')
+    expect(requestRerender).toHaveBeenCalledTimes(1)
   } finally {
     instance.dispose?.()
   }
@@ -1026,9 +1251,15 @@ test('submits image attachments and keeps a small preview in the message history
 
   await instance.submit()
 
+  const attachmentEvent = instance
+    .getState()
+    .selectedTask?.events.find((event) => event.type === 'user-message')
+  if (attachmentEvent?.type !== 'user-message') {
+    throw new Error('Expected the submitted user image attachment')
+  }
+  expect(attachmentEvent.attachments?.[0]?.objectUrl).toContain('blob:')
   expect(instance.getState().selectedTask?.events).toContainEqual(
     expect.objectContaining({
-      attachments: [attachment],
       text: 'Describe this',
       type: 'user-message',
     }),
@@ -1037,7 +1268,7 @@ test('submits image attachments and keeps a small preview in the message history
     expect.objectContaining({
       alt: 'sample.png',
       className: 'ChatMessageImage',
-      src: attachment.dataUrl,
+      src: expect.any(String),
     }),
   )
 })
@@ -1064,12 +1295,13 @@ test('renders generated assistant images and opens a dismissible image preview',
     updatedAt: '2026-01-01T00:00:00.000Z',
   }
   instance.setState({ ...instance.getState(), selectedTask: task })
+  await new Promise((resolve) => setTimeout(resolve, 0))
 
   expect(instance.render()).toContainEqual(
     expect.objectContaining({
       alt: image.name,
       className: 'ChatMessageImage',
-      src: image.dataUrl,
+      src: expect.any(String),
     }),
   )
   await dispatch(instance, {
@@ -1082,7 +1314,7 @@ test('renders generated assistant images and opens a dismissible image preview',
   expect(instance.render()).toContainEqual(
     expect.objectContaining({
       className: 'ChatImagePreview',
-      src: image.dataUrl,
+      src: expect.any(String),
     }),
   )
   await dispatch(instance, { name: 'close-image-preview', type: 'click' })
@@ -1096,6 +1328,42 @@ test('renders generated assistant images and opens a dismissible image preview',
   instance.handleKeyDown('Escape')
   expect(
     getNodesByClass(instance.render(), 'ChatImagePreviewOverlay'),
+  ).toHaveLength(0)
+})
+
+test('renders an accessible image placeholder only while generation is running', async () => {
+  const instance = await createTestInstance()
+  const task: ChatTask = {
+    createdAt: '2026-01-01T00:00:00.000Z',
+    events: [],
+    id: 'task-generating-image',
+    imageGenerationActive: true,
+    modelId: 'gpt-test',
+    status: 'running',
+    title: 'Image',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+  instance.setState({ ...instance.getState(), selectedTask: task })
+
+  expect(
+    getNodesByClass(instance.render(), 'ChatImageGenerationPlaceholder'),
+  ).toHaveLength(1)
+  expect(instance.render()).toContainEqual(
+    expect.objectContaining({
+      ariaLabel: 'Generating image',
+      className: 'ChatImageGenerationPlaceholder',
+      role: 'status',
+    }),
+  )
+
+  const completedTask = {
+    ...task,
+    imageGenerationActive: false,
+    status: 'completed' as const,
+  }
+  instance.setState({ ...instance.getState(), selectedTask: completedTask })
+  expect(
+    getNodesByClass(instance.render(), 'ChatImageGenerationPlaceholder'),
   ).toHaveLength(0)
 })
 
@@ -1129,18 +1397,21 @@ test('loads pasted image files once and submits the decoded image bytes', async 
   expect(instance.getState().composerImages[0]?.status).toBe('ready')
   await instance.submit()
 
-  expect(
-    instance
-      .getState()
-      .selectedTask?.events.find((event) => event.type === 'user-message'),
-  ).toEqual(
+  const submittedMessage = instance
+    .getState()
+    .selectedTask?.events.find((event) => event.type === 'user-message')
+  if (submittedMessage?.type !== 'user-message') {
+    throw new Error('Expected a user message with the pasted image')
+  }
+  expect(submittedMessage.attachments?.[0]?.objectUrl).toContain('blob:')
+  expect(submittedMessage).toEqual(
     expect.objectContaining({
       attachments: [
-        {
+        expect.objectContaining({
           dataUrl: 'data:image/png;base64,aGVsbG8=',
           mimeType: 'image/png',
           name: 'pasted.png',
-        },
+        }),
       ],
     }),
   )
@@ -1355,7 +1626,7 @@ test('AI-native browser title includes the editor name and restores the workspac
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(execute).toHaveBeenCalledWith(
       'WindowTitle.set',
-      'Chat 2 - Lvce Editor',
+      'New Chat - Lvce Editor',
     )
 
     await instance.toggleFocusMode()
@@ -1549,6 +1820,50 @@ test('exposes and applies live component state without replacing the chat instan
   )
 })
 
+test('copies the current component state as readable JSON without changing it', async () => {
+  const instance = await createTestInstance()
+  const writeClipboardText = jest.fn(async (_text: string) => undefined)
+  instance.setState({ ...instance.getState(), draft: 'First draft' })
+
+  await copyChatViewComponentState(instance, writeClipboardText)
+
+  expect(writeClipboardText).toHaveBeenLastCalledWith(
+    `${JSON.stringify(instance.getState(), null, 2)}\n`,
+  )
+  expect(JSON.parse(writeClipboardText.mock.calls[0][0])).toEqual(
+    instance.getState(),
+  )
+  expect(instance.getState().draft).toBe('First draft')
+
+  instance.setState({ ...instance.getState(), draft: 'Updated draft' })
+  await copyChatViewComponentState(instance, writeClipboardText)
+  expect(JSON.parse(writeClipboardText.mock.calls[1][0]).draft).toBe(
+    'Updated draft',
+  )
+  instance.dispose?.()
+})
+
+test('surfaces component state clipboard failures', async () => {
+  const instance = await createTestInstance()
+  const writeClipboardText = jest.fn(async (_text: string) => {
+    throw new Error('Clipboard unavailable')
+  })
+
+  await expect(
+    copyChatViewComponentState(instance, writeClipboardText),
+  ).rejects.toThrow('Clipboard unavailable')
+  instance.dispose?.()
+})
+
+test('reports when Chat 2 has no instance to copy', async () => {
+  const instance = await createTestInstance()
+  instance.dispose?.()
+
+  await expect(copyChatViewComponentState(undefined)).rejects.toThrow(
+    'Chat 2 is not open',
+  )
+})
+
 test('rejects invalid live component state without changing the chat', async () => {
   const instance = await createTestInstance()
   const originalState = instance.getState()
@@ -1599,7 +1914,7 @@ test('keeps failed token refreshes in the login state without unauthenticated re
     accessToken: '',
     baseUrl: 'https://backend.example.com',
     loginRequired: true,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const listModels = jest.fn(createMockChatApi().listModels)
   const listTasks = jest.fn(createMockChatApi().listTasks)
@@ -1651,7 +1966,7 @@ test('reloads models when authentication changes after the view loads', async ()
   let configuration: BackendConfiguration = {
     accessToken: '',
     baseUrl: 'https://backend.example.com',
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const loggedOutApi = {
     ...createMockChatApi(),
@@ -2570,6 +2885,7 @@ test('registers model picker keydown handling on the view root', async () => {
       'event.ctrlKey',
       'event.metaKey',
       'event.shiftKey',
+      'event.target.name',
     ],
   })
   expect(instance.render()[0]).toEqual(
@@ -2900,7 +3216,7 @@ test('renders only the login screen and replaces it after login, then hides chat
     accessToken: '',
     baseUrl: 'https://backend.example.com',
     loginRequired: true,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const execute = jest.fn(async (id: string) => {
     expect(id).toBe('Layout.signIn')
@@ -2973,7 +3289,7 @@ test('keeps login available after a failed or cancelled login', async () => {
     accessToken: '',
     baseUrl: 'https://backend.example.com',
     loginRequired: true,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const execute = jest.fn(async () => {
     throw new Error('Login cancelled')
@@ -3020,7 +3336,7 @@ test('starts login without awaiting a rerender queued behind the click event', a
     accessToken: '',
     baseUrl: 'https://backend.example.com',
     loginRequired: true,
-    supportsStreaming: true,
+    responseMethod: 'websocket',
   }
   const signInGate = Promise.withResolvers<void>()
   const rerenderGate = Promise.withResolvers<void>()
@@ -3172,7 +3488,7 @@ test.each(['models', 'request'])(
     const configuration: BackendConfiguration = {
       accessToken: 'rejected-token',
       baseUrl: 'https://backend.example.com',
-      supportsStreaming: true,
+      responseMethod: 'websocket',
     }
     const resolveConfiguration = jest.fn(async () => configuration)
     const api = createMockChatApi(0)

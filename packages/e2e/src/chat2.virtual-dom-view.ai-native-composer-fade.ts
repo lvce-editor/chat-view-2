@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.ai-native-composer-fade'
 
@@ -18,8 +19,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(chat).toBeVisible()
   await expect(composer).toBeVisible()
   await composer.type('Make a scoped change')
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
 
   const userMessage = Locator('.ChatMessageUser')
   await expect(userMessage).toBeVisible()

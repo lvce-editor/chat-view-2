@@ -21,7 +21,7 @@ export interface ResponsesBackendOptions {
   readonly onLoginRequired?: () => void
   readonly openAiWebSearch?: boolean
   readonly refreshAccessToken?: () => Promise<string>
-  readonly supportsStreaming?: boolean
+  readonly responseMethod?: 'http' | 'websocket'
 }
 
 interface ResponseEvent {
@@ -187,6 +187,18 @@ const getRecord = (
   value && typeof value === 'object'
     ? (value as Readonly<Record<string, unknown>>)
     : undefined
+
+const isImageGenerationStartEvent = (event: ResponseEvent): boolean =>
+  event.type === 'response.output_item.added' &&
+  event.item?.type === 'image_generation_call'
+
+const notifyImageGenerationStart = async (
+  options: AgentStepOptions,
+): Promise<void> => {
+  if (usesImageGeneration(options)) {
+    await options.onImageGenerationStart?.()
+  }
+}
 
 const getResponseImages = (response: {
   readonly output?: readonly unknown[]
@@ -421,7 +433,6 @@ const runWebSocketRequest = (
   let usage: ChatTokenUsage | undefined
   let settled = false
   let text = ''
-
   const cleanup = (): void => {
     socket.onclose = null
     socket.onerror = null
@@ -487,6 +498,10 @@ const runWebSocketRequest = (
       return
     }
     const { item } = event
+    if (isImageGenerationStartEvent(event)) {
+      await options.onImageGenerationStart?.()
+      return
+    }
     if (
       event.type === 'response.output_item.done' &&
       item?.type === 'function_call' &&
@@ -846,7 +861,7 @@ export const createResponsesBackend = ({
   onLoginRequired,
   openAiWebSearch = true,
   refreshAccessToken,
-  supportsStreaming = false,
+  responseMethod = 'http',
 }: ResponsesBackendOptions): AgentBackend => {
   const root = trimTrailingSlash(baseUrl)
   let currentAccessToken = accessToken
@@ -1050,9 +1065,10 @@ export const createResponsesBackend = ({
       const openRouterInput = isOpenRouter
         ? [...(options.responseHistory || []), ...options.input.map(mapInput)]
         : []
-      if (supportsStreaming && !isOpenRouter) {
+      if (responseMethod === 'websocket' && !isOpenRouter) {
         return runAuthenticatedWebSocket(options)
       }
+      await notifyImageGenerationStart(options)
       const response = await authenticatedFetch(
         getApiUrl(root, '/v1/responses'),
         {

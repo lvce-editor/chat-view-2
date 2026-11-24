@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.submit-button'
 
@@ -10,8 +11,7 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await Locator('textarea[name="composer"]').type('Submit with the button')
   const submit = Locator('button[name="submit"]')
   await expect(submit).toContainText('↑')
-  // eslint-disable-next-line e2e/no-direct-click
-  await submit.click()
+  await runChatAction(Command, 'submit')
 
   const detail = Locator('.ChatDetailView')
   const userMessage = Locator('.ChatMessageUser')
@@ -22,7 +22,6 @@ export const test: Test = async ({ Command, expect, Locator, Main }) => {
   await expect(stop).toContainText('■')
   await expect(stop).toHaveAttribute('aria-label', 'Stop task')
   await expect(submit).toBeHidden()
-  // eslint-disable-next-line e2e/no-direct-click
-  await stop.click()
+  await runChatAction(Command, 'stop')
   await expect(submit).toBeVisible()
 }

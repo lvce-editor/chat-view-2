@@ -14,7 +14,7 @@ import type { ChatViewState } from './ChatViewState.ts'
 import { summarizeTask } from '../ChatTask/ChatTask.ts'
 import * as Dom from '../VirtualDom/VirtualDom.ts'
 import { applyLayoutClasses } from './ApplyLayoutClasses.ts'
-import { formatMessageDate } from './FormatMessageDate.ts'
+import { formatMessageDate, formatWorkDuration } from './FormatMessageDate.ts'
 import { getMathTokens } from './MathExpressions.ts'
 
 const fileUriPattern = /^(?:file|memfs|remote-ssh|html|opfs):\/\//u
@@ -61,28 +61,56 @@ const getStatusLabel = (task: ChatTask): string => {
 const renderTask = (
   task: ChatTask,
   taskOpenMode: ChatViewState['taskOpenMode'],
+  focusedTaskId: ChatViewState['focusedTaskId'],
+  selectedTaskId: string | undefined,
 ): Dom.Node => {
   const status = getStatusLabel(task)
-  return Dom.div('ChatTaskItem', [
-    Dom.button(
-      `task:${task.id}`,
-      status ? `${task.title} · ${status}` : task.title,
-      `ChatTaskButton ChatTaskStatus-${task.status}`,
-      {
-        onClick: 'handleTaskClick',
-        ...(taskOpenMode === 'mousedown' && {
-          onMouseDown: 'handleTaskMouseDown',
-        }),
-      },
-    ),
-    Dom.iconButton(
-      `archive-task:${task.id}`,
-      'ChatTaskArchiveButton',
-      'ChatTaskArchiveIcon',
-      `Archive ${task.title}`,
-      'Archive',
-    ),
-  ])
+  const focused = task.id === focusedTaskId
+  const selected = task.id === selectedTaskId
+  return Dom.node(
+    VirtualDomElements.Div,
+    {
+      className: mergeClassNames(
+        'ChatTaskItem',
+        focused ? 'ChatTaskFocused' : '',
+        selected ? 'ChatTaskSelected' : '',
+      ),
+      role: 'treeitem',
+    },
+    [
+      Dom.node(
+        VirtualDomElements.Button,
+        {
+          buttonType: 'button',
+          className: mergeClassNames(
+            'ChatTaskButton',
+            `ChatTaskStatus-${task.status}`,
+          ),
+          id: `chat-task-${task.id}`,
+          name: `task:${task.id}`,
+          onClick: 'handleTaskClick',
+          ...(taskOpenMode === 'mousedown' && {
+            onMouseDown: 'handleTaskMouseDown',
+          }),
+          tabIndex: -1,
+        },
+        [Dom.textNode(status ? `${task.title} · ${status}` : task.title)],
+      ),
+      Dom.node(
+        VirtualDomElements.Button,
+        {
+          ariaLabel: `Archive ${task.title}`,
+          buttonType: 'button',
+          className: 'ChatTaskArchiveButton',
+          name: `archive-task:${task.id}`,
+          onClick: 'handleClick',
+          tabIndex: focused ? 0 : -1,
+          title: 'Archive',
+        },
+        [Dom.div('ChatTaskArchiveIcon', [])],
+      ),
+    ],
+  )
 }
 
 const renderTaskList = (
@@ -90,6 +118,9 @@ const renderTaskList = (
   fontFamily: string,
   fontSize: string,
   taskOpenMode: ChatViewState['taskOpenMode'],
+  focusedTaskId: ChatViewState['focusedTaskId'],
+  selectedTaskId: string | undefined,
+  ariaLabel: string,
 ): Dom.Node => {
   if (tasks.length === 0) {
     return Dom.div('ChatEmptyState', [
@@ -101,9 +132,24 @@ const renderTaskList = (
       ]),
     ])
   }
-  return Dom.div(
-    `ChatTaskList ${getTaskListStyleClass(fontFamily, fontSize)}`,
-    tasks.map((task) => renderTask(task, taskOpenMode)),
+  const activeTaskId =
+    tasks.find((task) => task.id === focusedTaskId)?.id || tasks[0].id
+  return Dom.node(
+    VirtualDomElements.Div,
+    {
+      'aria-activedescendant': `chat-task-${activeTaskId}`,
+      ariaLabel,
+      className: mergeClassNames(
+        'ChatTaskList',
+        getTaskListStyleClass(fontFamily, fontSize),
+      ),
+      name: 'task-list',
+      role: 'tree',
+      tabIndex: 0,
+    },
+    tasks.map((task) =>
+      renderTask(task, taskOpenMode, activeTaskId, selectedTaskId),
+    ),
   )
 }
 
@@ -879,7 +925,7 @@ const renderMessageImages = (
             Dom.node(VirtualDomElements.Img, {
               alt: image.name,
               className: 'ChatMessageImage',
-              src: image.dataUrl,
+              src: image.objectUrl || '',
             }),
           ],
         ),
@@ -950,17 +996,35 @@ const renderImagePreview = (
       Dom.node(VirtualDomElements.Img, {
         alt: image.name,
         className: 'ChatImagePreview',
-        src: image.dataUrl,
+        src: image.objectUrl || '',
       }),
     ],
   )
+
+// Saved sessions can contain the raw fetch message from different browsers.
+const fetchFailureMessages = [
+  'Failed to fetch',
+  'NetworkError when attempting to fetch resource.',
+  'Load failed',
+]
+
+const getChatErrorText = (message: string): string => {
+  if (fetchFailureMessages.includes(message)) {
+    return 'Could not reach the chat server. Check your connection and try again.'
+  }
+  return message
+}
 
 const renderErrorBanners = (
   summaryErrorMessage: string,
   errorMessage: string,
 ): readonly Dom.Node[] => [
   ...(summaryErrorMessage
-    ? [Dom.div('ChatErrorBanner', [Dom.textNode(summaryErrorMessage)])]
+    ? [
+        Dom.div('ChatErrorBanner', [
+          Dom.textNode(getChatErrorText(summaryErrorMessage)),
+        ]),
+      ]
     : []),
   ...(errorMessage
     ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
@@ -984,6 +1048,20 @@ const renderStreamingMessage = (
       ),
     ),
   ])
+}
+
+const renderImageGenerationPlaceholder = (
+  state: Readonly<ChatViewState>,
+): Dom.Node | undefined => {
+  const { selectedTask: task } = state
+  if (!task || !isRunning(task) || !task.imageGenerationActive) {
+    return undefined
+  }
+  return Dom.node(VirtualDomElements.Div, {
+    ariaLabel: 'Generating image',
+    className: 'ChatImageGenerationPlaceholder',
+    role: 'status',
+  })
 }
 
 const renderModel = (model: ChatModel): Dom.Node => {
@@ -1157,6 +1235,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
   const {
     composerImages,
     draft,
+    followUpBehavior,
     modelPickerOpen,
     preserveComposerValue = false,
     selectedModelId,
@@ -1164,7 +1243,9 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
   } = state
   const running = isRunning(selectedTask)
   const placeholder = running
-    ? 'Steer the current task'
+    ? followUpBehavior === 'steer'
+      ? 'Steer the current task'
+      : 'Queue a follow-up message'
     : selectedTask
       ? 'Ask for a follow-up change'
       : 'Describe a programming task'
@@ -1183,7 +1264,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
                         Dom.node(VirtualDomElements.Img, {
                           alt: image.name,
                           className: 'ChatComposerImagePreview',
-                          src: image.attachment.dataUrl,
+                          src: image.attachment.objectUrl || '',
                         }),
                       ]
                     : [
@@ -1224,7 +1305,7 @@ const renderComposer = (state: Readonly<ChatViewState>): Dom.Node => {
           'ChatModelButton',
           { ariaExpanded: modelPickerOpen },
         ),
-        running && draft.trim() !== '/status'
+        running && !draft.trim() && composerImages.length === 0
           ? Dom.button('stop', '■', 'ChatSubmitButton', {
               ariaLabel: 'Stop task',
               title: 'Stop task',
@@ -1294,7 +1375,15 @@ const getAiNativeThemeClassName = (
 }
 
 const renderListView = (state: Readonly<ChatViewState>): Dom.Node => {
-  const { errorMessage, fontFamily, fontSize, taskOpenMode, tasks } = state
+  const {
+    errorMessage,
+    focusedTaskId,
+    fontFamily,
+    fontSize,
+    selectedTask,
+    taskOpenMode,
+    tasks,
+  } = state
   return Dom.div(
     getRootClassName(state, 'ChatListView'),
     [
@@ -1311,7 +1400,15 @@ const renderListView = (state: Readonly<ChatViewState>): Dom.Node => {
       ...(errorMessage
         ? [Dom.div('ChatErrorBanner', [Dom.textNode(errorMessage)])]
         : []),
-      renderTaskList(tasks, fontFamily, fontSize, taskOpenMode),
+      renderTaskList(
+        tasks,
+        fontFamily,
+        fontSize,
+        taskOpenMode,
+        focusedTaskId,
+        selectedTask?.id,
+        'Tasks',
+      ),
       renderComposer(state),
     ],
     {
@@ -1343,11 +1440,11 @@ const renderActivity = (state: Readonly<ChatViewState>): Dom.Node => {
   if (activities.length === 0 && !isRunning(task) && !hasWorked) {
     return Dom.div('ChatActivityHidden', [])
   }
-  const unit = workingSeconds === 1 ? 'second' : 'seconds'
+  const duration = formatWorkDuration(workingSeconds)
   const label = isRunning(task)
-    ? `Working for ${workingSeconds} ${unit}`
+    ? `Working for ${duration}`
     : hasWorked
-      ? `Worked for ${workingSeconds} ${unit}`
+      ? `Worked for ${duration}`
       : `${activities.length} ${activities.length === 1 ? 'step' : 'steps'} completed`
   return Dom.div('ChatActivity', [
     Dom.button('toggle-activity', label, 'ChatActivityToggle', {
@@ -1469,6 +1566,7 @@ const renderDetailView = (
     errorMessage,
     focusMode,
     imagePreview,
+    queuedMessages = [],
     selectedTask: task,
     sessionsVisible,
   } = state
@@ -1503,6 +1601,7 @@ const renderDetailView = (
   )
   const currentTurnStart = Math.max(0, lastUserMessageIndex)
   const previousMessages = renderedMessages.slice(0, currentTurnStart)
+  const imageGenerationPlaceholder = renderImageGenerationPlaceholder(state)
   const latestTurnContent = [
     ...renderedMessages.slice(currentTurnStart, currentTurnStart + 1),
     renderActivity(state),
@@ -1517,6 +1616,7 @@ const renderDetailView = (
           ),
         ]
       : []),
+    ...(imageGenerationPlaceholder ? [imageGenerationPlaceholder] : []),
     ...renderErrorBanners(summary.errorMessage, errorMessage),
   ]
   const messageContent =
@@ -1526,7 +1626,22 @@ const renderDetailView = (
   const changes = renderChanges(state)
   const composer = renderComposer(state)
   const messages = Dom.div('ChatMessages', [
-    Dom.div('ChatMessagesContent', messageContent),
+    Dom.div('ChatMessagesContent', [
+      ...messageContent,
+      ...queuedMessages
+        .filter((item) => item.taskId === task.id)
+        .map((item) =>
+          Dom.div('ChatQueuedMessage', [
+            renderMessage(
+              item.event,
+              copiedMessageId,
+              copiedCodeId,
+              renderedMath,
+            ),
+            Dom.div('ChatQueuedMessageLabel', [Dom.textNode('Queued')]),
+          ]),
+        ),
+    ]),
   ])
   if (focusMode) {
     return Dom.div(
@@ -1566,8 +1681,10 @@ const renderAiNativeSessions = (
   state: Readonly<ChatViewState>,
 ): readonly Dom.Node[] => {
   const {
+    focusedTaskId,
     fontFamily,
     fontSize,
+    selectedTask,
     sessionsListVisible,
     sessionsWidth,
     taskOpenMode,
@@ -1586,7 +1703,15 @@ const renderAiNativeSessions = (
         Dom.heading(1, 'ChatTitle', 'Sessions'),
         Dom.button('new-task', 'New chat', 'ChatNewTaskButton'),
       ]),
-      renderTaskList(tasks, fontFamily, fontSize, taskOpenMode),
+      renderTaskList(
+        tasks,
+        fontFamily,
+        fontSize,
+        taskOpenMode,
+        focusedTaskId,
+        selectedTask?.id,
+        'Chat sessions',
+      ),
     ]),
     Dom.node(VirtualDomElements.Div, {
       ariaLabel: 'Resize sessions panel',
@@ -1660,18 +1785,12 @@ const renderDom = (
       : Dom.div(
           'ChatView ChatDetailView',
           [
-            Dom.div('ChatDetailHeader', [
-              Dom.heading(1, 'ChatTitle', 'Chat'),
-              Dom.button(
-                'toggle-sessions',
-                'Sessions',
-                'ChatSessionsToggleButton',
-                {
-                  ariaExpanded: sessionsVisible,
-                },
-              ),
-              ...renderFocusModeButton(state),
-            ]),
+            Dom.button(
+              'toggle-sessions',
+              'Sessions',
+              'ChatSessionsToggleButton ChatWelcomeSessionsToggleButton',
+              { ariaExpanded: sessionsVisible },
+            ),
             Dom.div('ChatConversationBody', [
               Dom.div('ChatMessages', [
                 Dom.div('ChatMessagesContent', [

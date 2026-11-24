@@ -1,4 +1,5 @@
 import type { Test, TestApi } from '@lvce-editor/test-with-playwright'
+import { runChatAction } from './_ChatCommands.ts'
 
 const workspace = 'memfs:///recorded-workspace/'
 
@@ -45,8 +46,8 @@ const prepareChat = async (
   await api.Command.execute('Preferences.update', {
     'chat2.backendUrl': replayUrl,
     'chat2.computerUseEnabled': false,
+    'chat2.responseMethod': 'websocket',
     'chat2.selectedModelId': 'gpt-5.4-mini',
-    'chat2.supportsStreaming': true,
     'chat2.useMockBackend': false,
   })
 }
@@ -115,8 +116,7 @@ export const test: Test = async (api) => {
     'Fix the obvious bug in this Node.js project so that npm test passes. Keep the change scoped to the bug.',
   )
   await waitForTasks(api)
-  // eslint-disable-next-line e2e/no-direct-click
-  await api.Locator('button[name="toggle-changes"]').click()
+  await runChatAction(api.Command, 'toggle-changes')
   await api
     .expect(api.Locator('.ChatFileDiff'))
     .toContainText('--- a/src/add.js')

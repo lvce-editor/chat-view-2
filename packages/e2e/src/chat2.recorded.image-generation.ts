@@ -16,11 +16,11 @@ export const test: Test = async (api) => {
   await api.Command.execute('Preferences.update', {
     'chat2.backendUrl': 'http://127.0.0.1:8787',
     'chat2.computerUseEnabled': false,
+    'chat2.responseMethod': 'websocket',
     'chat2.selectedModelId': 'gpt-5.4-mini',
-    'chat2.supportsStreaming': true,
     'chat2.useMockBackend': false,
   })
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
   const components = await api.ComponentState.getComponents()
   const view = components.find(
     (component) => component.moduleId === 'ExtensionView',
@@ -55,12 +55,51 @@ export const test: Test = async (api) => {
 
   const image = api.Locator('.ChatMessageAssistant .ChatMessageImage')
   await api.expect(image).toBeVisible()
+  const imageState = await api.ComponentState.getState<{
+    readonly errorMessage?: string
+    readonly selectedTask?: {
+      readonly events: readonly {
+        readonly images?: readonly { readonly objectUrl?: string }[]
+      }[]
+    }
+    readonly tasks?: readonly Readonly<Record<string, unknown>>[]
+  }>(view.uid)
+  const imageSource = imageState.selectedTask?.events
+    .flatMap((event) => event.images || [])
+    .at(0)?.objectUrl
+  if (!imageSource?.startsWith('blob:')) {
+    throw new Error(
+      `Expected a blob image URL; selected task: ${JSON.stringify(imageState.selectedTask)}; tasks: ${JSON.stringify(imageState.tasks)}; error: ${JSON.stringify(imageState.errorMessage)}`,
+    )
+  }
   await api.expect(image).toHaveAttribute('alt', 'Generated image 1.png')
+  await api.expect(image).toHaveAttribute('src', imageSource)
   await api.expect(image).toHaveJSProperty('naturalWidth', 1)
   await api.expect(api.Locator('.ChatError, .ChatErrorBanner')).toHaveCount(0)
 
   await api.Main.closeAllEditors()
-  await api.ChatView2.show()
+  await api.Command.execute('SideBar.show', 'chat2.views.chat', true)
   await api.expect(image).toBeVisible()
+  const restoredComponents = await api.ComponentState.getComponents()
+  const restoredView = restoredComponents.find(
+    (component) => component.moduleId === 'ExtensionView',
+  )
+  if (!restoredView) throw new Error('Chat 2 view was not restored')
+  const restoredState = await api.ComponentState.getState<{
+    readonly selectedTask?: {
+      readonly events: readonly {
+        readonly images?: readonly { readonly objectUrl?: string }[]
+      }[]
+    }
+  }>(restoredView.uid)
+  const restoredImageSource = restoredState.selectedTask?.events
+    .flatMap((event) => event.images || [])
+    .at(0)?.objectUrl
+  if (!restoredImageSource?.startsWith('blob:')) {
+    throw new Error(
+      `Expected a restored blob image URL, got ${restoredImageSource}`,
+    )
+  }
+  await api.expect(image).toHaveAttribute('src', restoredImageSource)
   await api.expect(image).toHaveJSProperty('naturalWidth', 1)
 }

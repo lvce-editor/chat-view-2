@@ -1,18 +1,5 @@
+import type { TypeScriptExecutionResult } from '@lvce-editor/typescript-evaluation-worker/TypeScriptExecutionResult.ts'
 import { createRpc } from '@lvce-editor/api'
-
-export interface TypeScriptExecutionSuccess {
-  readonly result: string
-  readonly success: true
-}
-
-export interface TypeScriptExecutionFailure {
-  readonly error: string
-  readonly success: false
-}
-
-export type TypeScriptExecutionResult =
-  | TypeScriptExecutionFailure
-  | TypeScriptExecutionSuccess
 
 interface Rpc {
   readonly dispose: () => Promise<void> | void

@@ -13,7 +13,11 @@ import {
 /* eslint-disable sonarjs/cognitive-complexity, unicorn/prefer-await */
 import { getWorkspaceRelativePath } from '@lvce-editor/chat-tool-worker/parts/AgentToolHost/AgentToolHost.ts'
 import { DragAndDropWorker } from '@lvce-editor/rpc-registry'
-import type { ChatApi, ChatTask } from '../ChatApi/ChatApi.ts'
+import type {
+  ChatApi,
+  ChatImageAttachment,
+  ChatTask,
+} from '../ChatApi/ChatApi.ts'
 import type { ChatViewState } from './ChatViewState.ts'
 import type { ChatComposerImage } from './ChatViewState.ts'
 import type { ReadPreference } from './FontSize.ts'
@@ -30,15 +34,18 @@ import {
   isImageFile,
   loadImageAttachment,
 } from '../ChatImageAttachments/ChatImageAttachments.ts'
+import { createChatImageCache } from '../ChatImageCache/ChatImageCache.ts'
 import {
   getUrl,
   getChatTaskHash,
   getChatPath,
+  getBoardPath,
   getIdePath,
+  isBoardPath,
   isChatPath,
   parseChatTaskHash,
 } from '../ChatSessionUrl/ChatSessionUrl.ts'
-import { setStatus } from '../ChatTask/ChatTask.ts'
+import { createEvent, setStatus } from '../ChatTask/ChatTask.ts'
 import {
   createDefaultChatApi,
   type DefaultChatApiOptions,
@@ -68,10 +75,63 @@ import { getMathExpressions, type MathExpression } from './MathExpressions.ts'
 import { getCodeBlockText, render, renderCss } from './Render.ts'
 import { readTaskOpenMode } from './TaskOpenMode.ts'
 
+const hasUnresolvedTaskImages = (task: ChatTask): boolean =>
+  task.events.some(
+    (event) =>
+      (event.type === 'assistant-message' &&
+        event.images?.some((image) => !image.objectUrl)) ||
+      (event.type === 'user-message' &&
+        event.attachments?.some((image) => !image.objectUrl)),
+  )
+
+const hasUnresolvedComposerImages = (
+  images: readonly ChatComposerImage[],
+): boolean =>
+  images.some((image) => image.attachment && !image.attachment.objectUrl)
+
+const getTaskImages = (task: ChatTask): readonly ChatImageAttachment[] =>
+  task.events.flatMap((event): readonly ChatImageAttachment[] => {
+    if (event.type === 'assistant-message') {
+      return event.images || []
+    }
+    if (event.type === 'user-message') {
+      return event.attachments || []
+    }
+    return []
+  })
+
+const removeObjectUrl = (image: ChatImageAttachment): ChatImageAttachment => {
+  const { objectUrl: _objectUrl, ...persistedImage } = image
+  return persistedImage
+}
+
+const removeObjectUrls = (task: ChatTask): ChatTask => ({
+  ...task,
+  events: task.events.map((event) => {
+    if (event.type === 'assistant-message' && event.images) {
+      return {
+        ...event,
+        images: event.images.map(removeObjectUrl),
+      }
+    }
+    if (event.type === 'user-message' && event.attachments) {
+      return {
+        ...event,
+        attachments: event.attachments.map(removeObjectUrl),
+      }
+    }
+    return event
+  }),
+})
+
 export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   readonly getContext: () => Readonly<Record<string, boolean>>
   readonly getCss: () => string
   readonly getMenuEntries: (menuId: string) => readonly MenuEntry[]
+  readonly getQuickPickItems: () => readonly {
+    readonly id: string
+    readonly title: string
+  }[]
   readonly getState: () => Readonly<ChatViewState>
   readonly handleDragOver: () => void
   readonly handleEvent: (event: Readonly<ViewEvent>) => Promise<void>
@@ -87,6 +147,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
     ctrlKey?: unknown,
     metaKey?: unknown,
     shiftKey?: unknown,
+    targetName?: unknown,
   ) => void
   readonly handleModelPickerOutsideClick: (
     name: unknown,
@@ -114,6 +175,7 @@ export interface ActiveChatViewInstance extends VirtualDomViewInstance {
   ) => Promise<void>
   readonly handleTitleMenuClick: (x: unknown, y: unknown) => Promise<void>
   readonly newChat: (requestRerender?: boolean) => Promise<void>
+  readonly openQuickPickItem: (id: string) => Promise<void>
   readonly render: () => readonly VirtualDomNode[]
   readonly renderFocus: (
     oldContext: Readonly<Record<string, boolean>>,
@@ -195,11 +257,24 @@ const messagesSelector = '.ChatMessages'
 const maxScrollTop = 9_999_999
 const workingTimerInterval = 1000
 const defaultWindowTitle = 'Lvce Editor'
-const defaultChatTitle = 'Chat 2'
+const defaultChatTitle = 'New Chat'
 const titleMenuId = 'chat2.title'
 const maxTaskTitleLength = 80
 const fileLineHash = /^#L(\d+)$/u
 const pathSeparatorRegex = /[\\/]/
+export const getWorkspaceTitle = async (
+  execute: typeof executeCommand = executeCommand,
+): Promise<string> => {
+  try {
+    const workspacePath = await execute('Workspace.getPath')
+    if (typeof workspacePath !== 'string' || !workspacePath) {
+      return defaultWindowTitle
+    }
+    return workspacePath.split(pathSeparatorRegex).at(-1) || defaultWindowTitle
+  } catch {
+    return defaultWindowTitle
+  }
+}
 const localImagePathRegex =
   /^(?:file:\/\/|\/|~\/|[a-z]:[\\/]).+\.(?:avif|bmp|gif|jpe?g|png|webp)$/i
 const toImageFile = async (value: unknown): Promise<File | undefined> => {
@@ -224,22 +299,28 @@ const isWorking = (task: ChatTask | undefined): boolean => {
   return task?.status === 'running' || task?.status === 'stopping'
 }
 
-const getWorkingStartedAt = (task: ChatTask): number => {
-  const runningEvent = task.events.findLast(
-    (event) => event.type === 'status' && event.status === 'running',
+export const getWorkDurationSeconds = (
+  task: ChatTask,
+  now = Date.now(),
+): number => {
+  const { events } = task
+  const startEvent =
+    events.findLast(
+      (event) => event.type === 'status' && event.status === 'running',
+    ) ?? events.findLast((event) => event.type === 'user-message')
+  const startAt = Date.parse(startEvent?.timestamp ?? task.createdAt)
+  const endEvent = events.findLast(
+    (event) =>
+      event.type === 'status' &&
+      event.status !== 'running' &&
+      event.status !== 'stopping',
   )
-  const userMessage = task.events.findLast(
-    (event) => event.type === 'user-message',
-  )
-  const timestamp =
-    runningEvent?.timestamp || userMessage?.timestamp || task.createdAt
-  const startedAt = Date.parse(timestamp)
-  return Number.isNaN(startedAt) ? Date.now() : startedAt
-}
-
-const getWorkingSeconds = (task: ChatTask): number => {
-  const endedAt = isWorking(task) ? Date.now() : Date.parse(task.updatedAt)
-  return Math.max(0, Math.floor((endedAt - getWorkingStartedAt(task)) / 1000))
+  const endedAt = isWorking(task)
+    ? now
+    : Date.parse(endEvent?.timestamp ?? startEvent?.timestamp ?? task.createdAt)
+  return Number.isFinite(startAt) && Number.isFinite(endedAt)
+    ? Math.max(0, Math.floor((endedAt - startAt) / 1000))
+    : 0
 }
 
 const getEventString = (event: Readonly<ViewEvent>): string => {
@@ -281,9 +362,9 @@ const setChatTaskHash = async (
   }
 }
 
-const setWorkbenchLayoutUrl = async (
+export const setWorkbenchLayoutUrl = async (
   execute: ExecuteCommand,
-  layout: 'ide' | 'ai-native',
+  layout: 'ide' | 'ai-native' | 'board',
   taskId?: string,
 ): Promise<void> => {
   try {
@@ -302,16 +383,34 @@ const setWorkbenchLayoutUrl = async (
       return
     }
     const wasChatPath = isChatPath(url.pathname)
-    if (layout === 'ai-native') {
+    const wasBoardPath = isBoardPath(url.pathname)
+    if (layout === 'ai-native' || layout === 'board') {
       const assetDir = await execute('Layout.getAssetDir')
-      if (typeof assetDir !== 'string' || !assetDir) {
+      if (typeof assetDir !== 'string') {
         return
       }
-      url.pathname = getChatPath(href, assetDir)
-      url.hash = taskId ? getChatTaskHash(taskId) : ''
+      url.pathname =
+        layout === 'ai-native'
+          ? getChatPath(href, assetDir)
+          : getBoardPath(href, assetDir)
+      if (layout === 'ai-native') {
+        if (taskId) {
+          url.hash = getChatTaskHash(taskId)
+        } else if (
+          parseChatTaskHash(href).type !== 'none' ||
+          (wasBoardPath && url.hash)
+        ) {
+          url.hash = ''
+        }
+      } else if (!wasBoardPath && parseChatTaskHash(href).type !== 'none') {
+        url.hash = ''
+      }
     } else {
       url.pathname = getIdePath(href)
-      if (wasChatPath) {
+      if (
+        wasBoardPath ||
+        (wasChatPath && parseChatTaskHash(href).type !== 'none')
+      ) {
         url.hash = ''
       }
     }
@@ -385,7 +484,7 @@ const isSameBackendConfiguration = (
     oldConfiguration.openAiWebSearch === newConfiguration.openAiWebSearch &&
     oldConfiguration.titleModelId === newConfiguration.titleModelId &&
     oldConfiguration.baseUrl === newConfiguration.baseUrl &&
-    oldConfiguration.supportsStreaming === newConfiguration.supportsStreaming
+    oldConfiguration.responseMethod === newConfiguration.responseMethod
   )
 }
 
@@ -411,8 +510,39 @@ export const toggleActiveChatViewSessionsList = async (): Promise<void> => {
   await getActiveInstance()?.toggleSessionsList(true)
 }
 
+export const copyChatViewComponentState = async (
+  instance: Pick<ActiveChatViewInstance, 'getState'> | undefined,
+  writeClipboardText: (text: string) => Promise<void> = writeClipboardTextApi,
+): Promise<void> => {
+  if (!instance) {
+    throw new Error('Chat 2 is not open')
+  }
+  await writeClipboardText(`${JSON.stringify(instance.getState(), null, 2)}\n`)
+}
+
+export const copyActiveChatViewComponentState = async (): Promise<void> => {
+  await copyChatViewComponentState(getActiveInstance())
+}
+
+export const getActiveChatQuickPickItems = (): readonly {
+  readonly id: string
+  readonly title: string
+}[] => {
+  return getActiveInstance()?.getQuickPickItems() ?? []
+}
+
+export const openActiveChatQuickPickItem = async (
+  id: unknown,
+): Promise<void> => {
+  if (typeof id !== 'string' || !id) {
+    return
+  }
+  await getActiveInstance()?.openQuickPickItem(id)
+}
+
 const activeRuns = new Map<string, AbortController>()
 const runCompletions = new Map<string, Promise<void>>()
+const stoppedRuns = new Set<string>()
 
 interface MathRenderCache {
   readonly pending: Map<string, Promise<void>>
@@ -478,6 +608,7 @@ export const createInstance = async (
   writeClipboardText: (text: string) => Promise<void> = writeClipboardTextApi,
   writePreference: typeof setPreference = setPreference,
 ): Promise<ActiveChatViewInstance> => {
+  const imageCache = createChatImageCache()
   let pendingWorkbenchLayout: 'ide' | 'ai-native' | undefined
   let authenticationRejected = false
   let currentState: MutableChatViewState | undefined
@@ -543,6 +674,15 @@ export const createInstance = async (
     ?.thinkingModes?.includes(savedThinkingMode)
     ? savedThinkingMode
     : 'medium'
+  let followUpBehavior: 'queue' | 'steer' = 'queue'
+  try {
+    const value = await (readPreference || getPreference)(
+      'chat2.followUpBehavior',
+    )
+    if (value === 'steer') followUpBehavior = value
+  } catch {
+    // Queue safely when preferences are unavailable.
+  }
   let thinkingModeEnabled = true
   try {
     thinkingModeEnabled =
@@ -559,11 +699,38 @@ export const createInstance = async (
     chatHash.type === 'task'
       ? await api.getTask(chatHash.id).catch(() => undefined)
       : undefined
-  const selectedTask =
+  let selectedTask =
     urlTask ||
     (saved.selectedTaskId
       ? await api.getTask(saved.selectedTaskId).catch(() => undefined)
       : undefined)
+  const resolveTaskImages = async (task: ChatTask): Promise<ChatTask> => ({
+    ...task,
+    events: await Promise.all(
+      task.events.map(async (event) => {
+        if (event.type === 'assistant-message' && event.images?.length) {
+          return {
+            ...event,
+            images: await Promise.all(event.images.map(imageCache.resolve)),
+          }
+        }
+        if (event.type === 'user-message' && event.attachments?.length) {
+          return {
+            ...event,
+            attachments: await Promise.all(
+              event.attachments.map(imageCache.resolve),
+            ),
+          }
+        }
+        return event
+      }),
+    ),
+  })
+  const [resolvedTasks, resolvedSelectedTask] = await Promise.all([
+    Promise.all(tasks.map(resolveTaskImages)),
+    selectedTask ? resolveTaskImages(selectedTask) : Promise.resolve(undefined),
+  ])
+  selectedTask = resolvedSelectedTask
   if (chatHash.type === 'invalid') {
     await setChatTaskHash(execute)
   }
@@ -582,8 +749,10 @@ export const createInstance = async (
     copiedMessageId: '',
     draft: storedDraft ?? (typeof saved.draft === 'string' ? saved.draft : ''),
     errorMessage,
+    focusedTaskId: resolvedTasks[0]?.id,
     focusMode: chatRoute || (focusModeEnabled && (await getFocusMode())),
     focusModeEnabled,
+    followUpBehavior,
     fontFamily,
     fontSize,
     loginPending: false,
@@ -597,35 +766,24 @@ export const createInstance = async (
     sessionsListVisible: true,
     sessionsVisible: false,
     taskOpenMode,
-    tasks,
+    tasks: resolvedTasks,
     thinkingModeEnabled,
     thinkingModePickerOpen: false,
     userMessageFontFamily,
     workingSeconds:
       selectedTask && isWorking(selectedTask)
-        ? getWorkingSeconds(selectedTask)
+        ? getWorkDurationSeconds(selectedTask)
         : 0,
   }
   const saveDraft = (): Promise<void> =>
     writeDraft(draftWorkspace, state.selectedTask?.id, state.draft)
   let selectedTaskRequest = 0
   let focusComposerRequest = false
+  let focusArchiveRequest = false
+  let focusTaskListRequest = false
   let preserveComposerValue = false
   let windowTitleQueue = Promise.resolve()
   let windowTitleActive = false
-  const getWorkspaceTitle = async (): Promise<string> => {
-    try {
-      const workspacePath = await execute('Workspace.getPath')
-      if (typeof workspacePath !== 'string' || !workspacePath) {
-        return defaultWindowTitle
-      }
-      return (
-        workspacePath.split(pathSeparatorRegex).at(-1) || defaultWindowTitle
-      )
-    } catch {
-      return defaultWindowTitle
-    }
-  }
   const syncWindowTitle = (): Promise<void> => {
     if (state.focusMode) {
       windowTitleActive = true
@@ -638,7 +796,10 @@ export const createInstance = async (
     windowTitleQueue = windowTitleQueue
       .catch(() => {})
       .then(async () => {
-        await execute('WindowTitle.set', title || (await getWorkspaceTitle()))
+        await execute(
+          'WindowTitle.set',
+          title || (await getWorkspaceTitle(execute)),
+        )
       })
     if (!state.focusMode) {
       windowTitleActive = false
@@ -652,6 +813,7 @@ export const createInstance = async (
   let copyFeedbackTimeout: ReturnType<typeof setTimeout> | undefined
   let disposed = false
   let taskRefreshRequest = 0
+  let stateResolutionRequest = 0
   let taskRefreshTimeout: ReturnType<typeof setTimeout> | undefined
   const taskChangeChannel =
     typeof BroadcastChannel === 'undefined'
@@ -684,7 +846,9 @@ export const createInstance = async (
           return
         }
         try {
-          const attachment = await loadImageAttachment(file)
+          const attachment = await imageCache.resolve(
+            await loadImageAttachment(file),
+          )
           state.composerImages = state.composerImages.map((image) =>
             image.id === loadingImage.id
               ? { ...image, attachment, status: 'ready' }
@@ -716,7 +880,7 @@ export const createInstance = async (
       state.workingSeconds = 0
       return
     }
-    state.workingSeconds = getWorkingSeconds(task)
+    state.workingSeconds = getWorkDurationSeconds(task)
     if (!isWorking(task)) {
       stopWorkingTimer()
       return
@@ -730,7 +894,7 @@ export const createInstance = async (
         stopWorkingTimer()
         return
       }
-      state.workingSeconds = getWorkingSeconds(selectedTask)
+      state.workingSeconds = getWorkDurationSeconds(selectedTask)
       void context?.requestRerender()
     }, workingTimerInterval)
   }
@@ -865,22 +1029,29 @@ export const createInstance = async (
     if (archivedTaskIds.has(task.id)) {
       return
     }
-    taskRefreshRequest++
-    const taskChanged = state.selectedTask?.id !== task.id
-    state.selectedTask = task
-    if (taskChanged) {
-      await setChatTaskHash(execute, task.id)
+    const resolvedTask = await resolveTaskImages(task)
+    if (disposed) {
+      return
     }
-    syncWorkingTimer(task)
+    taskRefreshRequest++
+    const taskChanged = state.selectedTask?.id !== resolvedTask.id
+    state.selectedTask = resolvedTask
+    if (taskChanged) {
+      await setChatTaskHash(execute, resolvedTask.id)
+    }
+    syncWorkingTimer(resolvedTask)
     state.tasks = [
-      task,
-      ...state.tasks.filter((item) => item.id !== task.id),
+      resolvedTask,
+      ...state.tasks.filter((item) => item.id !== resolvedTask.id),
     ].slice(0, 20)
     void syncWindowTitle().catch(() => {})
   }
 
   let openingTaskId: string | undefined
-  const openTask = async (id: string): Promise<void> => {
+  const openTask = async (
+    id: string,
+    requestRerender = false,
+  ): Promise<void> => {
     if (state.selectedTask?.id === id || openingTaskId === id) {
       return
     }
@@ -916,6 +1087,9 @@ export const createInstance = async (
       state.activityExpanded = false
       state.changesExpanded = false
       void syncWindowTitle().catch(() => {})
+      if (requestRerender) {
+        await context?.requestRerender()
+      }
     } finally {
       if (openingTaskId === id) {
         openingTaskId = undefined
@@ -932,9 +1106,13 @@ export const createInstance = async (
     }
     if (request !== selectedTaskRequest && state.selectedTask?.id !== task.id) {
       taskRefreshRequest++
+      const resolvedTask = await resolveTaskImages(task)
+      if (disposed) {
+        return
+      }
       state.tasks = [
-        task,
-        ...state.tasks.filter((item) => item.id !== task.id),
+        resolvedTask,
+        ...state.tasks.filter((item) => item.id !== resolvedTask.id),
       ].slice(0, 20)
       await context?.requestRerender()
       return
@@ -954,7 +1132,7 @@ export const createInstance = async (
     if (disposed || request !== taskRefreshRequest) {
       return
     }
-    state.tasks = tasks
+    state.tasks = await Promise.all(tasks.map(resolveTaskImages))
     if (
       selectedTaskId &&
       selectedTaskRequestAtStart === selectedTaskRequest &&
@@ -968,8 +1146,8 @@ export const createInstance = async (
         syncWorkingTimer(undefined)
         await setChatTaskHash(execute)
       } else {
-        state.selectedTask = selectedTask
-        syncWorkingTimer(selectedTask)
+        state.selectedTask = await resolveTaskImages(selectedTask)
+        syncWorkingTimer(state.selectedTask)
       }
       void syncWindowTitle().catch(() => {})
     }
@@ -1008,7 +1186,9 @@ export const createInstance = async (
     }
     state.statusPopup = undefined
     const attachments = state.composerImages.flatMap((image) =>
-      image.status === 'ready' && image.attachment ? [image.attachment] : [],
+      image.status === 'ready' && image.attachment
+        ? [removeObjectUrl(image.attachment)]
+        : [],
     )
     if (
       state.loginRequired ||
@@ -1032,10 +1212,36 @@ export const createInstance = async (
     }
     const modelId = state.selectedModelId
     const initialTask = state.selectedTask
+    const thinkingMode = state.selectedThinkingMode
     const submissionApi = api
     const controller = new AbortController()
     const completion = Promise.withResolvers<void>()
+    const previousCompletion = initialTask && runCompletions.get(initialTask.id)
+    if (initialTask && isWorking(initialTask) && !previousCompletion) {
+      releaseReservation()
+      throw new Error('This conversation is running in another window.')
+    }
     let runningTaskId: string | undefined
+    const queuedMessage =
+      initialTask && previousCompletion
+        ? {
+            event: createEvent({
+              attachments: state.composerImages.flatMap((image) =>
+                image.attachment ? [image.attachment] : [],
+              ),
+              text: message,
+              type: 'user-message',
+            }),
+            taskId: initialTask.id,
+          }
+        : undefined
+    if (queuedMessage) {
+      state.queuedMessages = [...(state.queuedMessages || []), queuedMessage]
+      // Each follow-up owns a place in the chain before persistence yields.
+      runningTaskId = queuedMessage.taskId
+      runCompletions.set(runningTaskId, completion.promise)
+      if (followUpBehavior === 'steer') activeRuns.get(runningTaskId)?.abort()
+    }
     try {
       if (state.focusMode) {
         scrollToLatestTurn = true
@@ -1045,47 +1251,46 @@ export const createInstance = async (
       state.composerImages = []
       state.modelPickerOpen = false
       await saveDraft()
-      let latestTask =
+      if (queuedMessage) {
+        releaseReservation()
+        await context?.requestRerender()
+      }
+      if (previousCompletion) await previousCompletion
+      if (
+        disposed ||
+        controller.signal.aborted ||
+        (initialTask && stoppedRuns.has(initialTask.id)) ||
+        (initialTask && archivedTaskIds.has(initialTask.id))
+      )
+        return
+      const latestTask =
         initialTask &&
         (state.tasks.find((task) => task.id === initialTask.id) || initialTask)
-      const previousCompletion =
-        latestTask?.status !== 'running' && latestTask
-          ? runCompletions.get(latestTask.id)
-          : undefined
-      if (previousCompletion) {
-        // Completion can render before the previous backend releases its lock.
-        await previousCompletion
-        latestTask =
-          state.tasks.find((task) => task.id === latestTask?.id) || latestTask
-      }
       const selectedTask = latestTask ? { ...latestTask, modelId } : undefined
-      if (selectedTask?.status === 'running') {
-        if (!activeRuns.has(selectedTask.id)) {
-          throw new Error('This conversation is running in another window.')
-        }
-        await submissionApi.steer(selectedTask.id, message, attachments)
-        if (requestRerender) {
-          await context?.requestRerender()
-        }
-        return
+      if (queuedMessage) {
+        state.queuedMessages = (state.queuedMessages || []).filter(
+          (item) => item !== queuedMessage,
+        )
       }
       runningTaskId = selectedTask?.id
       if (runningTaskId) {
         activeRuns.set(runningTaskId, controller)
-        runCompletions.set(runningTaskId, completion.promise)
+        if (!runCompletions.has(runningTaskId))
+          runCompletions.set(runningTaskId, completion.promise)
       }
       const options = {
         attachments,
         ...(state.models
           .find((model) => model.id === modelId)
-          ?.thinkingModes?.includes(state.selectedThinkingMode) && {
-          thinkingMode: state.selectedThinkingMode,
+          ?.thinkingModes?.includes(thinkingMode) && {
+          thinkingMode,
         }),
         onUpdate: (task: ChatTask): Promise<void> => {
           runningTaskId = task.id
           if (task.status === 'idle' || isWorking(task)) {
             activeRuns.set(task.id, controller)
-            runCompletions.set(task.id, completion.promise)
+            if (!runCompletions.has(task.id))
+              runCompletions.set(task.id, completion.promise)
           }
           if (task.status !== 'idle') {
             releaseReservation()
@@ -1095,13 +1300,24 @@ export const createInstance = async (
         signal: controller.signal,
       }
       const task = selectedTask
-        ? await submissionApi.sendMessage(selectedTask, message, options)
+        ? await submissionApi.sendMessage(
+            removeObjectUrls(selectedTask),
+            message,
+            options,
+          )
         : await submissionApi.createTask(message, modelId, options)
       await updateTask(task, request)
       if (requestRerender) {
         await context?.requestRerender()
       }
     } finally {
+      if (queuedMessage)
+        state.queuedMessages = (state.queuedMessages || []).filter(
+          (item) => item !== queuedMessage,
+        )
+      if (queuedMessage) {
+        await context?.requestRerender()
+      }
       releaseReservation()
       if (runningTaskId && activeRuns.get(runningTaskId) === controller) {
         activeRuns.delete(runningTaskId)
@@ -1111,6 +1327,7 @@ export const createInstance = async (
         runCompletions.get(runningTaskId) === completion.promise
       ) {
         runCompletions.delete(runningTaskId)
+        stoppedRuns.delete(runningTaskId)
       }
       completion.resolve()
     }
@@ -1235,6 +1452,7 @@ export const createInstance = async (
   const instance: ActiveChatViewInstance = {
     dispose(): void {
       disposed = true
+      imageCache.dispose()
       taskChangeChannel?.close()
       if (taskRefreshTimeout !== undefined) {
         clearTimeout(taskRefreshTimeout)
@@ -1258,8 +1476,10 @@ export const createInstance = async (
     getContext(): Readonly<Record<string, boolean>> {
       return {
         'chat2.composerFocus': state.composerFocused,
+        'chat2.focusArchiveRequest': focusArchiveRequest,
         'chat2.focusComposerRequest': focusComposerRequest,
         'chat2.focusMode': state.focusMode,
+        'chat2.focusTaskListRequest': focusTaskListRequest,
         'chat2.taskRunning': state.selectedTask?.status === 'running',
       }
     },
@@ -1280,6 +1500,11 @@ export const createInstance = async (
           label: 'Rename',
         },
       ]
+    },
+    getQuickPickItems() {
+      return state.tasks
+        .filter((task) => !archivedTaskIds.has(task.id))
+        .map(({ id, title }) => ({ id, title }))
     },
     getState(): Readonly<ChatViewState> {
       return state
@@ -1432,17 +1657,24 @@ export const createInstance = async (
         return
       }
       if (event.name === 'stop') {
-        if (state.selectedTask && !activeRuns.has(state.selectedTask.id)) {
+        const taskId = state.selectedTask?.id
+        const activeRun = taskId ? activeRuns.get(taskId) : undefined
+        if (
+          state.selectedTask &&
+          !activeRun &&
+          !(taskId && runCompletions.has(taskId))
+        ) {
           state.errorMessage =
             'Stop this conversation in the window where it is running.'
           return
         }
+        if (taskId) {
+          stoppedRuns.add(taskId)
+        }
         if (state.selectedTask?.status === 'running') {
           await setTask(setStatus(state.selectedTask, 'stopping'))
         }
-        if (state.selectedTask) {
-          activeRuns.get(state.selectedTask.id)?.abort()
-        }
+        activeRun?.abort()
         return
       }
       if (event.name === 'back' || event.name === 'new-task') {
@@ -1470,7 +1702,9 @@ export const createInstance = async (
       }
       if (event.name === 'revert' && state.selectedTask) {
         try {
-          await setTask(await api.revertTask(state.selectedTask))
+          await setTask(
+            await api.revertTask(removeObjectUrls(state.selectedTask)),
+          )
           state.errorMessage = ''
         } catch (error) {
           state.errorMessage =
@@ -1548,6 +1782,9 @@ export const createInstance = async (
           taskRefreshRequest++
           archivedTaskIds.add(id)
           state.tasks = state.tasks.filter((task) => task.id !== id)
+          if (state.focusedTaskId === id) {
+            state.focusedTaskId = state.tasks[0]?.id
+          }
           state.errorMessage = ''
         } catch (error) {
           state.errorMessage =
@@ -1647,7 +1884,54 @@ export const createInstance = async (
       ctrlKey?: unknown,
       metaKey?: unknown,
       shiftKey?: unknown,
+      targetName?: unknown,
     ): void {
+      if (targetName === 'task-list' && key === 'Tab' && !shiftKey) {
+        focusArchiveRequest = !focusArchiveRequest
+        void context?.requestRerender()
+        return
+      }
+      if (
+        typeof targetName === 'string' &&
+        targetName.startsWith('archive-task:') &&
+        key === 'Tab'
+      ) {
+        if (shiftKey) {
+          focusTaskListRequest = !focusTaskListRequest
+        } else {
+          focusComposerRequest = !focusComposerRequest
+        }
+        void context?.requestRerender()
+        return
+      }
+      if (
+        targetName === 'task-list' &&
+        (key === 'ArrowDown' || key === 'ArrowUp')
+      ) {
+        if (state.tasks.length === 0) {
+          return
+        }
+        const currentIndex = state.tasks.findIndex(
+          (task) => task.id === state.focusedTaskId,
+        )
+        const startIndex = currentIndex === -1 ? 0 : currentIndex
+        const nextIndex =
+          key === 'ArrowDown'
+            ? Math.min(state.tasks.length - 1, startIndex + 1)
+            : Math.max(0, startIndex - 1)
+        state.focusedTaskId = state.tasks[nextIndex].id
+        void context?.requestRerender()
+        return
+      }
+      if (targetName === 'task-list' && (key === 'Enter' || key === ' ')) {
+        const focusedTask = state.tasks.find(
+          (task) => task.id === state.focusedTaskId,
+        )
+        if (focusedTask) {
+          void openTask(focusedTask.id)
+        }
+        return
+      }
       const zoomCommand = getZoomCommand(key, ctrlKey, metaKey, shiftKey)
       if (zoomCommand) {
         // The host's Ctrl/Cmd minus binding already handles zoom out. Route
@@ -1780,6 +2064,9 @@ export const createInstance = async (
     },
     handleTitleMenuClick,
     newChat,
+    async openQuickPickItem(id: string): Promise<void> {
+      await openTask(id, true)
+    },
     render(): readonly VirtualDomNode[] {
       const { selectedTask } = state
       if (selectedTask) {
@@ -1821,6 +2108,14 @@ export const createInstance = async (
           }).catch(() => {})
         }
       }
+      imageCache.retain([
+        ...state.tasks.flatMap(getTaskImages),
+        ...(state.selectedTask ? getTaskImages(state.selectedTask) : []),
+        ...state.composerImages.flatMap((image) =>
+          image.attachment ? [image.attachment] : [],
+        ),
+        ...(state.imagePreview ? [state.imagePreview] : []),
+      ])
       return render(
         { ...state, preserveComposerValue },
         mathRenderCache.rendered,
@@ -1831,6 +2126,23 @@ export const createInstance = async (
       oldContext: Readonly<Record<string, boolean>>,
       newContext: Readonly<Record<string, boolean>>,
     ): string {
+      if (
+        (oldContext['chat2.focusTaskListRequest'] ?? false) !==
+        (newContext['chat2.focusTaskListRequest'] ?? false)
+      ) {
+        return '.ChatTaskList'
+      }
+      if (
+        (oldContext['chat2.focusArchiveRequest'] ?? false) !==
+        (newContext['chat2.focusArchiveRequest'] ?? false)
+      ) {
+        const taskId = state.tasks.some(
+          (task) => task.id === state.focusedTaskId,
+        )
+          ? state.focusedTaskId
+          : state.tasks[0]?.id
+        return taskId ? `button[name="archive-task:${taskId}"]` : ''
+      }
       return (oldContext['chat2.focusComposerRequest'] ?? false) ===
         (newContext['chat2.focusComposerRequest'] ?? false)
         ? ''
@@ -1869,11 +2181,53 @@ export const createInstance = async (
         throw new TypeError('Chat 2 state must be a valid state object')
       }
       preserveComposerValue = false
+      const resolutionRequest = ++stateResolutionRequest
       Object.assign(state, {
         ...newState,
         composerImages: newState.composerImages || [],
         selectedTask: newState.selectedTask,
       })
+      const task = state.selectedTask
+      const needsImageResolution =
+        [...state.tasks, ...(task ? [task] : [])].some(
+          hasUnresolvedTaskImages,
+        ) || hasUnresolvedComposerImages(state.composerImages)
+      if (!needsImageResolution) {
+        syncWorkingTimer(state.selectedTask)
+        return
+      }
+      void Promise.all([
+        Promise.all(state.tasks.map(resolveTaskImages)),
+        task ? resolveTaskImages(task) : Promise.resolve(undefined),
+        Promise.all(
+          state.composerImages.map(async (image) =>
+            image.attachment
+              ? {
+                  ...image,
+                  attachment: await imageCache.resolve(image.attachment),
+                }
+              : image,
+          ),
+        ),
+      ]).then(
+        async ([resolvedTasks, resolvedTask, resolvedComposerImages]: readonly [
+          readonly ChatTask[],
+          ChatTask | undefined,
+          readonly ChatComposerImage[],
+        ]) => {
+          if (
+            disposed ||
+            resolutionRequest !== stateResolutionRequest ||
+            state.selectedTask?.id !== task?.id
+          ) {
+            return
+          }
+          state.tasks = resolvedTasks
+          state.selectedTask = resolvedTask
+          state.composerImages = resolvedComposerImages
+          await context?.requestRerender()
+        },
+      )
       syncWorkingTimer(state.selectedTask)
     },
     submit,

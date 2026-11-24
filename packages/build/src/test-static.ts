@@ -73,16 +73,15 @@ async function serve(
       file === resolve(root) ||
         file.startsWith(root.endsWith(sep) ? root : root + sep),
     )
-    let target = extname(file) ? file : join(file, 'index.html')
-    let content: Buffer
-    try {
-      content = await readFile(target)
-    } catch (error) {
-      if (extname(file)) {
-        throw error
-      }
-      target = join(root, 'index.html')
-      content = await readFile(target)
+    const target = extname(file) ? file : join(file, 'index.html')
+    const content = await readFile(target)
+    const parsedUrl = new URL(url, 'http://localhost')
+    if (!extname(file) && !pathname.endsWith('/')) {
+      response.writeHead(301, {
+        Location: `${pathname}/${parsedUrl.search}`,
+      })
+      response.end()
+      return
     }
     response.writeHead(200, {
       'Content-Type': mimeTypes[extname(target)] || 'application/octet-stream',
@@ -161,6 +160,14 @@ try {
         'Cold startup or direct chat reload raised an exception',
       )
       process.stdout.write('cold startup and signed-out chat reload: pass\n')
+      await page.keyboard.press('Control+Shift+P')
+      await page.getByRole('combobox').fill('>Open Board Layout')
+      await page
+        .getByRole('option', { name: 'View: Open Board Layout', exact: true })
+        .click()
+      await page.waitForURL((url) => url.pathname === `${prefix}boards`)
+      await page.locator('.BoardView').waitFor()
+      process.stdout.write('command palette opens the board view: pass\n')
     } catch (error) {
       console.error(
         'Startup state:',
@@ -179,6 +186,28 @@ try {
       await page.goto(`${baseUrl}chat/`)
       await page.locator('.Workbench.AiNativeLayout').waitFor()
       await page.locator('.ChatLoggedOut').waitFor()
+      const activityBar = page.locator('.ActivityBarLayout')
+      const toggleActivityBar = async (): Promise<void> => {
+        await page.keyboard.press('F1')
+        await page
+          .locator('.QuickPick input')
+          .fill('>Layout: Toggle Activity Bar')
+        await page
+          .locator('.QuickPickItem')
+          .filter({ hasText: 'Layout: Toggle Activity Bar' })
+          .click()
+      }
+      for (let index = 0; index < 2; index++) {
+        await toggleActivityBar()
+        await activityBar.waitFor({ state: 'hidden' })
+        await toggleActivityBar()
+        await activityBar.waitFor()
+        await activityBar
+          .getByRole('button', { name: 'Settings', exact: true })
+          .waitFor()
+        assert.equal(await activityBar.getByRole('tab').count(), 0)
+        await page.locator('.Workbench.AiNativeLayout').waitFor()
+      }
       assert.deepEqual(
         directErrors,
         [],
@@ -194,6 +223,48 @@ try {
       throw error
     } finally {
       await direct.close()
+    }
+    const savedIdeLayout = await browser.newContext()
+    const savedIdePage = await savedIdeLayout.newPage()
+    try {
+      await savedIdePage.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+      await savedIdePage.evaluate(
+        'localStorage.setItem("Layout", JSON.stringify({ aiNativeLayout: false }))',
+      )
+      await savedIdePage.goto(`${baseUrl}chat/`, {
+        waitUntil: 'domcontentloaded',
+      })
+      const startupClass = await savedIdePage.evaluate(
+        'document.documentElement.classList.contains("AiNativeLayoutStartup")',
+      )
+      const startupBackground = await savedIdePage.evaluate(
+        'getComputedStyle(document.documentElement).backgroundColor',
+      )
+      assert.equal(
+        startupClass,
+        true,
+        'direct chat with a saved IDE layout did not apply the startup surface',
+      )
+      assert.equal(
+        startupBackground,
+        'rgb(255, 255, 255)',
+        'direct chat with a saved IDE layout used the dark startup surface',
+      )
+      await savedIdePage.locator('.ChatLoggedOut').waitFor()
+      process.stdout.write(
+        'direct chat uses a light startup surface with saved IDE layout: pass\n',
+      )
+    } catch (error) {
+      console.error(
+        'Saved IDE layout startup state:',
+        await savedIdePage.locator('body').innerText(),
+        await savedIdePage.evaluate(
+          'JSON.stringify({pathname: location.pathname, layout: localStorage.getItem("Layout"), rootClass: document.documentElement.className, background: getComputedStyle(document.documentElement).backgroundColor})',
+        ),
+      )
+      throw error
+    } finally {
+      await savedIdeLayout.close()
     }
     for (const preserveStartupFocus of [false, true]) {
       const context = await browser.newContext()
@@ -372,7 +443,7 @@ try {
                 'chat2.backendUrl': backendUrl,
                 'chat2.computerUseEnabled': false,
                 'chat2.selectedModelId': 'gpt-5.4-mini',
-                'chat2.supportsStreaming': true,
+                'chat2.responseMethod': 'websocket',
                 'chat2.useMockBackend': false,
               }),
             )

@@ -3,6 +3,7 @@ import type {
   ChatImageAttachment,
   ChatModel,
   ChatTask,
+  ChatUserMessageEvent,
 } from '../ChatApi/ChatApi.ts'
 import type { AiNativeTheme } from './AiNativeTheme.ts'
 import type { TaskOpenMode } from './TaskOpenMode.ts'
@@ -32,8 +33,10 @@ export interface ChatViewState {
   readonly copiedMessageId: string
   readonly draft: string
   readonly errorMessage: string
+  readonly focusedTaskId?: string
   readonly focusMode: boolean
   readonly focusModeEnabled: boolean
+  readonly followUpBehavior?: 'queue' | 'steer'
   readonly fontFamily: string
   readonly fontSize: string
   readonly imagePreview?: ChatImageAttachment | undefined
@@ -42,6 +45,10 @@ export interface ChatViewState {
   readonly modelPickerOpen: boolean
   readonly models: readonly ChatModel[]
   readonly preserveComposerValue?: boolean
+  readonly queuedMessages?: readonly {
+    readonly taskId: string
+    readonly event: ChatUserMessageEvent
+  }[]
   readonly selectedModelId: string
   readonly selectedTask: ChatTask | undefined
   readonly selectedThinkingMode: 'low' | 'medium' | 'high'

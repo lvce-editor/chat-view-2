@@ -6,12 +6,15 @@ import path, { join } from 'node:path'
 import { type Plugin, rollup } from 'rollup'
 import { build as esbuildBuild } from 'esbuild'
 import esbuild from 'rollup-plugin-esbuild'
+import { buildMathAssets } from './buildMathAssets.ts'
 import { root } from './root.ts'
 
 const extension = path.join(root, 'packages', 'extension')
 const node = path.join(root, 'packages', 'node')
 const workerEntryPoint = join(
-  extension,
+  root,
+  'packages',
+  'typescript-evaluation-worker',
   'src',
   'typeScriptEvaluationWorkerMain.ts',
 )
@@ -29,11 +32,6 @@ const chatMathWorkerEntryPoint = join(
   'chat-math-worker',
   'dist',
   'chatMathWorkerMain.js',
-)
-const chatMathCssWorkerEntryPoint = join(
-  extension,
-  'src',
-  'chatMathCssWorkerMain.ts',
 )
 const require = createRequire(import.meta.url)
 const commonjs = require('@rollup/plugin-commonjs') as () => Plugin
@@ -195,31 +193,7 @@ await chatMathWorkerBundle.write({
 
 await chatMathWorkerBundle.close()
 
-const chatMathCssWorkerBundle = await rollup({
-  input: chatMathCssWorkerEntryPoint,
-  external: ['electron', 'node:*'],
-  plugins: [
-    json(),
-    nodeResolve({
-      browser: true,
-    }),
-    commonjs(),
-    esbuild({
-      target: 'esnext',
-    }),
-  ],
-  treeshake: {
-    moduleSideEffects: false,
-  },
-})
-
-await chatMathCssWorkerBundle.write({
-  file: join(root, 'dist', 'dist', 'chatMathCssWorkerMain.js'),
-  format: 'esm',
-  inlineDynamicImports: true,
-})
-
-await chatMathCssWorkerBundle.close()
+await buildMathAssets(join(root, 'dist'))
 
 await esbuildBuild({
   banner: {

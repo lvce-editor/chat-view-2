@@ -1,11 +1,15 @@
 // cspell:ignore Fwith
 import { expect, test } from '@jest/globals'
 import {
+  getBoardHash,
+  getBoardPath,
   getChatPath,
   getChatTaskHash,
   getIdePath,
+  isBoardPath,
   isChatPath,
   parseChatTaskHash,
+  parseBoardHash,
 } from '../src/parts/ChatSessionUrl/ChatSessionUrl.ts'
 
 test('creates a plain encoded chat task fragment', () => {
@@ -82,4 +86,47 @@ test('detects chat routes and preserves the deployment prefix', () => {
     '/prefix/',
   )
   expect(getIdePath('https://example.com/chat/')).toBe('/')
+})
+
+test('creates the boards route and preserves the board alias', () => {
+  expect(isBoardPath('/boards')).toBe(true)
+  expect(isBoardPath('/prefix/boards/')).toBe(true)
+  expect(isBoardPath('/board')).toBe(true)
+  expect(isBoardPath('/prefix/board/')).toBe(true)
+  expect(isBoardPath('/prefix/board/settings')).toBe(false)
+  expect(
+    getBoardPath('https://example.com/prefix/?workspace=one', '/prefix/commit'),
+  ).toBe('/prefix/boards')
+  expect(getBoardPath('https://example.com/?workspace=one', '/commit')).toBe(
+    '/boards',
+  )
+  expect(getBoardPath('https://example.com/?workspace=one', '')).toBe('/boards')
+  expect(
+    getIdePath('https://example.com/prefix/board?workspace=one#workspace=x'),
+  ).toBe('/prefix/')
+  expect(getIdePath('https://example.com/board/')).toBe('/')
+  expect(getIdePath('https://example.com/prefix/boards/')).toBe('/prefix/')
+})
+
+test('parses board hashes only on the board route', () => {
+  expect(getBoardHash('5k8NLHLh')).toBe('#5k8NLHLh')
+  expect(
+    parseBoardHash('https://example.com/board?workspace=one#5k8NLHLh'),
+  ).toEqual({
+    id: '5k8NLHLh',
+    type: 'board',
+  })
+  expect(parseBoardHash('https://example.com/prefix/boards#5k8NLHLh')).toEqual({
+    id: '5k8NLHLh',
+    type: 'board',
+  })
+  expect(parseBoardHash('https://example.com/chat#5k8NLHLh')).toEqual({
+    type: 'none',
+  })
+  expect(parseBoardHash('https://example.com/board#%')).toEqual({
+    type: 'invalid',
+  })
+  expect(parseBoardHash('https://example.com/board#')).toEqual({
+    type: 'none',
+  })
 })

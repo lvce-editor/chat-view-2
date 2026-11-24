@@ -1,9 +1,11 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { openChatTask, runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.ai-native-sidebar-side'
 
 export const test: Test = async ({
   Command,
+  ComponentState,
   expect,
   KeyBoard,
   Locator,
@@ -15,6 +17,9 @@ export const test: Test = async ({
     'chat2.useMockBackend': true,
   })
   await Command.executeExtensionCommand('chat2.show')
+  const components = await ComponentState.getComponents()
+  const component = components.find((item) => item.moduleId === 'ExtensionView')
+  if (!component) throw new Error('Expected the Chat 2 component')
   const chat = Locator('.ChatAiNativeLayout')
   const activityBar = Locator('.ActivityBar')
   const activityBarLayout = Locator('.ActivityBarLayout')
@@ -75,8 +80,7 @@ export const test: Test = async ({
         pointerId: 1,
       } as unknown as string)
       const task = Locator('.ChatTaskButton').first()
-      // eslint-disable-next-line e2e/no-direct-click
-      await task.click()
+      await openChatTask(Command, task)
       await expect(taskTitle).toBeVisible()
       await KeyBoard.press('Control+B')
       await expect(sessions).toHaveCount(0)
@@ -87,7 +91,14 @@ export const test: Test = async ({
       await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
       const composer = Locator('textarea[name="composer"]')
       const message = `Long conversation ${side} `.repeat(100)
-      await composer.type(message)
+      // This scenario tests layout preservation, so initialize the long draft
+      // through the worker state instead of racing native typing with rerenders.
+      const state = await ComponentState.getState<Record<string, unknown>>(
+        component.uid,
+      )
+      await ComponentState.setState(component.uid, { ...state, draft: message })
+      await expect(composer).toHaveValue(message)
+
       await KeyBoard.press('Control+B')
       await expect(sessions).toHaveCount(0)
       await expect(sash).toHaveCount(0)
@@ -99,8 +110,7 @@ export const test: Test = async ({
       await expect(sessions).toHaveCSS('width', `${expectedSessionsWidth}px`)
       const submit = Locator('button[name="submit"]')
       const messageContent = Locator('.ChatMessagesContent')
-      // eslint-disable-next-line e2e/no-direct-click
-      await submit.click()
+      await runChatAction(Command, 'submit')
       // The next layout iteration needs the completed task's submit button.
       await expect(messageContent).toContainText(message.trim())
       await expect(submit).toBeVisible()

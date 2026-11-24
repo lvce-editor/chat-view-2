@@ -1,5 +1,5 @@
 import { WebWorkerRpcClient } from '@lvce-editor/rpc'
-import { katexCss } from './parts/ChatView/KatexCss.ts'
+import katexCss from 'katex/dist/katex.min.css'
 
 const globalScope = globalThis as typeof globalThis & { rpc?: unknown }
 

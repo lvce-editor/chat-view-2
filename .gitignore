@@ -140,3 +140,6 @@ dist
 renderer-worker-traces/
 
 .test-with-playwright/
+
+# Generated KaTeX fonts and license for local extension builds
+/packages/extension/media/katex/

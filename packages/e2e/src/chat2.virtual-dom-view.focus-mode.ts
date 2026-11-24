@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { openChatTask, runChatAction } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.focus-mode'
 
@@ -30,12 +31,13 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await Command.executeExtensionCommand('chat2.toggleFocusMode')
   await expect(toggle).toHaveCount(0)
   await expect(focusMode).toBeVisible()
-  await expect(browserTabTitle).toHaveText('Chat 2 - Lvce Editor')
+  await expect(browserTabTitle).toHaveText('New Chat - Lvce Editor')
   const activityBar = Locator('.ActivityBar')
   await expect(activityBar).toBeVisible()
   const sessions = Locator('.ChatSessions')
   await expect(sessions).toBeVisible()
   const newChatButton = Locator('.ChatSessions .ChatNewTaskButton')
+  const detailHeader = Locator('.ChatDetailHeader')
   const headerFocusButton = Locator('.ChatDetailHeader .ChatFocusModeButton')
   const headerNewChatButton = Locator('.ChatDetailHeader .ChatNewTaskButton')
   await expect(newChatButton).toHaveText('New chat')
@@ -48,6 +50,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   const emptyTitle = Locator('.ChatDetailView .ChatEmptyTitle')
   const newConversationMessages = Locator('.ChatConversationBody .ChatMessages')
   await expect(emptyTitle).toBeVisible()
+  await expect(detailHeader).toHaveCount(0)
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
   await expect(newConversationMessages).toHaveCSS('flex', '0 0 auto')
   await expect(newConversationMessages).toHaveCSS('overflow-y', 'visible')
@@ -55,14 +58,14 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   const composerInput = Locator('textarea[name="composer"]')
   await composerInput.type('Center the new chat composer')
   await expect(composerInput).toHaveValue('Center the new chat composer')
-  // eslint-disable-next-line e2e/no-direct-click
-  await Locator('button[name="submit"]').click()
+  await runChatAction(Command, 'submit')
   await expect(browserTabTitle).toHaveText(
     'Center the new chat composer - Lvce Editor',
   )
   const userMessage = Locator('.ChatMessageUser')
   await expect(userMessage).toContainText('Center the new chat composer')
   await expect(emptyTitle).toHaveCount(0)
+  await expect(detailHeader).toBeVisible()
   const detailComposer = Locator('.ChatDetailView .ChatComposer')
   const composerAreaInConversation = Locator(
     '.ChatConversationBody > .ChatComposerArea',
@@ -73,8 +76,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(newConversationMessages).toHaveCSS('overflow-y', 'auto')
   await expect(newConversationBody).toHaveCSS('justify-content', 'flex-start')
   const task = Locator('.ChatTaskButton').nth(2)
-  // eslint-disable-next-line e2e/no-direct-click
-  await task.click()
+  await openChatTask(Command, task)
   await expect(browserTabTitle).toHaveText(
     'Fix quickpick beforeinput crash - Lvce Editor',
   )
@@ -86,9 +88,9 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
   await expect(newConversationBody).toHaveCSS('justify-content', 'flex-start')
   const tasks = Locator('.ChatTaskButton')
   await expect(tasks).toHaveCount(20)
-  // eslint-disable-next-line e2e/no-direct-click
-  await newChatButton.click()
-  await expect(browserTabTitle).toHaveText('Chat 2 - Lvce Editor')
+  await runChatAction(Command, 'new-task')
+  await expect(browserTabTitle).toHaveText('New Chat - Lvce Editor')
+  await expect(detailHeader).toHaveCount(0)
   await expect(emptyTitle).toBeVisible()
   await expect(newConversationBody).toHaveCSS('justify-content', 'center')
   await expect(composerInput).toBeFocused()
@@ -97,8 +99,7 @@ export const test: Test = async ({ Command, expect, Locator, QuickPick }) => {
     'Type immediately after starting a new chat',
   )
   // Repeated requests must still focus the input when already on a new chat.
-  // eslint-disable-next-line e2e/no-direct-click
-  await newChatButton.click()
+  await runChatAction(Command, 'new-task')
   await expect(composerInput).toHaveValue('')
   await expect(composerInput).toBeFocused()
   await composerInput.type('Another new chat')

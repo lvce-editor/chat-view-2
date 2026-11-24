@@ -28,6 +28,7 @@ export type AgentInput = AgentInputMessage | AgentToolOutput
 export interface AgentStepOptions {
   readonly input: readonly AgentInput[]
   readonly modelId: string
+  readonly onImageGenerationStart?: () => void | Promise<void>
   readonly onTextDelta: (delta: string) => void | Promise<void>
   readonly previousResponseId?: string
   readonly responseHistory?: readonly Readonly<Record<string, unknown>>[]

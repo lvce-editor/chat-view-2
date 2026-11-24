@@ -4,7 +4,10 @@ import { root } from './root.ts'
 
 const outputDirectory = join(root, 'dist', 'dist')
 const bundleBudgets = new Map([
-  ['chatMain.js', 313_500],
+  // Card details measured +7,178 bytes; board backgrounds add 746 bytes.
+  // Main measures 415,113 bytes; board favicons add 5,127 bytes.
+  // Retain roughly 2 KiB of headroom above the measured 420,240-byte bundle.
+  ['chatMain.js', 422_300],
   ['chatMathCssWorkerMain.js', 80_000],
   ['chatMathWorkerMain.js', 750_000],
   ['chatToolWorkerMain.js', 100_000],

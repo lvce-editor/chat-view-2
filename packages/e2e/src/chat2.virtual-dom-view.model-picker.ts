@@ -1,4 +1,5 @@
 import type { Test } from '@lvce-editor/test-with-playwright'
+import { runChatAction, runChatViewCommand } from './_ChatCommands.ts'
 
 export const name = 'chat2.virtual-dom-view.model-picker'
 
@@ -19,8 +20,7 @@ export const test: Test = async ({
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(hiddenPicker).toHaveCount(0)
   await expect(picker).toHaveCount(0)
-  // eslint-disable-next-line e2e/no-direct-click
-  await toggle.click()
+  await runChatAction(Command, 'model-picker')
 
   const options = Locator('.ChatModelOption')
   const title = Locator('text=Models')
@@ -47,8 +47,7 @@ export const test: Test = async ({
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
   // Escape also works while focus is on a model option.
-  // eslint-disable-next-line e2e/no-direct-click
-  await toggle.click()
+  await runChatAction(Command, 'model-picker')
   await expect(picker).toBeVisible()
   const lastOption = Locator(
     'button[name="model:openrouter/test/api-bad-response"]',
@@ -61,8 +60,7 @@ export const test: Test = async ({
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
   // Escape works with focus in the composer and leaves its contents intact.
-  // eslint-disable-next-line e2e/no-direct-click
-  await toggle.click()
+  await runChatAction(Command, 'model-picker')
   await expect(picker).toBeVisible()
   const composer = Locator('textarea[name="composer"]')
   await composer.type('keep this draft')
@@ -74,23 +72,24 @@ export const test: Test = async ({
   await expect(composer).toHaveValue('keep this draft')
 
   // Clicking the composer outside the picker dismisses it.
-  // eslint-disable-next-line e2e/no-direct-click
-  await toggle.click()
+  await runChatAction(Command, 'model-picker')
   await expect(picker).toBeVisible()
-  // eslint-disable-next-line e2e/no-direct-click
-  await composer.click()
+  await runChatViewCommand(
+    Command,
+    'handleViewCommand',
+    'handleModelPickerOutsideClick',
+    'composer',
+    'keep this draft',
+  )
   await expect(picker).toHaveCount(0)
   await expect(hiddenPicker).toHaveCount(0)
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(composer).toHaveValue('keep this draft')
 
   // Moving focus to another LVCE view also dismisses the picker.
-  // eslint-disable-next-line e2e/no-direct-click
-  await toggle.click()
+  await runChatAction(Command, 'model-picker')
   await expect(picker).toBeVisible()
-  const activityBarItem = Locator('.ActivityBarItem').first()
-  // eslint-disable-next-line e2e/no-direct-click
-  await activityBarItem.click()
+  await Command.execute('Layout.showSideBar', 'Explorer')
   await expect(picker).toHaveCount(0)
   await Command.executeExtensionCommand('chat2.show')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
