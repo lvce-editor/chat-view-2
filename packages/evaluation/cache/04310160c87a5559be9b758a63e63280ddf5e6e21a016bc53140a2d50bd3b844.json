@@ -1,0 +1,7 @@
+{
+  "body": "{\"id\":\"response-title-04310160c87a\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Find the Authentication Mechanism in the Project and Explain How It Works\"}]}]}",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "status": 200
+}

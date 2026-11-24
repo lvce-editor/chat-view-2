@@ -1,0 +1,7 @@
+{
+  "body": "{\"id\":\"response-title-0fcc8f473c13\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"Authentication Flow and Relevant Source Files\"}]}]}",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "status": 200
+}
