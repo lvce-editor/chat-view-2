@@ -232,20 +232,20 @@ test('runs a multi-step tool loop and records a compact event history', async ()
 
 test.each([
   {
-    message: 'über please fix the titlte of this chat',
-    initialTitle: 'Über please fix the titlte of this chat',
-    modelTitle: 'fix the chat title',
     finalTitle: 'Fix the chat title',
+    initialTitle: 'Über please fix the titlte of this chat',
+    message: 'über please fix the titlte of this chat',
+    modelTitle: 'fix the chat title',
   },
   {
-    message: 'image of a cat',
-    initialTitle: 'Image of a cat',
-    modelTitle: 'cat image',
     finalTitle: 'Cat image',
+    initialTitle: 'Image of a cat',
+    message: 'image of a cat',
+    modelTitle: 'cat image',
   },
-])(
+] as const)(
   'generates and persists an asynchronous title for "$message"',
-  async ({ message, initialTitle, modelTitle, finalTitle }) => {
+  async ({ finalTitle, initialTitle, message, modelTitle }) => {
     const step =
       Promise.withResolvers<Awaited<ReturnType<AgentBackend['runStep']>>>()
     const stepPromise = step.promise
