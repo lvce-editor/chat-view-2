@@ -2,7 +2,7 @@ import { expect, test } from '@jest/globals'
 import { showChatLayout } from '../src/parts/ChatLayout/ChatLayout.ts'
 
 test.each(['ai-native', 'ide'] as const)(
-  '%s keeps the board layout until chat loads',
+  '%s keeps the previous layout until chat loads',
   async (layout) => {
     const loading = Promise.withResolvers<void>()
     const started = Promise.withResolvers<void>()
@@ -43,12 +43,14 @@ test.each(['ai-native', 'ide'] as const)(
 )
 
 test.each(['ai-native', 'ide'] as const)(
-  '%s preserves the board layout when chat fails to load',
+  '%s preserves the previous layout when chat fails to load',
   async (layout) => {
     const calls: string[] = []
     await expect(
       showChatLayout(layout, {
         async executeCommand(id) {
+          if (id === 'Layout.getSideBarFocusMode') return true
+          if (id === 'Layout.getActiveSideBarView') return 'chat2.views.chat'
           calls.push(id)
           throw new Error('Chat could not load')
         },
@@ -61,3 +63,34 @@ test.each(['ai-native', 'ide'] as const)(
     expect(calls).toEqual(['SideBar.show'])
   },
 )
+
+test('switching from Boards to IDE restores Explorer without loading Chat', async () => {
+  const calls: unknown[][] = []
+  await showChatLayout('ide', {
+    async executeCommand(id, ...args) {
+      switch (id) {
+        case 'Layout.getActiveSideBarView':
+          return 'chat2.views.board'
+        case 'Layout.getSideBarFocusMode':
+          return true
+        default:
+          calls.push([id, ...args])
+      }
+      if (id === 'SideBar.show' && args[0] === 'chat2.views.chat') {
+        throw new Error('Chat backend is unavailable')
+      }
+      return undefined
+    },
+    async setWorkbenchLayoutUrl(_execute, layout) {
+      calls.push(['url', layout])
+    },
+    async toggleFocusMode() {
+      calls.push(['toggle'])
+    },
+  })
+  expect(calls).toEqual([
+    ['url', 'ide'],
+    ['SideBar.show', 'Explorer', true],
+    ['Layout.leaveSideBarFocusMode'],
+  ])
+})
